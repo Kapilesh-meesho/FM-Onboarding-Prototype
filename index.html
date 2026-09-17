@@ -903,7 +903,7 @@ function viewOtp() {
   var meta;
   if (S.otpLocked) meta = '<span class="err">' + ERR.otpLocked + '</span>';
   else if (S.otpError) meta = '<span class="err">' + esc(S.otpError) + '</span>';
-  else if (S.otpSeconds > 0) meta = "Resend OTP in " + S.otpSeconds + " s";
+  else if (S.otpSeconds > 0) meta = '<span id="otp-countdown">Resend OTP in ' + S.otpSeconds + ' s</span>';
   else meta = '<button id="resend" class="btn-link">Resend OTP</button>';
 
   return '' +
@@ -2369,14 +2369,26 @@ function runFanout() {
   });
 }
 
-/* OTP countdown */
+/* OTP countdown.
+   The tick patches just the countdown text. A full render() here would replace
+   app.innerHTML every second, destroying the OTP inputs and dropping focus —
+   which makes the field untypeable while the countdown is running. */
+function paintOtpCountdown() {
+  var el = document.getElementById("otp-countdown");
+  if (el) el.textContent = "Resend OTP in " + S.otpSeconds + " s";
+}
 function startOtpTimer() {
   stopOtpTimer();
   otpTimer = setInterval(function () {
     if (S.screen !== "otp") { stopOtpTimer(); return; }
     S.otpSeconds--;
-    if (S.otpSeconds <= 0) { S.otpSeconds = 0; stopOtpTimer(); }
-    render();
+    if (S.otpSeconds <= 0) {
+      S.otpSeconds = 0;
+      stopOtpTimer();
+      render();          // one full render, to swap the countdown for "Resend OTP"
+      return;
+    }
+    paintOtpCountdown();
   }, 1000);
 }
 function stopOtpTimer() { if (otpTimer) { clearInterval(otpTimer); otpTimer = null; } }
@@ -2407,23 +2419,50 @@ function bind() {
   on("go-otp", "click", A.submitPhone);
 
   /* otp */
+  /* OTP cells are patched in place rather than re-rendered, so the focused cell
+     survives. A full render() here would drop focus and make the row untypeable. */
+  function otpCell(i) { return document.querySelector('.otp-cell[data-i="' + i + '"]'); }
+  function paintOtpCells() {
+    for (var i = 0; i < 6; i++) {
+      var c = otpCell(i);
+      if (c && c.value !== S.otp[i]) c.value = S.otp[i];
+    }
+    var vb = document.getElementById("verify-otp");
+    if (vb) vb.disabled = !S.otp.every(function (x) { return x !== ""; });
+  }
+  /* Spread a run of digits across the cells starting at `from`. This is the
+     SMS-autofill and paste path: the whole code arrives in a single cell. */
+  function fillOtpFrom(from, digits) {
+    for (var k = 0; k < digits.length && from + k < 6; k++) S.otp[from + k] = digits[k];
+    paintOtpCells();
+    var land = otpCell(Math.min(from + digits.length, 5));
+    if (land) land.focus();
+  }
+  A.fillOtpFrom = fillOtpFrom;
+
   Array.prototype.forEach.call(document.querySelectorAll(".otp-cell[data-i]"), function (el) {
     el.addEventListener("input", function (e) {
       var i = +el.getAttribute("data-i");
-      var d = e.target.value.replace(/\D/g, "").slice(-1);
-      S.otp[i] = d; e.target.value = d;
+      var raw = (e.target.value || "").replace(/\D/g, "");
       S.otpError = "";
-      if (d && i < 5) {
-        var nx = document.querySelector('.otp-cell[data-i="' + (i + 1) + '"]');
-        if (nx) nx.focus();
-      }
-      var vb = document.getElementById("verify-otp");
-      if (vb) vb.disabled = !S.otp.every(function (x) { return x !== ""; });
+      if (raw.length > 1) { fillOtpFrom(i, raw); return; }
+      S.otp[i] = raw;
+      e.target.value = raw;
+      paintOtpCells();
+      if (raw && i < 5) { var nx = otpCell(i + 1); if (nx) nx.focus(); }
+    });
+    el.addEventListener("paste", function (e) {
+      var cb = e.clipboardData || window.clipboardData;
+      if (!cb) return;
+      var digits = (cb.getData("text") || "").replace(/\D/g, "");
+      if (!digits) return;
+      e.preventDefault();
+      fillOtpFrom(+el.getAttribute("data-i"), digits);
     });
     el.addEventListener("keydown", function (e) {
       var i = +el.getAttribute("data-i");
       if (e.key === "Backspace" && !el.value && i > 0) {
-        var pv = document.querySelector('.otp-cell[data-i="' + (i - 1) + '"]');
+        var pv = otpCell(i - 1);
         if (pv) pv.focus();
       }
       if (e.key === "Enter" && S.otp.every(function (x) { return x !== ""; })) A.verifyOtp();

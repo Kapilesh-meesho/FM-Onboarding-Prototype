@@ -191,7 +191,7 @@ build from.
 npm install && npm test
 ```
 
-**170 assertions across 8 groups:**
+**187 assertions across 9 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -203,16 +203,35 @@ npm install && npm test
    subtrees round-trip through localStorage; resume lands on the right phase
 5. **Validation** — pincode format, duplicate, max-5, PAN, IFSC, GSTIN, map link, hub
    address, email, email-OTP lockout, login-OTP lockout, with the error copy asserted
+5b. **OTP entry** — focus survives the resend countdown; six keystrokes land in order via
+   the app's own auto-advance; SMS-autofill/paste of a full code into one cell spreads
+   across all six; partial paste fills forward from the focused cell
 6. **LM two-strike rule** — first rejection routes back to hub details, second escalates
 7. **Benchmark ceilings** — all five categories, ceiling and touchpoint rate
 8. **Dev panel** — every simulated actor reachable, every reject path has a route out
 
-Two notes on how the tests drive the app:
+Three notes on how the tests drive the app:
 
 - `markAgreementRead()` stands in for scroll-to-end, because jsdom has no layout and
   therefore no real `scrollHeight`. The test separately asserts the checkbox is disabled
   before and enabled after.
 - Activation fan-out runs on real timers; the tests wait for it rather than stubbing it.
+- The harness awaits the app's own `DOMContentLoaded` boot before driving anything. jsdom
+  fires that after the constructor returns, so without the wait the app's boot lands
+  mid-test and re-renders the DOM out from under whatever is being driven.
+
+### Two bugs this suite was extended to cover
+
+Both were found by driving the deployed build in a real browser, not by the original suite:
+
+1. **The resend countdown made the OTP field untypeable.** The 1-second tick called a full
+   `render()`, replacing `app.innerHTML` and dropping focus to `<body>`. The tick now
+   patches only the countdown text. The original tests missed this because they set each
+   cell's `.value` on a freshly-queried element and never depended on focus surviving.
+2. **SMS autofill and paste dropped five of six digits.** The input handler took
+   `slice(-1)` of the cell's value, so a full code arriving in one cell kept one digit.
+   Multi-digit input now spreads across the remaining cells, and there is an explicit
+   `paste` handler.
 
 ---
 

@@ -31,13 +31,25 @@ function eq(actual, expected, msg) {
 
 /* ------------------------------------------------------------ jsdom env --- */
 
-function boot() {
+/* The app boots on DOMContentLoaded. jsdom fires that asynchronously, after the
+   constructor returns — so the harness must wait for it, or the app's own boot()
+   lands mid-test and re-renders the DOM out from under whatever we are driving. */
+async function boot() {
   const dom = new JSDOM(HTML, {
     runScripts: "dangerously",
     url: "http://localhost/",
     pretendToBeVisual: true
   });
   const win = dom.window;
+
+  await new Promise((resolve) => {
+    if (win.document.readyState === "complete") return resolve();
+    win.addEventListener("load", () => resolve(), { once: true });
+    win.document.addEventListener("DOMContentLoaded", () => resolve(), { once: true });
+  });
+  // let the boot handler's own render settle before anyone queries the DOM
+  await new Promise((r) => win.setTimeout(r, 0));
+
   const doc = win.document;
   const api = win.__APP__;
   if (!api) throw new Error("window.__APP__ missing — app script did not run");
@@ -155,7 +167,7 @@ function doAgreements(doc, api) {
 
 async function testLM() {
   section("1. LM Captain — full 9-phase flow");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
 
   login(doc);
   check(api.state.screen === "roles", "login + OTP reaches role selection");
@@ -231,7 +243,7 @@ async function testLM() {
 
 async function testFMCombined() {
   section("2. FM Captain — 7 phases, combined rate, within benchmark");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
 
   login(doc);
   pickRole(doc, "FM");
@@ -356,7 +368,7 @@ async function testFMCombined() {
 
 async function testFMEscalation() {
   section("3. FM escalation — split, above benchmark, ZH reject then approve");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
 
   login(doc);
   pickRole(doc, "FM");
@@ -420,7 +432,7 @@ async function testFMEscalation() {
 
 async function testRoleIndependence() {
   section("4. Role independence — FM must not disturb LM");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
 
   login(doc);
 
@@ -481,7 +493,7 @@ async function testRoleIndependence() {
 
 async function testValidation() {
   section("5. Validation error paths");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
   const E = api.errors;
 
   login(doc);
@@ -592,12 +604,105 @@ async function testValidation() {
 }
 
 /* =========================================================================
+   5b. OTP entry survives the resend countdown
+   Regression: the countdown tick used to call a full render(), replacing
+   app.innerHTML every second. That destroyed the OTP inputs and dropped focus
+   to <body>, so a real user could not type a 6-digit code while it ran.
+   ====================================================================== */
+
+async function testOtpFocusSurvivesCountdown() {
+  section("5b. OTP entry survives the resend countdown");
+  const { win, doc, api } = await boot();
+
+  type(doc, "phone", "7004301290");
+  click(doc, "go-otp");
+  eq(api.state.screen, "otp", "reached the OTP screen with the countdown running");
+  check(api.state.otpSeconds > 2, "countdown is running (" + api.state.otpSeconds + "s)");
+
+  /* focus must survive a tick */
+  const cell0 = sel(doc, '.otp-cell[data-i="0"]');
+  cell0.focus();
+  eq(doc.activeElement === cell0, true, "first OTP cell takes focus");
+
+  const before = api.state.otpSeconds;
+  await new Promise(r => win.setTimeout(r, 1300));
+  check(api.state.otpSeconds < before,
+        "countdown ticked down (" + before + " → " + api.state.otpSeconds + ")");
+  check(sel(doc, '.otp-cell[data-i="0"]') === cell0,
+        "OTP cell is not replaced by the countdown tick");
+  check(doc.activeElement === cell0,
+        "OTP cell keeps focus across a countdown tick");
+
+  /* type the way a keyboard does: always into whatever currently has focus,
+     relying on the app's own auto-advance rather than re-querying cells */
+  sel(doc, '.otp-cell[data-i="0"]').focus();
+  let focusEscaped = null;
+  for (const ch of "000000") {
+    const el = doc.activeElement;
+    if (!el || !el.classList || !el.classList.contains("otp-cell")) {
+      focusEscaped = el ? (el.tagName || "?") : "none";
+      break;
+    }
+    el.value = ch;
+    el.dispatchEvent(new (doc.defaultView.Event)("input", { bubbles: true }));
+  }
+  check(focusEscaped === null,
+        "focus stays inside the OTP row for all six keystrokes",
+        focusEscaped ? "focus escaped to <" + focusEscaped + ">" : "");
+  eq(api.state.otp.join(""), "000000", "all six digits land in order");
+
+  const verify = $(doc, "verify-otp");
+  check(verify && !verify.disabled, "Verify OTP enables once six digits are entered");
+  click(doc, "verify-otp");
+  eq(api.state.screen, "roles", "typed-by-keyboard OTP verifies and reaches role selection");
+
+  /* SMS autofill / paste: the whole code arrives in ONE cell. The handler used
+     to keep only the last digit and drop the other five. */
+  api.reset();
+  type(doc, "phone", "7004301290");
+  click(doc, "go-otp");
+  const pasteTarget = sel(doc, '.otp-cell[data-i="0"]');
+  pasteTarget.focus();
+  pasteTarget.value = "000000";
+  pasteTarget.dispatchEvent(new (doc.defaultView.Event)("input", { bubbles: true }));
+  eq(api.state.otp.join(""), "000000", "a 6-digit code autofilled into one cell spreads across all six");
+  const cellValues = [0,1,2,3,4,5].map(i => sel(doc, '.otp-cell[data-i="' + i + '"]').value).join("");
+  eq(cellValues, "000000", "every cell shows its digit after autofill");
+  const vb2 = $(doc, "verify-otp");
+  check(vb2 && !vb2.disabled, "Verify enables straight after autofill");
+  click(doc, "verify-otp");
+  eq(api.state.screen, "roles", "autofilled OTP verifies");
+
+  /* a partial paste mid-row fills forward from that cell, not from the start */
+  api.reset();
+  type(doc, "phone", "7004301290");
+  click(doc, "go-otp");
+  const mid = sel(doc, '.otp-cell[data-i="2"]');
+  mid.focus();
+  mid.value = "789";
+  mid.dispatchEvent(new (doc.defaultView.Event)("input", { bubbles: true }));
+  eq(api.state.otp.join(""), "__789".replace(/_/g, ""), "partial paste fills forward from the focused cell");
+  eq(api.state.otp, ["","","7","8","9",""], "earlier and later cells are left alone");
+
+  /* the countdown still resolves to a working Resend control */
+  api.reset();
+  type(doc, "phone", "7004301290");
+  click(doc, "go-otp");
+  api.state.otpSeconds = 1;
+  await new Promise(r => win.setTimeout(r, 1400));
+  check(!!sel(doc, "#resend"), "countdown expiring swaps in the Resend OTP button");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
    6. LM two-strike Area Manager rule
    ====================================================================== */
 
 async function testAmTwoStrike() {
   section("6. LM Area Manager two-strike rule");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
 
   login(doc);
   pickRole(doc, "LM");
@@ -647,7 +752,7 @@ async function testAmTwoStrike() {
 
 async function testCeilings() {
   section("7. Hub category benchmark ceilings");
-  const { win, api } = boot();
+  const { win, api } = await boot();
   const C = api.config.HUB_CATEGORIES;
 
   const expected = [
@@ -674,7 +779,7 @@ async function testCeilings() {
 
 async function testDevPanel() {
   section("8. Dev panel — every simulated actor is reachable");
-  const { win, doc, api } = boot();
+  const { win, doc, api } = await boot();
 
   login(doc);
   pickRole(doc, "FM");
@@ -773,6 +878,7 @@ async function testDevPanel() {
     await testFMEscalation();
     await testRoleIndependence();
     await testValidation();
+    await testOtpFocusSurvivesCountdown();
     await testAmTwoStrike();
     await testCeilings();
     await testDevPanel();
