@@ -1,0 +1,2730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valmo · Captain Self-Serve Onboarding</title>
+<style>
+/* ============================================================================
+   Design tokens — extracted from Figma file T6DMr5qro6WZS908w41Qc9
+   ("Self-serve captain onboarding", page "First time user flows" 0:1)
+   ========================================================================= */
+:root{
+  --navy:#092d5e;
+  --navy-deep:#0f2e5e;
+  --rail-top:#0f2444;
+  --rail-bot:#071d3b;
+  --rail-chip:#0d2a52;
+  --cyan:#20c7f3;
+  --cyan-bar:#15b6e8;
+  --cyan-ink:#087c9d;
+  --cyan-label:#078eb9;
+  --cyan-bg:#f0fbff;
+  --cyan-br:#cbeff9;
+
+  --page:#f4f7fb;
+  --page-alt:#f4f6f9;
+  --ink:#17213b;
+  --ink-alt:#272829;
+  --muted:#667085;
+  --muted-alt:#5a5e66;
+  --placeholder:#8e96a3;
+  --placeholder-alt:#6b7380;
+
+  --line:#e5eaf2;
+  --line-soft:#eef1f6;
+  --line-top:#e4eaf2;
+  --line-field:#c6ccd6;
+  --line-field-lg:#c3c9d4;
+  --line-ghost:#dee6f1;
+  --line-chip:#e1e7f0;
+  --line-sum:#e3e8f1;
+
+  --ok:#12b76a;
+  --ok-ink:#13a565;
+  --ok-bg:#eaf8f1;
+  --ok-br:#bfe9d3;
+
+  --warn-bg:#fff3e1;
+  --warn-ink:#b88000;
+  --warn-br:#f5e0b8;
+
+  --err:#d92d20;
+  --err-bg:#fef3f2;
+  --err-br:#fda29b;
+
+  --rail-mute:#8ea0bd;
+  --rail-mute2:#95a8c4;
+  --rail-mute3:#9fb2cd;
+  --rail-mute4:#b8c4d8;
+  --logout:#ffb4a9;
+
+  --sum-bg:#fbfcfe;
+  --chip-bg:#f5f8fc;
+  --chip-ink:#48627d;
+  --track:#ebf0f6;
+
+  --role-icon:#e6f2fc;
+  --role-icon-mute:#eef2f7;
+  --role-icon-ink:#98a2b2;
+  --avatar:#dde7f7;
+
+  --font:'Inter','Inter var',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font);
+  background:var(--page);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  font-size:14px;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,select,textarea{font-family:inherit}
+img{max-width:100%}
+[hidden]{display:none !important}
+
+/* ---------------------------------------------------------------- shells -- */
+/* Full-bleed navy shell used by LG-01..LG-06. Fills the viewport and centres
+   the card both axes — the Figma frames are fixed 1440x900 with the card at
+   x=510/y=306, which is dead-centre horizontally. */
+.shell-navy{
+  position:fixed; inset:0;
+  background:var(--navy);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:28px; padding:24px;
+  overflow:auto;
+}
+.shell-navy .brand{width:150px;height:40px;flex:none}
+.shell-navy .brand img{width:100%;height:100%;object-fit:contain}
+
+.auth-card{
+  background:#fff; border-radius:8px; width:100%;
+  padding:32px; position:relative;
+  box-shadow:0 18px 48px rgba(3,14,32,.28);
+}
+.auth-card.login{max-width:420px}
+.auth-card.otp{max-width:440px}
+.auth-card h1{
+  margin:0 0 10px; font-size:22px; font-weight:700;
+  color:var(--ink-alt); line-height:1.25;
+}
+.auth-card.otp h1{font-size:20px;margin-top:4px}
+.auth-card p.sub{margin:0 0 22px;font-size:15px;color:var(--muted-alt)}
+
+.backlink{
+  position:absolute;left:20px;top:14px;font-size:26px;line-height:1;
+  color:var(--ink-alt);background:none;padding:0;
+}
+
+/* floating-label field (login + inner forms share the pattern) */
+.fl{position:relative;margin-bottom:18px}
+.fl > label{
+  position:absolute;left:10px;top:-7px;z-index:2;
+  background:#fff;padding:0 5px;
+  font-size:11px;font-weight:700;color:var(--cyan-label);
+  line-height:14px;white-space:nowrap;
+}
+.fl.lg > label{font-size:12px;font-weight:500}
+.fl .box{
+  display:flex;align-items:center;gap:8px;
+  height:48px;padding:0 14px;
+  background:#fff;border:1px solid var(--line-field);border-radius:8px;
+}
+.fl.lg .box{height:52px;border:1.5px solid var(--line-field-lg);border-radius:10px}
+.fl .box:focus-within{border-color:var(--cyan-label);box-shadow:0 0 0 3px rgba(7,142,185,.12)}
+.fl .box.bad{border-color:var(--err)}
+.fl .box input{
+  flex:1;min-width:0;border:none;outline:none;background:none;
+  font-size:14px;font-weight:500;color:var(--ink);
+}
+.fl.lg .box input{font-size:15px;font-weight:400}
+.fl .box input::placeholder{color:var(--placeholder);font-weight:400}
+.fl .box .prefix{font-size:15px;font-weight:500;color:var(--ink-alt);flex:none}
+.fl .hint{padding:6px 0 0 2px;font-size:11px;font-weight:500;color:var(--muted);line-height:16px}
+.fl .hint.err{color:var(--err)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:8px;font-weight:700;transition:filter .12s,opacity .12s;
+}
+.btn:disabled{cursor:not-allowed}
+.btn-primary{
+  background:var(--navy);color:#fff;padding:12px 20px;font-size:15px;
+  box-shadow:0 4px 10px rgba(33,41,79,.18);
+}
+.btn-primary:hover:not(:disabled){filter:brightness(1.14)}
+.btn-primary:disabled{background:var(--line-field-lg);box-shadow:none;color:#fff}
+.btn-block{
+  display:flex;width:100%;height:48px;border-radius:10px;
+  font-size:16px;font-weight:600;
+}
+.btn-ghost{
+  background:#fff;border:1px solid var(--line-ghost);color:var(--navy);
+  padding:8px 14px;font-size:13px;border-radius:8px;line-height:20px;
+}
+.btn-ghost:hover{background:var(--chip-bg)}
+.btn-sm{padding:8px 12px;font-size:12px;border-radius:7px;background:var(--navy);color:#fff;font-weight:700}
+.btn-sm:disabled{background:var(--line-field-lg)}
+.btn-link{color:var(--cyan-ink);font-weight:700;font-size:13px;padding:0}
+
+/* OTP cells */
+.otp-row{display:flex;gap:12px;justify-content:center;margin:4px 0 18px}
+.otp-cell{
+  width:52px;height:56px;border:1.5px solid var(--line-field-lg);border-radius:10px;
+  text-align:center;font-size:20px;font-weight:700;color:var(--ink);
+  outline:none;background:#fff;
+}
+.otp-cell:focus{border-color:var(--cyan-label);box-shadow:0 0 0 3px rgba(7,142,185,.12)}
+.otp-cell.bad{border-color:var(--err);background:var(--err-bg)}
+.otp-meta{font-size:14px;color:var(--muted-alt);margin:0 0 16px}
+.otp-meta .err{color:var(--err);font-weight:600}
+
+/* ------------------------------------------------------------ role select -- */
+.rs-page{min-height:100vh;background:var(--page-alt)}
+.phead{
+  height:64px;background:var(--navy);display:flex;align-items:center;
+  padding:0 40px;justify-content:space-between;
+}
+.phead .logo{width:120px;height:32px}
+.phead .logo img{width:100%;height:100%;object-fit:contain}
+.phead button{color:var(--rail-mute4);font-size:14px;font-weight:500}
+.rs-body{max-width:1200px;margin:0 auto;padding:44px 24px 60px}
+.rs-body h1{margin:0 0 6px;font-size:28px;font-weight:700;color:var(--ink-alt)}
+.rs-body .lede{margin:0 0 40px;font-size:15px;color:var(--muted-alt)}
+.rs-sec{margin:0 0 14px;font-size:18px;font-weight:600;color:var(--ink-alt)}
+.rs-empty{
+  background:#fff;border:1px dashed var(--line);border-radius:12px;
+  min-height:96px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;margin-bottom:36px;
+}
+.rs-empty b{font-size:15px;font-weight:600;color:var(--ink-alt)}
+.rs-empty span{font-size:14px;color:var(--muted-alt)}
+.rs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px;margin-bottom:36px}
+.role-card{
+  background:#fff;border:1px solid var(--line);border-radius:14px;
+  padding:19px;display:flex;gap:16px;align-items:flex-start;
+}
+.role-card .ricon{
+  width:48px;height:48px;border-radius:10px;flex:none;
+  background:var(--role-icon);color:var(--navy);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:700;
+}
+.role-card.dim .ricon{background:var(--role-icon-mute);color:var(--role-icon-ink)}
+.role-card .rbody{flex:1;min-width:0}
+.role-card h3{margin:0 0 4px;font-size:17px;font-weight:600;color:var(--ink-alt)}
+.role-card p{margin:0 0 10px;font-size:14px;color:var(--muted-alt)}
+.role-card .ract{flex:none;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.tag{
+  display:inline-block;padding:4px 10px;border-radius:6px;
+  font-size:12px;font-weight:500;
+}
+.tag.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.tag.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.tag.info{background:var(--cyan-bg);color:var(--cyan-ink)}
+.role-card .btn-primary{padding:11px 16px;font-size:14px;border-radius:10px;white-space:nowrap}
+
+/* ------------------------------------------------------------------ flow -- */
+.flow{display:flex;align-items:stretch;min-height:100vh}
+.rail{
+  width:280px;flex:none;padding:22px 20px;
+  background:linear-gradient(180deg,var(--rail-top),var(--rail-bot));
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+}
+.rail .rlogo{display:flex;gap:12px;align-items:center;padding-bottom:24px}
+.rail .rlogo .mark{width:132px;height:36px;flex:none}
+.rail .rlogo .mark img{width:100%;height:100%;object-fit:contain}
+.rail .rlogo span{font-size:11px;font-weight:500;color:var(--rail-mute4);line-height:14px}
+.rprogress{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;
+}
+.rprogress .top{display:flex;justify-content:space-between;align-items:center}
+.rprogress b{font-size:13px;font-weight:700;color:#fff;line-height:16px}
+.rprogress i{font-size:12px;font-weight:500;color:var(--rail-mute3);font-style:normal}
+.bar{background:rgba(255,255,255,.12);height:8px;border-radius:999px;overflow:hidden}
+.bar > div{background:var(--cyan-bar);height:8px;border-radius:999px;transition:width .3s}
+.rsteps{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin-top:14px}
+.rstep{
+  display:flex;gap:10px;align-items:center;padding:9px 6px;
+  border-radius:11px;text-align:left;width:100%;
+}
+.rstep .dot{
+  width:24px;height:24px;border-radius:12px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;line-height:11px;
+  background:var(--rail-chip);border:1px solid rgba(255,255,255,.22);color:var(--rail-mute);
+}
+.rstep .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.rstep .txt b{font-size:13px;font-weight:700;line-height:16px;color:var(--rail-mute)}
+.rstep .txt span{font-size:11px;font-weight:500;line-height:14px;color:var(--rail-mute)}
+.rstep.done .dot{background:var(--cyan);border-color:var(--cyan);color:#062038}
+.rstep.done .txt b{color:#fff}
+.rstep.done .txt span{color:var(--rail-mute2)}
+.rstep.here{background:rgba(21,182,232,.13)}
+.rstep.here .dot{background:#fff;border:3px solid var(--cyan);color:#082347}
+.rstep.here .txt b{color:#fff}
+.rstep.here .txt span{color:var(--rail-mute2)}
+.ruser{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);
+  border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center;margin-top:10px;
+}
+.ruser .av{
+  width:36px;height:36px;border-radius:18px;flex:none;background:var(--avatar);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;color:var(--navy-deep);
+}
+.ruser .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ruser .who span{font-size:11px;font-weight:500;color:var(--rail-mute3);line-height:14px}
+.ruser .who b{font-size:13px;font-weight:700;color:#fff;line-height:16px}
+.rfoot{display:flex;gap:16px;padding-top:14px}
+.rfoot button{font-size:13px;font-weight:700;line-height:16px;padding:0}
+.rfoot .out{color:var(--logout)}
+.rfoot .swap{color:var(--rail-mute4)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{
+  background:#fff;border-bottom:1px solid var(--line-top);
+  height:70px;display:flex;align-items:center;gap:24px;padding:0 34px;flex:none;
+}
+.topbar .tt{width:300px;flex:none;display:flex;flex-direction:column;gap:2px}
+.topbar .tt span{font-size:12px;font-weight:500;color:var(--muted);line-height:16px}
+.topbar .tt b{font-size:17px;font-weight:700;color:var(--ink);line-height:24px}
+.topbar .track{flex:1;min-width:0;height:8px;background:var(--track);border-radius:999px;overflow:hidden}
+.topbar .track > div{height:8px;background:var(--cyan);border-radius:999px;transition:width .3s}
+.topbar .tr{display:flex;gap:10px;align-items:center;flex:none}
+.pill{
+  display:inline-flex;align-items:center;gap:9px;
+  background:#fff;border:1px solid var(--line-ghost);border-radius:999px;
+  padding:7px 14px;font-size:13px;font-weight:700;color:#344054;line-height:20px;
+}
+.pill .led{width:8px;height:8px;border-radius:4px;background:var(--ok);flex:none}
+
+.content{flex:1;display:flex;gap:24px;align-items:flex-start;padding:30px 34px}
+.col-left{flex:1;min-width:0;max-width:760px;display:flex;flex-direction:column;gap:16px}
+.col-side{width:340px;flex:none;display:flex;flex-direction:column;gap:16px}
+
+.phead-row{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.phead-row .pl{display:flex;flex-direction:column;gap:9px;min-width:0}
+.crumb{
+  display:inline-flex;align-items:center;gap:8px;align-self:flex-start;
+  background:var(--cyan-bg);border:1px solid var(--cyan-br);border-radius:999px;
+  padding:5px 10px;font-size:12px;font-weight:700;color:var(--cyan-ink);line-height:16px;
+}
+.phead-row h2{margin:0;font-size:26px;font-weight:700;color:var(--ink);line-height:31px}
+.phead-row .lede{margin:0;font-size:15px;font-weight:500;color:var(--muted);line-height:20px}
+.saved{
+  display:inline-flex;align-items:center;gap:8px;flex:none;
+  background:var(--ok-bg);border:1px solid var(--ok-br);border-radius:999px;
+  padding:7px 10px;font-size:12px;font-weight:700;color:var(--ok-ink);line-height:16px;
+}
+.saved .led{width:8px;height:8px;border-radius:4px;background:var(--ok-ink)}
+
+.card{
+  background:#fff;border:1px solid var(--line);border-radius:14px;
+  filter:drop-shadow(0 1px 1px rgba(15,23,41,.04));
+}
+.card > .chead{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+  padding:22px 24px 16px;border-bottom:1px solid var(--line-soft);
+}
+.card > .chead .ct{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.card > .chead b{font-size:17px;font-weight:700;color:var(--ink);line-height:24px}
+.card > .chead span{font-size:13px;font-weight:500;color:var(--muted);line-height:20px}
+.chip{
+  background:var(--chip-bg);border:1px solid var(--line-chip);border-radius:999px;
+  padding:4px 10px;font-size:11px;font-weight:700;color:var(--chip-ink);
+  line-height:20px;white-space:nowrap;flex:none;
+}
+.card > .cbody{padding:24px}
+.cfoot{
+  display:flex;justify-content:space-between;align-items:center;gap:20px;
+  border-top:1px solid var(--line-soft);padding-top:18px;margin-top:22px;
+}
+.cfoot .note{font-size:12px;font-weight:500;color:var(--muted);line-height:16px;max-width:430px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:1180px){.grid2{grid-template-columns:1fr}}
+
+/* status / timeline rows */
+.status-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.status-head .ico{
+  width:34px;height:34px;border-radius:17px;flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.status-head .ico.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.status-head .ico.run{background:#eef3fa;color:var(--navy)}
+.status-head .ico.bad{background:var(--err-bg);color:var(--err)}
+.status-head .ico.wait{background:var(--warn-bg);color:var(--warn-ink)}
+.status-head .st{flex:1;min-width:0}
+.status-head h3{margin:0 0 5px;font-size:17px;font-weight:700;color:var(--ink);line-height:22px}
+.status-head p{margin:0;font-size:13px;font-weight:500;color:var(--muted);line-height:20px}
+
+.tl{display:flex;flex-direction:column;gap:10px}
+.tl-row{
+  display:flex;gap:12px;align-items:flex-start;
+  border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff;
+}
+.tl-row .m{
+  width:18px;height:18px;border-radius:9px;flex:none;margin-top:1px;
+  display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;
+  background:#dfe5ee;
+}
+.tl-row.ok .m{background:var(--ok)}
+.tl-row.now{background:var(--cyan-bg);border-color:var(--cyan-br)}
+.tl-row.now .m{background:var(--cyan-ink)}
+.tl-row.bad{background:var(--err-bg);border-color:var(--err-br)}
+.tl-row.bad .m{background:var(--err)}
+.tl-row .tx{flex:1;min-width:0}
+.tl-row b{display:block;font-size:13px;font-weight:700;color:var(--ink);line-height:18px}
+.tl-row span{display:block;font-size:12px;font-weight:500;color:var(--muted);line-height:17px;margin-top:2px}
+
+/* key/value tables */
+.kv{border:1px solid var(--line-sum);border-radius:12px;background:var(--sum-bg);padding:0 16px}
+.kv .row{
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:10px 0;border-bottom:1px solid var(--line-soft);
+}
+.kv .row:last-child{border-bottom:none}
+.kv .row .k{font-size:12px;font-weight:500;color:var(--muted)}
+.kv .row .v{font-size:13px;font-weight:700;color:var(--ink);text-align:right}
+.kv .row .v.ok{color:var(--ok-ink)}
+.kv .row .v.mute{color:var(--muted)}
+
+.side-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
+.side-card > b{display:block;font-size:14px;font-weight:700;color:var(--ink);line-height:20px}
+.side-step{display:flex;gap:10px;align-items:flex-start;padding-top:10px}
+.side-step .n{
+  width:28px;height:28px;border-radius:8px;flex:none;background:var(--cyan-bg);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:var(--cyan-ink);
+}
+.side-step .sx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.side-step .sx b{font-size:12px;font-weight:700;color:var(--ink);line-height:16px}
+.side-step .sx span{font-size:11px;font-weight:500;color:var(--muted);line-height:16px}
+.contact{display:flex;gap:10px;align-items:flex-start;padding-top:12px}
+.contact .ci{width:22px;flex:none;text-align:center;font-size:14px}
+.contact .cx{flex:1;min-width:0}
+.contact .cx b{display:block;font-size:13px;font-weight:700;color:var(--ink);line-height:18px}
+.contact .cx span{display:block;font-size:11px;font-weight:500;color:var(--muted);line-height:16px}
+.contact .cx a{color:var(--cyan-ink);font-weight:700;text-decoration:none;font-size:13px}
+
+/* chips (pincodes) */
+.chips{display:flex;flex-wrap:wrap;gap:8px;min-height:36px;align-items:center}
+.pchip{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--chip-bg);border:1px solid var(--line-chip);border-radius:8px;
+  padding:7px 10px;font-size:13px;font-weight:700;color:var(--ink);
+}
+.pchip.ok{background:var(--ok-bg);border-color:var(--ok-br);color:var(--ok-ink)}
+.pchip.no{background:var(--err-bg);border-color:var(--err-br);color:var(--err)}
+.pchip button{font-size:14px;line-height:1;color:var(--muted);padding:0}
+.meta-row{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:11px;margin-top:10px}
+.meta-row .l{flex:1;min-width:0;font-weight:500;color:var(--muted);line-height:16px}
+.meta-row .r{font-weight:700;color:var(--cyan-ink);white-space:nowrap}
+.addbtn{
+  background:var(--cyan-bg);border:1px solid var(--cyan-br);border-radius:8px;
+  height:34px;padding:0 14px;font-size:13px;font-weight:700;color:var(--cyan-ink);flex:none;
+}
+.addbtn:disabled{opacity:.45;cursor:not-allowed}
+
+/* KYC blocks */
+.kyc-item{
+  border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px;background:#fff;
+}
+.kyc-item.done{background:var(--ok-bg);border-color:var(--ok-br)}
+.kyc-item > .h{display:flex;justify-content:space-between;align-items:center;gap:14px}
+.kyc-item > .h .lt{flex:1;min-width:0}
+.kyc-item > .h b{display:block;font-size:14px;font-weight:700;color:var(--ink);line-height:20px}
+.kyc-item > .h span{display:block;font-size:12px;font-weight:500;color:var(--muted);line-height:17px;margin-top:2px}
+.kyc-item .body{margin-top:14px;padding-top:14px;border-top:1px solid var(--line-soft)}
+.req{color:var(--err);font-weight:700}
+
+.toggle-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.toggle-row button{
+  border:1px solid var(--line-field);border-radius:8px;padding:9px 14px;
+  font-size:13px;font-weight:600;color:var(--muted);background:#fff;
+}
+.toggle-row button.on{border-color:var(--navy);background:var(--navy);color:#fff}
+
+.upload{
+  border:1px dashed var(--line-field);border-radius:10px;padding:16px;
+  display:flex;justify-content:space-between;align-items:center;gap:14px;background:var(--sum-bg);
+}
+.upload.done{border-style:solid;border-color:var(--ok-br);background:var(--ok-bg)}
+.upload .ut b{display:block;font-size:13px;font-weight:700;color:var(--ink)}
+.upload .ut span{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}
+
+/* agreements */
+.rate-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+@media (max-width:900px){.rate-grid{grid-template-columns:1fr}}
+.rate-box{border:1px solid var(--line);border-radius:12px;padding:16px}
+.rate-box span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:6px}
+.rate-box b{display:block;font-size:20px;font-weight:700;color:var(--ink)}
+.scrollbox{
+  border:1px solid var(--line);border-radius:12px;padding:18px;
+  height:170px;overflow-y:auto;margin-bottom:18px;background:#fff;
+}
+.scrollbox p{margin:0 0 12px;font-size:13px;font-weight:500;color:var(--muted);line-height:20px}
+.scrollbox p:last-child{margin-bottom:0}
+.check-row{
+  display:flex;gap:12px;align-items:flex-start;
+  border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;
+}
+.check-row.off{opacity:.55}
+.check-row input{
+  width:18px;height:18px;flex:none;margin:1px 0 0;accent-color:var(--navy);cursor:pointer;
+}
+.check-row input:disabled{cursor:not-allowed}
+.check-row .cl b{display:block;font-size:13px;font-weight:700;color:var(--ink);line-height:18px}
+.check-row .cl span{display:block;font-size:12px;font-weight:500;color:var(--muted);line-height:17px;margin-top:2px}
+
+/* notices */
+.notice{
+  border-radius:12px;padding:14px 16px;margin-bottom:16px;
+  font-size:13px;font-weight:500;line-height:20px;
+}
+.notice b{display:block;font-weight:700;margin-bottom:3px;font-size:13px}
+.notice.info{background:var(--cyan-bg);border:1px solid var(--cyan-br);color:var(--cyan-ink)}
+.notice.warn{background:var(--warn-bg);border:1px solid var(--warn-br);color:var(--warn-ink)}
+.notice.bad{background:var(--err-bg);border:1px solid var(--err-br);color:var(--err)}
+.notice.ok{background:var(--ok-bg);border:1px solid var(--ok-br);color:var(--ok-ink)}
+
+/* ------------------------------------------------------------- dev panel -- */
+#dev{
+  position:fixed;right:18px;bottom:18px;z-index:9999;width:330px;
+  font-family:var(--font);
+}
+#dev .dp{
+  background:#0e1b2e;border:1px solid #243449;border-radius:14px;
+  box-shadow:0 16px 40px rgba(2,10,22,.45);overflow:hidden;
+}
+#dev .dh{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:11px 14px;background:#132340;cursor:pointer;width:100%;
+}
+#dev .dh b{font-size:12px;font-weight:700;color:#cfe0f5;letter-spacing:.2px}
+#dev .dh i{font-size:11px;color:#7d93b2;font-style:normal}
+#dev .db{padding:12px 14px 14px;max-height:62vh;overflow-y:auto}
+#dev .dctx{font-size:11px;color:#8fa6c4;margin:0 0 10px;line-height:16px}
+#dev .dctx b{color:#e6f0fb}
+#dev .dgrp{margin-bottom:12px}
+#dev .dgrp > span{
+  display:block;font-size:10px;font-weight:700;color:#6f87a8;
+  text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;
+}
+#dev button.da{
+  display:block;width:100%;text-align:left;margin-bottom:6px;
+  background:#1b2c47;border:1px solid #2b3f5c;border-radius:9px;
+  padding:9px 11px;font-size:12px;font-weight:600;color:#dce8f7;
+}
+#dev button.da:hover{background:#24395a}
+#dev button.da.ok{border-color:#1d5f45;background:#12331f;color:#7fe0ae}
+#dev button.da.bad{border-color:#6d2b28;background:#33161a;color:#ffb0a6}
+#dev button.da.warn{border-color:#6b5320;background:#332a12;color:#ffd58a}
+#dev button.da:disabled{opacity:.4;cursor:not-allowed}
+#dev .dnone{font-size:11px;color:#6f87a8;line-height:16px;margin:0 0 10px}
+#dev .dreset{
+  width:100%;background:#2a1418;border:1px solid #5c2a2a;border-radius:9px;
+  padding:9px;font-size:11px;font-weight:700;color:#ff9b8e;margin-top:4px;
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="dev"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Valmo — Captain self-serve onboarding prototype
+   Design source: Figma T6DMr5qro6WZS908w41Qc9 / page "First time user flows"
+
+   Two roles, two independent onboarding journeys:
+     LM Captain — 9 phases (as designed)
+     FM Captain — 7 phases (diverges; see README for the decision list)
+   ========================================================================= */
+
+var LOGO = "data:image/png;base64,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";
+
+/* ------------------------------------------------------------------ config */
+
+var HUB_CATEGORIES = {
+  standalone_mini: { label:"Standalone (mini-hub)", ceiling:3.2, tp:6,   note:"Independent facility under 2,500 daily shipments." },
+  standalone:      { label:"Standalone",            ceiling:5,   tp:5,   note:"Standard independent facility above 2,500 shipments." },
+  lm_as_fm:        { label:"LM-as-FM",              ceiling:6,   tp:6,   note:"Existing Last Mile partner extending into First Mile." },
+  mall:            { label:"Mall hub",              ceiling:2,   tp:2,   note:"Consolidated facility inside a single mall premise." },
+  sah:             { label:"SAH (seller as hub)",   ceiling:1.5, tp:1.5, note:"Seller-operated node injecting direct to the sort centre." }
+};
+var CATEGORY_ORDER = ["standalone_mini","standalone","lm_as_fm","mall","sah"];
+
+var PHASES = {
+  LM: [
+    { id:"pd",  title:"Personal details",          sub:"Name, email, alternate phone, pincode" },
+    { id:"kyc", title:"KYC verification",          sub:"Aadhaar, PAN, bank, GST status" },
+    { id:"bgv", title:"Background verification",   sub:"Secure background check" },
+    { id:"ch",  title:"Cluster Head review",       sub:"Interview and rate card" },
+    { id:"sd",  title:"Security deposit",          sub:"Final deposit and receipt" },
+    { id:"hub", title:"Hub details",               sub:"Address details" },
+    { id:"am",  title:"Area Manager verification", sub:"Facility check" },
+    { id:"ag",  title:"Agreements",                sub:"Rate card and service agreement" },
+    { id:"act", title:"Activation",                sub:"Hub goes live" }
+  ],
+  FM: [
+    { id:"pd",  title:"Personal details",        sub:"Name, email, alternate phone, pincode" },
+    { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST, MSME" },
+    { id:"bgv", title:"Background verification", sub:"Secure background check" },
+    { id:"ch",  title:"Cluster Head review",     sub:"Hub category and rate card" },
+    { id:"hub", title:"Hub details",             sub:"Address details" },
+    { id:"ag",  title:"Agreements",              sub:"Rate card and service agreement" },
+    { id:"act", title:"Activation",              sub:"Hub goes live" }
+  ]
+};
+
+var ROLE_META = {
+  LM: { code:"LM", name:"LM Captain", desc:"Operate a last-mile delivery hub for VALMO." },
+  FM: { code:"FM", name:"FM Captain", desc:"Operate a First Mile hub for VALMO." }
+};
+
+/* Activation fan-out. LM keeps the Oracle vendor ID via VLS; FM has no Oracle
+   vendor at all and mints an internal Partner ID instead. */
+var FANOUT = {
+  LM: [
+    { id:"vls",     label:"VLS",              desc:"Vendor record and Oracle vendor ID created." },
+    { id:"opstech", label:"OpsTech",          desc:"Hub provisioned in operations systems." },
+    { id:"cs",      label:"Captain Service",  desc:"Captain profile published." },
+    { id:"ums",     label:"UMS",              desc:"User and access mapping created." },
+    { id:"agr",     label:"Agreement store",  desc:"Signed agreements archived." },
+    { id:"pay",     label:"Payout profile",   desc:"Payout profile linked to the vendor ID." }
+  ],
+  FM: [
+    { id:"design",  label:"Design & hub-code mapping", desc:"Handled by the survey system fed by the Area Manager. FM hub code is issued here.", passive:true },
+    { id:"pid",     label:"Partner ID",       desc:"Internal Partner ID created. Auto-payouts key off this." },
+    { id:"cs",      label:"Captain Service",  desc:"Captain profile published." },
+    { id:"ums",     label:"UMS",              desc:"User and access mapping created." },
+    { id:"agr",     label:"Agreement store",  desc:"Signed agreements archived." },
+    { id:"pay",     label:"Payout profile",   desc:"Payout profile linked to the Partner ID." }
+  ]
+};
+
+/* Pincode availability — deterministic so the demo and the tests agree. */
+var SERVICEABLE = ["560076","560034","560102","110017","400059","560001"];
+
+var STORE_KEY = "valmo.captain.onboarding.v1";
+
+/* -------------------------------------------------------------- validation */
+
+var V = {
+  phone:   function(s){ return /^[6-9]\d{9}$/.test(s || ""); },
+  email:   function(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s || ""); },
+  pincode: function(s){ return /^[1-9]\d{5}$/.test(s || ""); },
+  pan:     function(s){ return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test((s || "").toUpperCase()); },
+  ifsc:    function(s){ return /^[A-Z]{4}0[A-Z0-9]{6}$/.test((s || "").toUpperCase()); },
+  gstin:   function(s){ return (s || "").length === 15; },
+  account: function(s){ return /^\d{9,18}$/.test(s || ""); },
+  aadhaar: function(s){ return /^\d{12}$/.test(s || ""); },
+  mapLink: function(s){
+    s = (s || "").trim();
+    if (!s) return false;
+    return /^https?:\/\/(www\.)?(maps\.google\.[a-z.]+|google\.[a-z.]+\/maps|goo\.gl\/maps|maps\.app\.goo\.gl)\//i.test(s);
+  }
+};
+
+var ERR = {
+  pincodeFormat: "Enter a valid 6-digit pincode.",
+  pincodeDupe:   "This pincode is already added.",
+  pincodeMax:    "You can add up to 5 pincodes.",
+  pan:           "Enter a valid PAN (e.g. ABCDE1234F).",
+  panFather:     "Father's name is required for PAN verification.",
+  ifsc:          "Enter a valid IFSC (e.g. HDFC0001234).",
+  account:       "Enter a valid account number (9–18 digits).",
+  gstin:         "GSTIN must be 15 characters.",
+  gstRequired:   "GST registration is mandatory for FM captains.",
+  msmeRequired:  "MSME registration certificate is required for FM captains.",
+  mapLink:       "Paste a valid Google Maps link.",
+  aadhaar:       "Enter a valid 12-digit Aadhaar number.",
+  email:         "Enter a valid email address.",
+  phone:         "Enter a valid 10-digit mobile number.",
+  hubAddress:    "Hub address is required.",
+  otpWrong:      "Incorrect OTP. Please try again.",
+  otpLocked:     "Too many incorrect attempts. Try again later."
+};
+
+/* ------------------------------------------------------------------- state */
+
+function blankRole(role) {
+  return {
+    role: role,
+    started: false,
+    complete: false,
+    phaseIdx: 0,
+    requestId: null,
+    pd: {
+      name:"", altPhone:"", email:"",
+      emailVerified:false, emailOtpOpen:false, emailOtpAttempts:0, emailLocked:false,
+      pincodes:[], checked:false, selected:null, errors:{}
+    },
+    kyc: {
+      aadhaar:{ done:false, value:"", otpOpen:false },
+      pan:{ done:false, value:"", father:"" },
+      bank:{ done:false, acc:"", ifsc:"", pennyDone:false },
+      gst:{ registered:null, gstin:"", done:false },
+      msme:{ done:false, fileName:"" },
+      cheque:{ done:false, fileName:"" },
+      errors:{}
+    },
+    bgv: { status:"pending" },
+    ch:  { status:"pending", category:null, rateMode:"combined", slab:null, rate:null, decidedBy:null, reason:"" },
+    sd:  { status:"pending", amount:25000, attempts:0 },
+    hub: { address:"", mapLink:"", pincode:"", city:"", submitted:false, hubCode:null, errors:{} },
+    am:  { status:"pending", rejections:0, reason:"", escalated:false },
+    ag:  { rateAccepted:false, serviceRead:false, serviceAccepted:false },
+    act: { status:"idle", done:{}, partnerId:null, vendorId:null, failed:false, activatedOn:null }
+  };
+}
+
+function blankState() {
+  return {
+    screen: "login",
+    phone: "",
+    otp: ["","","","","",""],
+    otpAttempts: 0,
+    otpLocked: false,
+    otpError: "",
+    otpSeconds: 25,
+    loginError: "",
+    activeRole: null,
+    roles: { LM: blankRole("LM"), FM: blankRole("FM") }
+  };
+}
+
+var S = blankState();
+var otpTimer = null;
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* private mode */ }
+}
+function load() {
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    var parsed = JSON.parse(raw);
+    if (!parsed || !parsed.roles) return false;
+    // Merge each role over a blank so an older saved shape cannot break a render.
+    var next = blankState();
+    for (var k in parsed) if (k !== "roles") next[k] = parsed[k];
+    ["LM","FM"].forEach(function (r) {
+      next.roles[r] = Object.assign(blankRole(r), parsed.roles[r] || {});
+    });
+    S = next;
+    return true;
+  } catch (e) { return false; }
+}
+function resetAll() {
+  try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  S = blankState();
+  stopOtpTimer();
+  render();
+}
+
+function R() { return S.roles[S.activeRole]; }
+function phases() { return PHASES[S.activeRole]; }
+function phaseId() { var p = phases()[R().phaseIdx]; return p ? p.id : "act"; }
+function isFM() { return S.activeRole === "FM"; }
+
+function makeRequestId() {
+  return "OBD-" + (10000 + Math.floor(Math.random() * 89999));
+}
+function makeHubCode() {
+  var A = "ABCDEFGHJKLMNPQRSTUVWXYZ", s = "";
+  for (var i = 0; i < 3; i++) s += A[Math.floor(Math.random() * A.length)];
+  return s;
+}
+function makePartnerId() {
+  return "FMP-" + (100000 + Math.floor(Math.random() * 899999));
+}
+function makeVendorId() {
+  return "ORA-" + (100000 + Math.floor(Math.random() * 899999));
+}
+
+/* ------------------------------------------------------------- flow moves */
+
+function goPhase(id) {
+  var list = phases();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) { R().phaseIdx = i; save(); render(); return; }
+  }
+}
+function nextPhase() {
+  var r = R();
+  if (r.phaseIdx < phases().length - 1) r.phaseIdx++;
+  save(); render();
+}
+
+/* Progress bar counts completed phases, not the index, so a rejection that
+   sends the captain backwards also walks the bar back. */
+function progressPct() {
+  var r = R(), total = phases().length;
+  var pct = Math.round(((r.phaseIdx + (r.complete ? 1 : 0)) / total) * 100);
+  return Math.max(0, Math.min(100, pct));
+}
+
+/* ------------------------------------------------------- phase gate checks */
+
+function kycComplete(r) {
+  var k = r.kyc;
+  var base = k.aadhaar.done && k.pan.done && k.bank.done;
+  if (!base) return false;
+  if (r.role === "FM") {
+    // FM: GST is mandatory and MSME must be uploaded. No cancelled cheque —
+    // the penny-drop already proves the bank account.
+    return k.gst.done && k.gst.registered === true && k.msme.done;
+  }
+  // LM: GST is an optional toggle — "Non-GST" is a valid completed answer.
+  return k.gst.done;
+}
+
+function chCanDecide(r) {
+  // FM blocks until the Area Manager has classified the hub.
+  if (r.role === "FM") return !!r.ch.category;
+  return true;
+}
+
+function agCanActivate(r) {
+  return r.ag.rateAccepted && r.ag.serviceAccepted;
+}
+
+/* ------------------------------------------------------- rate card helpers */
+
+function ceilingFor(r) {
+  var c = r.ch.category;
+  return c && HUB_CATEGORIES[c] ? HUB_CATEGORIES[c].ceiling : null;
+}
+function tpFor(r) {
+  var c = r.ch.category;
+  return c && HUB_CATEGORIES[c] ? HUB_CATEGORIES[c].tp : null;
+}
+function isAboveCeiling(r) {
+  var ceil = ceilingFor(r);
+  return ceil != null && r.ch.rate != null && r.ch.rate > ceil;
+}
+
+/* Split mode, captain side. The payouts team has NOT confirmed this formula —
+   it is rendered as an indicative figure with a caveat and is deliberately not
+   used to gate or compute anything downstream. */
+function indicativeCaptainSplit(r) {
+  var slab = r.ch.slab != null ? r.ch.slab : r.ch.rate;
+  if (slab == null) return null;
+  var pilotCut = 0.35;                 // placeholder per-shipment pilot cut
+  return Math.max(0, +(slab - pilotCut).toFixed(2));
+}
+
+/* ------------------------------------------------------------------ escape */
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function money(n) {
+  if (n == null) return "—";
+  return "₹" + (Math.round(n * 100) / 100).toFixed(2);
+}
+function maskPhone(p) {
+  if (!p || p.length < 10) return p || "";
+  return "+91 " + p.slice(0, 5) + "•••" + p.slice(8);
+}
+function initials(name, phone) {
+  var n = (name || "").trim();
+  if (n) {
+    var parts = n.split(/\s+/);
+    return ((parts[0][0] || "") + (parts[1] ? parts[1][0] : "")).toUpperCase();
+  }
+  return phone ? phone.slice(0, 2) : "KV";
+}
+
+/* =========================================================================
+   RENDER
+   ====================================================================== */
+
+var app;
+
+function render() {
+  app = app || document.getElementById("app");
+  if (!app) return;
+  var html;
+  if (S.screen === "login")      html = viewLogin();
+  else if (S.screen === "otp")   html = viewOtp();
+  else if (S.screen === "roles") html = viewRoles();
+  else                           html = viewFlow();
+  app.innerHTML = html;
+  bind();
+  renderDev();
+}
+
+/* ------------------------------------------------------------------ login */
+
+function viewLogin() {
+  var ok = V.phone(S.phone);
+  return '' +
+  '<div class="shell-navy">' +
+    '<div class="brand"><img alt="VALMO" src="' + LOGO + '"></div>' +
+    '<div class="auth-card login">' +
+      '<h1>Log in or sign up to your Valmo account</h1>' +
+      '<p class="sub">Enter your mobile number to continue</p>' +
+      '<div class="fl lg">' +
+        '<label>Mobile Number</label>' +
+        '<div class="box' + (S.loginError ? ' bad' : '') + '">' +
+          '<span class="prefix">+91 -</span>' +
+          '<input id="phone" inputmode="numeric" maxlength="10" autocomplete="tel" ' +
+                 'placeholder="Enter Mobile Number" value="' + esc(S.phone) + '">' +
+        '</div>' +
+        (S.loginError ? '<div class="hint err">' + esc(S.loginError) + '</div>' : '') +
+      '</div>' +
+      '<button id="go-otp" class="btn btn-primary btn-block"' + (ok ? '' : ' disabled') + '>Login</button>' +
+    '</div>' +
+  '</div>';
+}
+
+/* -------------------------------------------------------------------- otp */
+
+function viewOtp() {
+  var filled = S.otp.every(function (d) { return d !== ""; });
+  var cells = S.otp.map(function (d, i) {
+    return '<input class="otp-cell' + (S.otpError ? ' bad' : '') + '" data-i="' + i + '" ' +
+           'inputmode="numeric" maxlength="1" value="' + esc(d) + '"' +
+           (S.otpLocked ? ' disabled' : '') + '>';
+  }).join("");
+
+  var meta;
+  if (S.otpLocked) meta = '<span class="err">' + ERR.otpLocked + '</span>';
+  else if (S.otpError) meta = '<span class="err">' + esc(S.otpError) + '</span>';
+  else if (S.otpSeconds > 0) meta = "Resend OTP in " + S.otpSeconds + " s";
+  else meta = '<button id="resend" class="btn-link">Resend OTP</button>';
+
+  return '' +
+  '<div class="shell-navy">' +
+    '<div class="brand"><img alt="VALMO" src="' + LOGO + '"></div>' +
+    '<div class="auth-card otp">' +
+      '<button class="backlink" id="otp-back" aria-label="Back">&lsaquo;</button>' +
+      '<h1>Enter OTP sent to ' + esc(S.phone) + '</h1>' +
+      '<div class="otp-row">' + cells + '</div>' +
+      '<p class="otp-meta">' + meta + '</p>' +
+      '<button id="verify-otp" class="btn btn-primary btn-block"' +
+        (filled && !S.otpLocked ? '' : ' disabled') + '>Verify OTP</button>' +
+      '<p class="otp-meta" style="margin:14px 0 0;font-size:12px">Demo code: <b>000000</b></p>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ----------------------------------------------------------- role select */
+
+function roleCard(code) {
+  var meta = ROLE_META[code], r = S.roles[code];
+  var total = PHASES[code].length;
+  var btnLabel, tagHtml;
+
+  if (r.complete) {
+    tagHtml = '<span class="tag ok">Active</span>';
+    btnLabel = "Open role";
+  } else if (r.started) {
+    tagHtml = '<span class="tag info">Step ' + (r.phaseIdx + 1) + ' of ' + total + '</span>';
+    btnLabel = "Continue onboarding";
+  } else {
+    tagHtml = '<span class="tag warn">Onboarding required</span>';
+    btnLabel = "Start onboarding";
+  }
+
+  return '' +
+  '<div class="role-card" data-role-card="' + code + '">' +
+    '<div class="ricon">' + meta.code + '</div>' +
+    '<div class="rbody">' +
+      '<h3>' + esc(meta.name) + '</h3>' +
+      '<p>' + esc(meta.desc) + '</p>' +
+      tagHtml +
+    '</div>' +
+    '<div class="ract">' +
+      '<button class="btn btn-primary" data-pick="' + code + '">' + btnLabel + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function viewRoles() {
+  var active = [], inactive = [];
+  ["LM","FM"].forEach(function (c) {
+    (S.roles[c].complete ? active : inactive).push(c);
+  });
+
+  var activeHtml = active.length
+    ? '<div class="rs-grid">' + active.map(roleCard).join("") + '</div>'
+    : '<div class="rs-empty"><b>No active roles yet</b>' +
+      '<span>Select an inactive role below to start onboarding.</span></div>';
+
+  var inactiveHtml = inactive.length
+    ? '<div class="rs-grid">' + inactive.map(roleCard).join("") + '</div>'
+    : '<div class="rs-empty"><b>All roles are active</b>' +
+      '<span>You have completed onboarding for every available role.</span></div>';
+
+  return '' +
+  '<div class="rs-page">' +
+    '<div class="phead">' +
+      '<div class="logo"><img alt="VALMO" src="' + LOGO + '"></div>' +
+      '<button id="logout">⏻ Logout</button>' +
+    '</div>' +
+    '<div class="rs-body">' +
+      '<h1>Select role</h1>' +
+      '<p class="lede">Choose the VALMO role you want to open. ' +
+        'Inactive roles require onboarding before access.</p>' +
+      '<div class="rs-sec">Active roles (' + active.length + ')</div>' +
+      activeHtml +
+      '<div class="rs-sec">Inactive roles (' + inactive.length + ')</div>' +
+      inactiveHtml +
+    '</div>' +
+  '</div>';
+}
+
+/* ------------------------------------------------------------------- flow */
+
+function viewFlow() {
+  var r = R(), list = phases(), idx = r.phaseIdx;
+  var cur = list[idx];
+
+  var steps = list.map(function (p, i) {
+    var cls = i < idx ? "done" : (i === idx ? "here" : "");
+    var mark = i < idx ? "✓" : String(i + 1);
+    return '<div class="rstep ' + cls + '">' +
+             '<div class="dot">' + mark + '</div>' +
+             '<div class="txt"><b>' + esc(p.title) + '</b><span>' + esc(p.sub) + '</span></div>' +
+           '</div>';
+  }).join("");
+
+  var pct = progressPct();
+
+  var rail = '' +
+  '<div class="rail">' +
+    '<div class="rlogo">' +
+      '<div class="mark"><img alt="VALMO" src="' + LOGO + '"></div>' +
+      '<span>Captain<br>Onboarding</span>' +
+    '</div>' +
+    '<div class="rprogress">' +
+      '<div class="top"><b>Step ' + (idx + 1) + ' of ' + list.length + '</b>' +
+        '<i>' + pct + '% complete</i></div>' +
+      '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
+    '</div>' +
+    '<div class="rsteps">' + steps + '</div>' +
+    '<div class="ruser">' +
+      '<div class="av">' + esc(initials(r.pd.name, S.phone)) + '</div>' +
+      '<div class="who"><span>Logged in as</span><b>' + esc(maskPhone(S.phone)) + '</b></div>' +
+    '</div>' +
+    '<div class="rfoot">' +
+      '<button class="out" id="logout">↩ Log out</button>' +
+      '<button class="swap" id="switch-role">⇄ Switch role</button>' +
+    '</div>' +
+  '</div>';
+
+  var body = renderPhase(cur.id, r);
+
+  var top = '' +
+  '<div class="topbar">' +
+    '<div class="tt"><span>Captain Onboarding</span><b>' + esc(cur.title) + '</b></div>' +
+    '<div class="track"><div style="width:' + pct + '%"></div></div>' +
+    '<div class="tr">' +
+      '<span class="pill"><span class="led"></span>Phone verified</span>' +
+      '<button class="btn btn-ghost" id="save-exit">Save &amp; Exit</button>' +
+    '</div>' +
+  '</div>';
+
+  return '<div class="flow">' + rail +
+    '<div class="main">' + top +
+      '<div class="content">' +
+        '<div class="col-left">' + body.left + '</div>' +
+        '<div class="col-side">' + body.side + '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function phaseHeader(r, title, lede) {
+  var list = phases(), idx = r.phaseIdx;
+  return '' +
+  '<div class="phead-row">' +
+    '<div class="pl">' +
+      '<div class="crumb"><span>Step ' + (idx + 1) + ' of ' + list.length + '</span><span>•</span>' +
+        '<span>' + esc(list[idx].title) + '</span></div>' +
+      '<h2>' + esc(title) + '</h2>' +
+      '<p class="lede">' + esc(lede) + '</p>' +
+    '</div>' +
+    '<span class="saved"><span class="led"></span>All changes saved</span>' +
+  '</div>';
+}
+
+/* Right-hand column: "what happens next" + application summary. */
+function sideDefault(r, extraTop) {
+  var list = phases(), idx = r.phaseIdx;
+  var nxt = list[idx + 1];
+
+  var s1 = nxt
+    ? { b: nxt.title, s: nxt.sub }
+    : { b: "Hub goes live", s: "Captain Panel access is unlocked." };
+
+  var rows = [
+    ["Mobile", maskPhone(S.phone)],
+    ["Role", ROLE_META[r.role].name],
+    ["Request ID", r.requestId || "—"],
+    ["Status", list[idx].title]
+  ];
+  if (r.role === "FM" && r.ch.category) {
+    rows.splice(3, 0, ["Hub category", HUB_CATEGORIES[r.ch.category].label]);
+  }
+  if (r.hub.hubCode) rows.splice(rows.length - 1, 0, ["Hub code", r.hub.hubCode]);
+  if (r.act.partnerId) rows.splice(rows.length - 1, 0, ["Partner ID", r.act.partnerId]);
+  if (r.act.vendorId) rows.splice(rows.length - 1, 0, ["Oracle vendor ID", r.act.vendorId]);
+
+  var kv = rows.map(function (x) {
+    return '<div class="row"><span class="k">' + esc(x[0]) + '</span>' +
+           '<span class="v">' + esc(x[1]) + '</span></div>';
+  }).join("");
+
+  return (extraTop || "") +
+  '<div class="side-card">' +
+    '<b>What happens next?</b>' +
+    '<div class="side-step"><div class="n">1</div><div class="sx"><b>' + esc(s1.b) + '</b>' +
+      '<span>' + esc(s1.s) + '</span></div></div>' +
+    '<div class="side-step"><div class="n">2</div><div class="sx"><b>Progress is saved</b>' +
+      '<span>You can exit and resume from this step.</span></div></div>' +
+    '<div class="side-step"><div class="n">3</div><div class="sx"><b>Need help?</b>' +
+      '<span>Use VALMO Support for onboarding help.</span></div></div>' +
+  '</div>' +
+  '<div class="side-card">' +
+    '<b>Application summary</b>' +
+    '<div style="padding-top:16px"><div class="kv">' + kv + '</div></div>' +
+  '</div>';
+}
+
+function cardWrap(title, sub, inner, chip) {
+  return '<div class="card">' +
+    '<div class="chead"><div class="ct"><b>' + esc(title) + '</b>' +
+      '<span>' + esc(sub) + '</span></div>' +
+      '<span class="chip">' + (chip || "🔒 Secure onboarding") + '</span></div>' +
+    '<div class="cbody">' + inner + '</div>' +
+  '</div>';
+}
+
+function statusBlock(kind, title, text) {
+  var icons = { ok:"✓", run:"◴", bad:"!", wait:"◷" };
+  return '<div class="status-head"><div class="ico ' + kind + '">' + icons[kind] + '</div>' +
+    '<div class="st"><h3>' + esc(title) + '</h3><p>' + esc(text) + '</p></div></div>';
+}
+
+function tlRow(state, title, sub) {
+  var mark = state === "ok" ? "✓" : (state === "bad" ? "!" : (state === "now" ? "●" : ""));
+  return '<div class="tl-row ' + state + '"><div class="m">' + mark + '</div>' +
+    '<div class="tx"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></div></div>';
+}
+
+/* ------------------------------------------------------ phase dispatcher */
+
+function renderPhase(id, r) {
+  switch (id) {
+    case "pd":  return phasePD(r);
+    case "kyc": return phaseKYC(r);
+    case "bgv": return phaseBGV(r);
+    case "ch":  return phaseCH(r);
+    case "sd":  return phaseSD(r);
+    case "hub": return phaseHUB(r);
+    case "am":  return phaseAM(r);
+    case "ag":  return phaseAG(r);
+    case "act": return phaseACT(r);
+  }
+  return { left:"", side:"" };
+}
+
+/* --------------------------------------------------- 1. personal details */
+
+function phasePD(r) {
+  var pd = r.pd, e = pd.errors || {};
+
+  var chips = pd.pincodes.map(function (p) {
+    var cls = "";
+    if (pd.checked) cls = SERVICEABLE.indexOf(p) >= 0 ? " ok" : " no";
+    var flag = pd.checked ? (SERVICEABLE.indexOf(p) >= 0 ? " ✓" : " ✕") : "";
+    return '<span class="pchip' + cls + '">' + esc(p) + flag +
+           '<button data-rmpin="' + esc(p) + '" aria-label="Remove">✕</button></span>';
+  }).join("");
+
+  var emailBox;
+  if (pd.emailVerified) {
+    emailBox = '<div class="box"><input id="pd-email" value="' + esc(pd.email) + '" disabled>' +
+               '<span class="tag ok">Verified</span></div>';
+  } else {
+    emailBox = '<div class="box' + (e.email ? ' bad' : '') + '">' +
+      '<input id="pd-email" placeholder="you@example.com" value="' + esc(pd.email) + '"' +
+        (pd.emailLocked ? ' disabled' : '') + '>' +
+      '<button class="btn-sm" id="pd-verify-email"' +
+        (V.email(pd.email) && !pd.emailLocked ? '' : ' disabled') + '>Verify</button></div>';
+  }
+
+  var otpBlock = "";
+  if (pd.emailOtpOpen && !pd.emailVerified && !pd.emailLocked) {
+    otpBlock =
+      '<div class="notice info"><b>Enter the 6-digit code sent to ' + esc(pd.email) + '</b>' +
+      'Demo code: <b style="display:inline">000000</b>' +
+      (pd.emailOtpAttempts > 0
+        ? '<span style="display:block;color:var(--err);font-weight:700;margin-top:6px">' +
+          ERR.otpWrong + ' (' + (3 - pd.emailOtpAttempts) + ' left)</span>'
+        : '') +
+      '<div style="display:flex;gap:10px;margin-top:12px">' +
+        '<input id="pd-email-otp" class="otp-cell" style="width:auto;flex:1;height:44px;' +
+          'font-size:15px;letter-spacing:6px;padding:0 12px" maxlength="6" inputmode="numeric" ' +
+          'placeholder="000000">' +
+        '<button class="btn btn-primary" id="pd-email-otp-go" style="padding:10px 18px">Confirm</button>' +
+      '</div></div>';
+  }
+  if (pd.emailLocked) {
+    otpBlock = '<div class="notice bad"><b>Email verification locked</b>' +
+      'Three incorrect codes. Contact VALMO Support to unlock this email.</div>';
+  }
+
+  var canCheck = pd.pincodes.length > 0 && pd.emailVerified;
+  var canContinue = !!pd.name.trim() && pd.emailVerified && pd.checked && !!pd.selected;
+
+  var results = "";
+  if (pd.checked) {
+    var avail = pd.pincodes.filter(function (p) { return SERVICEABLE.indexOf(p) >= 0; });
+    if (avail.length === 0) {
+      results = '<div class="notice bad"><b>None of your pincodes are serviceable</b>' +
+        'VALMO is not opening hubs in these areas yet. Remove them and try other pincodes.</div>';
+    } else {
+      results = '<div class="notice ok"><b>' + avail.length + ' of ' + pd.pincodes.length +
+        ' pincodes are available</b>Select the pincode you want to run your hub in.</div>' +
+        '<div class="toggle-row">' + avail.map(function (p) {
+          return '<button data-selpin="' + esc(p) + '"' +
+                 (pd.selected === p ? ' class="on"' : '') + '>' + esc(p) + '</button>';
+        }).join("") + '</div>';
+    }
+  }
+
+  var inner =
+    '<div class="fl"><label>Vendor / Captain name</label>' +
+      '<div class="box' + (e.name ? ' bad' : '') + '">' +
+        '<input id="pd-name" placeholder="Full name" value="' + esc(pd.name) + '"></div>' +
+      '<div class="hint' + (e.name ? ' err' : '') + '">' +
+        (e.name || "Use the name you want VALMO to address you with.") + '</div></div>' +
+
+    '<div class="grid2">' +
+      '<div class="fl"><label>Alternate phone number</label>' +
+        '<div class="box' + (e.altPhone ? ' bad' : '') + '">' +
+          '<input id="pd-alt" inputmode="numeric" maxlength="10" placeholder="10-digit number" ' +
+            'value="' + esc(pd.altPhone) + '"></div>' +
+        '<div class="hint' + (e.altPhone ? ' err' : '') + '">' +
+          (e.altPhone || "Not used for login. We will call here only if your primary phone is unreachable.") +
+        '</div></div>' +
+      '<div class="fl"><label>Email address</label>' + emailBox +
+        '<div class="hint' + (e.email ? ' err' : '') + '">' +
+          (e.email || "Verify this email to receive onboarding updates and documents.") +
+        '</div></div>' +
+    '</div>' +
+
+    otpBlock +
+
+    '<div class="fl" style="margin-bottom:10px"><label>Serviceable pincodes</label>' +
+      '<div class="box' + (e.pincode ? ' bad' : '') + '" style="justify-content:space-between;padding-right:8px">' +
+        '<input id="pd-pin" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit pincode">' +
+        '<button class="addbtn" id="pd-addpin"' +
+          (pd.pincodes.length >= 5 ? ' disabled' : '') + '>＋ Add</button></div>' +
+      (e.pincode ? '<div class="hint err">' + esc(e.pincode) + '</div>' : '') +
+    '</div>' +
+    '<div class="chips">' + (chips || '<span style="font-size:12px;color:var(--muted)">No pincodes added yet.</span>') + '</div>' +
+    '<div class="meta-row"><span class="l">Add up to 5 pincodes where you&rsquo;d like to run a hub — ' +
+      'we&rsquo;ll check which are available.</span>' +
+      '<span class="r">' + pd.pincodes.length + ' of 5 added</span></div>' +
+
+    '<div style="margin-top:16px">' +
+      '<button class="btn btn-ghost" id="pd-check"' + (canCheck ? '' : ' disabled') + '>' +
+        'Check availability</button>' +
+      (!pd.emailVerified ? '<span style="font-size:11px;color:var(--muted);margin-left:10px">' +
+        'Verify your email first.</span>' : '') +
+    '</div>' +
+    (results ? '<div style="margin-top:16px">' + results + '</div>' : '') +
+
+    '<div class="cfoot">' +
+      '<span class="note">By continuing, you agree that VALMO can use this information to ' +
+        'process your onboarding request.</span>' +
+      '<button class="btn btn-primary" id="pd-continue"' + (canContinue ? '' : ' disabled') +
+        '>Continue →</button>' +
+    '</div>';
+
+  return {
+    left: phaseHeader(r, "Personal details", "Tell us who you are and where you want to open the hub.") +
+          cardWrap("Personal details",
+                   "Email verification is required before pincode availability check.", inner),
+    side: sideDefault(r)
+  };
+}
+
+/* -------------------------------------------------------- 2. KYC (LM/FM) */
+
+function phaseKYC(r) {
+  var k = r.kyc, e = k.errors || {}, fm = r.role === "FM";
+
+  /* --- Aadhaar --- */
+  var aad = k.aadhaar.done
+    ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>Aadhaar (DigiLocker)</b>' +
+      '<span>Verified via DigiLocker · ' + esc(k.aadhaar.value.replace(/\d(?=\d{4})/g, "•")) +
+      '</span></div><span class="tag ok">Verified</span></div></div>'
+    : '<div class="kyc-item"><div class="h"><div class="lt"><b>Aadhaar (DigiLocker)</b>' +
+      '<span>We fetch your Aadhaar record from DigiLocker with an OTP.</span></div></div>' +
+      '<div class="body">' +
+        '<div class="fl" style="margin-bottom:12px"><label>Aadhaar number</label>' +
+          '<div class="box' + (e.aadhaar ? ' bad' : '') + '">' +
+          '<input id="kyc-aadhaar" inputmode="numeric" maxlength="12" ' +
+            'placeholder="12-digit Aadhaar" value="' + esc(k.aadhaar.value) + '"></div>' +
+          (e.aadhaar ? '<div class="hint err">' + esc(e.aadhaar) + '</div>' : '') + '</div>' +
+        (k.aadhaar.otpOpen
+          ? '<div class="notice info"><b>DigiLocker OTP sent</b>Demo code: <b style="display:inline">000000</b>' +
+            '<div style="display:flex;gap:10px;margin-top:12px">' +
+            '<input id="kyc-aadhaar-otp" class="otp-cell" style="width:auto;flex:1;height:44px;' +
+              'font-size:15px;letter-spacing:6px;padding:0 12px" maxlength="6" placeholder="000000">' +
+            '<button class="btn btn-primary" id="kyc-aadhaar-confirm" style="padding:10px 18px">' +
+              'Confirm</button></div></div>'
+          : '<button class="btn btn-primary" id="kyc-aadhaar-go">Verify with DigiLocker</button>') +
+      '</div></div>';
+
+  /* --- PAN --- */
+  var pan = k.pan.done
+    ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>PAN</b>' +
+      '<span>' + esc(k.pan.value) + ' · ' + esc(k.pan.father) + '</span></div>' +
+      '<span class="tag ok">Verified</span></div></div>'
+    : '<div class="kyc-item"><div class="h"><div class="lt"><b>PAN</b>' +
+      '<span>PAN is matched against your Aadhaar name.</span></div></div>' +
+      '<div class="body"><div class="grid2">' +
+        '<div class="fl"><label>PAN number</label>' +
+          '<div class="box' + (e.pan ? ' bad' : '') + '">' +
+          '<input id="kyc-pan" maxlength="10" style="text-transform:uppercase" ' +
+            'placeholder="ABCDE1234F" value="' + esc(k.pan.value) + '"></div>' +
+          '<div class="hint' + (e.pan ? ' err' : '') + '">' + (e.pan || "As printed on your PAN card.") + '</div></div>' +
+        '<div class="fl"><label>Father&rsquo;s name</label>' +
+          '<div class="box' + (e.panFather ? ' bad' : '') + '">' +
+          '<input id="kyc-pan-father" placeholder="As on PAN records" value="' + esc(k.pan.father) + '"></div>' +
+          '<div class="hint' + (e.panFather ? ' err' : '') + '">' +
+            (e.panFather || "Required by the PAN verification API.") + '</div></div>' +
+      '</div><button class="btn btn-primary" id="kyc-pan-go">Verify PAN</button></div></div>';
+
+  /* --- Bank (penny drop) --- */
+  var bank = k.bank.done
+    ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>Bank account</b>' +
+      '<span>' + esc(k.bank.acc.replace(/\d(?=\d{4})/g, "•")) + ' · ' + esc(k.bank.ifsc) +
+      ' · ₹1 penny-drop confirmed</span></div><span class="tag ok">Verified</span></div></div>'
+    : '<div class="kyc-item"><div class="h"><div class="lt"><b>Bank account</b>' +
+      '<span>We deposit ₹1 to confirm the account belongs to you.</span></div></div>' +
+      '<div class="body"><div class="grid2">' +
+        '<div class="fl"><label>Account number</label>' +
+          '<div class="box' + (e.account ? ' bad' : '') + '">' +
+          '<input id="kyc-acc" inputmode="numeric" maxlength="18" placeholder="Account number" ' +
+            'value="' + esc(k.bank.acc) + '"></div>' +
+          '<div class="hint' + (e.account ? ' err' : '') + '">' +
+            (e.account || "9 to 18 digits, no spaces.") + '</div></div>' +
+        '<div class="fl"><label>IFSC</label>' +
+          '<div class="box' + (e.ifsc ? ' bad' : '') + '">' +
+          '<input id="kyc-ifsc" maxlength="11" style="text-transform:uppercase" ' +
+            'placeholder="HDFC0001234" value="' + esc(k.bank.ifsc) + '"></div>' +
+          '<div class="hint' + (e.ifsc ? ' err' : '') + '">' +
+            (e.ifsc || "11 characters, 5th character is always 0.") + '</div></div>' +
+      '</div><button class="btn btn-primary" id="kyc-bank-go">Send ₹1 penny-drop</button>' +
+      (fm ? '<div class="hint" style="padding-top:10px">Cancelled cheque is not required for FM — ' +
+            'the penny-drop is the bank proof.</div>' : '') +
+      '</div></div>';
+
+  /* --- GST: optional toggle for LM, mandatory for FM --- */
+  var gst;
+  if (k.gst.done) {
+    gst = '<div class="kyc-item done"><div class="h"><div class="lt"><b>GST' +
+      (fm ? ' <span class="req">*</span>' : ' status') + '</b><span>' +
+      (k.gst.registered ? esc(k.gst.gstin) : "Non-GST registered") +
+      '</span></div><span class="tag ok">' +
+      (k.gst.registered ? "Verified" : "Recorded") + '</span></div></div>';
+  } else if (fm) {
+    gst = '<div class="kyc-item"><div class="h"><div class="lt"><b>GST <span class="req">*</span></b>' +
+      '<span>GST registration is mandatory for First Mile hub partners.</span></div>' +
+      '<span class="tag warn">Required</span></div>' +
+      '<div class="body">' +
+        '<div class="fl"><label>GSTIN</label>' +
+          '<div class="box' + (e.gstin ? ' bad' : '') + '">' +
+          '<input id="kyc-gstin" maxlength="15" style="text-transform:uppercase" ' +
+            'placeholder="15-character GSTIN" value="' + esc(k.gst.gstin) + '"></div>' +
+          '<div class="hint' + (e.gstin ? ' err' : '') + '">' +
+            (e.gstin || "15 characters, as printed on your GST certificate.") + '</div></div>' +
+        '<button class="btn btn-primary" id="kyc-gst-go">Verify GSTIN</button>' +
+      '</div></div>';
+  } else {
+    gst = '<div class="kyc-item"><div class="h"><div class="lt"><b>GST status</b>' +
+      '<span>Optional. Tell us whether you are GST registered.</span></div>' +
+      '<span class="tag info">Optional</span></div>' +
+      '<div class="body">' +
+        '<div class="toggle-row">' +
+          '<button id="kyc-gst-yes"' + (k.gst.registered === true ? ' class="on"' : '') + '>GST registered</button>' +
+          '<button id="kyc-gst-no"' + (k.gst.registered === false ? ' class="on"' : '') + '>Non-GST</button>' +
+        '</div>' +
+        (k.gst.registered === true
+          ? '<div class="fl"><label>GSTIN</label>' +
+            '<div class="box' + (e.gstin ? ' bad' : '') + '">' +
+            '<input id="kyc-gstin" maxlength="15" style="text-transform:uppercase" ' +
+              'placeholder="15-character GSTIN" value="' + esc(k.gst.gstin) + '"></div>' +
+            '<div class="hint' + (e.gstin ? ' err' : '') + '">' +
+              (e.gstin || "15 characters.") + '</div></div>' +
+            '<button class="btn btn-primary" id="kyc-gst-go">Verify GSTIN</button>'
+          : (k.gst.registered === false
+              ? '<button class="btn btn-primary" id="kyc-gst-go">Confirm Non-GST</button>'
+              : '')) +
+      '</div></div>';
+  }
+
+  /* --- MSME: FM only --- */
+  var msme = "";
+  if (fm) {
+    msme = '<div class="kyc-item' + (k.msme.done ? ' done' : '') + '">' +
+      '<div class="h"><div class="lt"><b>MSME registration certificate <span class="req">*</span></b>' +
+      '<span>' + (k.msme.done ? esc(k.msme.fileName) :
+        "Upload your Udyam / MSME registration certificate.") + '</span></div>' +
+      (k.msme.done ? '<span class="tag ok">Uploaded</span>' : '<span class="tag warn">Required</span>') +
+      '</div>' +
+      (k.msme.done ? '' :
+        '<div class="body"><div class="upload"><div class="ut"><b>MSME certificate</b>' +
+        '<span>PDF or image, up to 5 MB.</span></div>' +
+        '<button class="btn btn-ghost" id="kyc-msme-go">Upload file</button></div>' +
+        (e.msme ? '<div class="hint err" style="padding-top:8px">' + esc(e.msme) + '</div>' : '') +
+        '</div>') +
+      '</div>';
+  }
+
+  /* --- cancelled cheque: LM only --- */
+  var cheque = "";
+  if (!fm) {
+    cheque = '<div class="kyc-item' + (k.cheque.done ? ' done' : '') + '">' +
+      '<div class="h"><div class="lt"><b>Cancelled cheque</b>' +
+      '<span>' + (k.cheque.done ? esc(k.cheque.fileName) :
+        "Upload a cancelled cheque for your bank record.") + '</span></div>' +
+      (k.cheque.done ? '<span class="tag ok">Uploaded</span>' : '<span class="tag info">Optional</span>') +
+      '</div>' +
+      (k.cheque.done ? '' :
+        '<div class="body"><div class="upload"><div class="ut"><b>Cancelled cheque</b>' +
+        '<span>PDF or image, up to 5 MB.</span></div>' +
+        '<button class="btn btn-ghost" id="kyc-cheque-go">Upload file</button></div></div>') +
+      '</div>';
+  }
+
+  var done = kycComplete(r);
+
+  var summary = done
+    ? statusBlock("ok", "KYC verification complete",
+        fm ? "Your Aadhaar, PAN, bank account, GST and MSME records are complete."
+           : "Your Aadhaar, PAN, bank account and GST status are complete.") +
+      '<div class="kv">' +
+        '<div class="row"><span class="k">Aadhaar</span><span class="v ok">Verified</span></div>' +
+        '<div class="row"><span class="k">PAN</span><span class="v ok">Verified</span></div>' +
+        '<div class="row"><span class="k">Bank account</span><span class="v ok">Verified</span></div>' +
+        '<div class="row"><span class="k">GST' + (fm ? '' : ' status') + '</span><span class="v' +
+          (k.gst.registered ? ' ok' : ' mute') + '">' +
+          (k.gst.registered ? "Verified" : "Non-GST") + '</span></div>' +
+        (fm ? '<div class="row"><span class="k">MSME certificate</span><span class="v ok">Uploaded</span></div>' : '') +
+      '</div>' +
+      '<div style="display:flex;justify-content:center;margin-top:20px">' +
+        '<button class="btn btn-primary" id="kyc-continue">Continue to background verification →</button>' +
+      '</div>'
+    : aad + pan + bank + gst + msme + cheque +
+      '<div class="cfoot"><span class="note">' +
+        (fm
+          ? "FM captains must complete Aadhaar, PAN, bank, GST and MSME before continuing."
+          : "Complete Aadhaar, PAN, bank and your GST status before continuing.") +
+      '</span>' +
+      '<button class="btn btn-primary" id="kyc-continue" disabled>Continue →</button></div>';
+
+  return {
+    left: phaseHeader(r, "KYC verification", "Identity and payout details are verified.") +
+          cardWrap("KYC verification", "Identity and payout details are verified.", summary),
+    side: sideDefault(r)
+  };
+}
+
+/* ------------------------------------------------ 3. background verification */
+
+function phaseBGV(r) {
+  var b = r.bgv, inner;
+
+  if (b.status === "passed") {
+    inner = statusBlock("ok", "Background verification passed", "Identity and risk checks cleared.") +
+      '<div class="tl">' +
+        tlRow("ok", "Identity check", "Aadhaar and PAN records matched.") +
+        tlRow("ok", "Risk screening", "No adverse records found.") +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
+        '<button class="btn btn-primary" id="bgv-continue">Continue to Cluster Head review →</button></div>';
+  } else if (b.status === "failed") {
+    inner = statusBlock("bad", "Background verification failed",
+        "We could not clear your background check. Review your KYC records and resubmit.") +
+      '<div class="notice bad"><b>What you can do</b>' +
+        'Check that your Aadhaar and PAN details match exactly, then resubmit. ' +
+        'If you believe this is an error, contact VALMO Support.</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="bgv-back-kyc">Back to KYC</button>' +
+        '<button class="btn btn-primary" id="bgv-retry">Resubmit for verification</button></div>';
+  } else {
+    inner = statusBlock("run", "Background verification in progress",
+        "This usually finishes within a few minutes. You can safely close this page — " +
+        "we will notify you at " + maskPhone(S.phone) + " when it is done.") +
+      '<div class="tl">' +
+        tlRow("ok", "KYC submitted", "Your identity and payout records were received.") +
+        tlRow("now", "Background check running", "Identity and risk screening in progress.") +
+        tlRow("", "Next: Cluster Head review", "A Cluster Head is assigned once the check clears.") +
+      '</div>';
+  }
+
+  return {
+    left: phaseHeader(r, "Background verification", "Secure identity and risk checks.") +
+          cardWrap("Background verification", "Secure identity and risk checks.", inner),
+    side: sideDefault(r)
+  };
+}
+
+/* ------------------------------------------------------ 4. Cluster Head review */
+
+var CH_CONTACT = { name:"Rakesh Sharma", cluster:"Bengaluru Urban Cluster", phone:"+91 98765 43210" };
+var ZH_CONTACT = { name:"Priya Nair", zone:"South Zone", phone:"+91 98450 11227" };
+
+function chContactCard(who) {
+  if (who === "zh") {
+    return '<div class="side-card"><b>Zonal Head assigned</b>' +
+      '<div class="contact"><div class="ci">👤</div><div class="cx"><b>' + esc(ZH_CONTACT.name) + '</b>' +
+        '<span>' + esc(ZH_CONTACT.zone) + '</span></div></div>' +
+      '<div class="contact"><div class="ci">📞</div><div class="cx">' +
+        '<a href="tel:' + esc(ZH_CONTACT.phone) + '">' + esc(ZH_CONTACT.phone) + '</a>' +
+        '<span>Tap to call — reach out anytime</span></div></div>' +
+      '<div class="contact"><div class="ci">⏱</div><div class="cx"><b>72 hours</b>' +
+        '<span>Typical turnaround for above-benchmark rate approvals.</span></div></div></div>';
+  }
+  return '<div class="side-card"><b>Cluster Head assigned</b>' +
+    '<div class="contact"><div class="ci">👤</div><div class="cx"><b>' + esc(CH_CONTACT.name) + '</b>' +
+      '<span>' + esc(CH_CONTACT.cluster) + '</span></div></div>' +
+    '<div class="contact"><div class="ci">📞</div><div class="cx">' +
+      '<a href="tel:' + esc(CH_CONTACT.phone) + '">' + esc(CH_CONTACT.phone) + '</a>' +
+      '<span>Tap to call — reach out anytime</span></div></div>' +
+    '<div class="contact"><div class="ci">⏱</div><div class="cx"><b>48 hours</b>' +
+      '<span>Typical review time. Call ' + esc(CH_CONTACT.name.split(" ")[0]) +
+      ' if it&rsquo;s urgent.</span></div></div></div>';
+}
+
+/* Rate card panel — FM only. Reads the ceiling from the AM-set hub category. */
+function rateCardPanel(r) {
+  var cat = r.ch.category;
+  if (!cat) return "";
+  var meta = HUB_CATEGORIES[cat];
+  var above = isAboveCeiling(r);
+
+  var rows =
+    '<div class="row"><span class="k">Hub category (set by Area Manager)</span>' +
+      '<span class="v">' + esc(meta.label) + '</span></div>' +
+    '<div class="row"><span class="k">Benchmark ceiling</span>' +
+      '<span class="v">' + money(meta.ceiling) + ' / shipment</span></div>' +
+    '<div class="row"><span class="k">Touchpoint rate</span>' +
+      '<span class="v">' + money(meta.tp) + '</span></div>';
+
+  if (r.ch.rate != null) {
+    rows += '<div class="row"><span class="k">Proposed rate</span>' +
+      '<span class="v' + (above ? '' : ' ok') + '">' + money(r.ch.rate) +
+      (above ? ' · above ceiling' : ' · within ceiling') + '</span></div>';
+  }
+
+  var modeBlock = "";
+  if (r.ch.rate != null) {
+    if (r.ch.rateMode === "combined") {
+      modeBlock = '<div class="notice info"><b>Combined rate card</b>' +
+        'One blended figure for the hub: slab rate plus touchpoint, billed as a single ' +
+        'per-shipment rate of ' + money(r.ch.rate) + '.</div>';
+    } else {
+      var cap = indicativeCaptainSplit(r);
+      modeBlock = '<div class="notice info"><b>Split rate card</b>' +
+        'The pilot and the captain are paid on separate lines.' +
+        '<div class="kv" style="margin-top:12px;background:#fff">' +
+          '<div class="row"><span class="k">Pilot — slab rate + touchpoint</span>' +
+            '<span class="v">' + money((r.ch.slab != null ? r.ch.slab : r.ch.rate)) +
+            ' + ' + money(meta.tp) + '</span></div>' +
+          '<div class="row"><span class="k">Captain — slab net of pilot cut</span>' +
+            '<span class="v mute">' + money(cap) + ' (indicative)</span></div>' +
+        '</div></div>' +
+        '<div class="notice warn" data-testid="split-caveat"><b>Indicative — formula being confirmed</b>' +
+        'The captain-side split figure above is a placeholder. The exact formula for netting ' +
+        'the pilot&rsquo;s per-shipment cut out of the slab rate is still being confirmed with ' +
+        'the payouts team, and this number must not be quoted to a partner.</div>';
+    }
+  }
+
+  return '<div class="kv" style="margin-bottom:16px">' + rows + '</div>' + modeBlock;
+}
+
+function phaseCH(r) {
+  var ch = r.ch, fm = r.role === "FM", inner, side;
+
+  /* FM blocks on hub classification before anything else can be judged. */
+  if (fm && !ch.category && ch.status !== "approved") {
+    inner = statusBlock("wait", "Waiting on hub classification",
+        "Your Area Manager has not classified this hub yet. The Cluster Head cannot review " +
+        "the rate card until the hub category is set.") +
+      '<div class="notice warn" data-testid="waiting-category"><b>Hub category is an Area Manager input</b>' +
+        'Hub category is captured by the Area Manager during the site survey — it is not something ' +
+        'you fill in. Once it is set, your benchmark rate ceiling is determined automatically.</div>' +
+      '<div class="tl">' +
+        tlRow("ok", "Background verification passed", "Identity and risk checks cleared.") +
+        tlRow("now", "Area Manager survey", "Hub category pending from the AM&rsquo;s site survey.") +
+        tlRow("", "Cluster Head review", "Rate card review starts once the category arrives.") +
+      '</div>';
+    side = sideDefault(r, chContactCard("ch"));
+    return {
+      left: phaseHeader(r, "Cluster Head review", "Cluster Head is reviewing your request.") +
+            cardWrap("Cluster Head review", "Waiting on hub classification from the Area Manager.", inner),
+      side: side
+    };
+  }
+
+  if (ch.status === "approved") {
+    var nxtLabel = fm ? "Continue to hub details →" : "Continue to security deposit →";
+    inner = statusBlock("ok", "Cluster Head review approved",
+        ch.decidedBy === "zh"
+          ? "Your above-benchmark rate card was approved by the Zonal Head."
+          : "Your request and rate card were approved by the Cluster Head.") +
+      (fm ? rateCardPanel(r) : '<div class="kv" style="margin-bottom:16px">' +
+        '<div class="row"><span class="k">Forward rate</span><span class="v">₹14.50</span></div>' +
+        '<div class="row"><span class="k">Reverse rate</span><span class="v">₹8.00</span></div></div>') +
+      '<div class="tl">' +
+        tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Approved on " + new Date().toDateString()) +
+        (ch.decidedBy === "zh"
+          ? tlRow("ok", "Zonal Head: " + ZH_CONTACT.name, "Above-benchmark rate approved.")
+          : "") +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
+        '<button class="btn btn-primary" id="ch-continue">' + nxtLabel + '</button></div>';
+    side = sideDefault(r, chContactCard(ch.decidedBy === "zh" ? "zh" : "ch"));
+
+  } else if (ch.status === "escalated") {
+    inner = statusBlock("run", "Escalated to Zonal Head",
+        "Your proposed rate of " + money(ch.rate) + " is above the " +
+        money(ceilingFor(r)) + " benchmark ceiling for a " +
+        HUB_CATEGORIES[ch.category].label + ". It needs Zonal Head approval.") +
+      rateCardPanel(r) +
+      '<div class="tl">' +
+        tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Reviewed and forwarded for approval.") +
+        tlRow("now", "Zonal Head: " + ZH_CONTACT.name, "Above-benchmark rate approval pending.") +
+        tlRow("", "Next: hub details", "Available once the Zonal Head approves.") +
+      '</div>';
+    side = sideDefault(r, chContactCard("zh"));
+
+  } else if (ch.status === "zh_rejected") {
+    inner = statusBlock("bad", "Zonal Head rejected the rate card",
+        ch.reason || "The proposed rate is above what this hub category supports.") +
+      rateCardPanel(r) +
+      '<div class="notice bad"><b>What happens now</b>' +
+        'Your Cluster Head will rework the rate card within the ' + money(ceilingFor(r)) +
+        ' benchmark ceiling, or resubmit a revised case to the Zonal Head.</div>' +
+      '<div class="tl">' +
+        tlRow("bad", "Zonal Head: " + ZH_CONTACT.name, esc(ch.reason || "Rate rejected.")) +
+        tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Reworking the rate card.") +
+      '</div>';
+    side = sideDefault(r, chContactCard("zh"));
+
+  } else if (ch.status === "rejected") {
+    inner = statusBlock("bad", "Cluster Head rejected this request",
+        ch.reason || "Your Cluster Head needs corrections before this can move forward.") +
+      '<div class="notice bad"><b>Reason</b>' + esc(ch.reason || "Details need correction.") + '</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="ch-back-pd">Edit personal details</button>' +
+        '<button class="btn btn-primary" id="ch-resubmit">Resubmit for review</button></div>';
+    side = sideDefault(r, chContactCard("ch"));
+
+  } else {
+    inner = statusBlock("run", "Cluster Head review in progress",
+        CH_CONTACT.name.split(" ")[0] + " reviews your request from his panel — usually within 48 hours. " +
+        "No need to wait here; we&rsquo;ll notify you at " + maskPhone(S.phone) + " when there&rsquo;s an update.") +
+      (fm ? rateCardPanel(r) : "") +
+      '<div class="tl">' +
+        tlRow("ok", "Background verification passed", "Identity and risk checks cleared.") +
+        tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Phone: " + CH_CONTACT.phone) +
+        tlRow("", fm ? "Next: hub details" : "Next: security deposit",
+                   fm ? "Available after approval." : "Final deposit appears after approval.") +
+      '</div>';
+    side = sideDefault(r, chContactCard("ch"));
+  }
+
+  return {
+    left: phaseHeader(r, "Cluster Head review", "Cluster Head is reviewing your request.") +
+          cardWrap("Cluster Head review",
+                   fm ? "Hub category, rate card and benchmark ceiling."
+                      : "Cluster Head is reviewing your request.", inner),
+    side: side
+  };
+}
+
+/* ----------------------------------------------- 5. security deposit (LM) */
+
+function phaseSD(r) {
+  var sd = r.sd, inner;
+
+  if (sd.status === "paid") {
+    inner = statusBlock("ok", "Security deposit received", "Your deposit is confirmed and receipted.") +
+      '<div class="kv" style="margin-bottom:16px">' +
+        '<div class="row"><span class="k">Amount</span><span class="v">' + money(sd.amount) + '</span></div>' +
+        '<div class="row"><span class="k">Receipt</span><span class="v">SD-' +
+          (100000 + Math.floor(sd.amount)) + '</span></div>' +
+        '<div class="row"><span class="k">Status</span><span class="v ok">Verified</span></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="sd-continue">Continue to hub details →</button></div>';
+  } else if (sd.status === "failed") {
+    inner = statusBlock("bad", "Payment failed", "Your payment did not go through. No amount was deducted.") +
+      '<div class="notice bad"><b>Try again</b>Use a different payment method if the problem repeats.</div>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="sd-retry">Retry payment</button></div>';
+  } else if (sd.status === "expired") {
+    inner = statusBlock("wait", "Quote expired", "Your deposit quote is no longer valid. Request a fresh quote.") +
+      '<div class="notice warn"><b>Quotes are valid for 24 hours</b>' +
+        'Deposit amounts track the current rate card, so an expired quote must be regenerated.</div>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="sd-requote">Request a new quote</button></div>';
+  } else {
+    inner = statusBlock("run", "Security deposit due",
+        "Pay the refundable security deposit to move to hub details.") +
+      '<div class="kv" style="margin-bottom:16px">' +
+        '<div class="row"><span class="k">Deposit amount</span><span class="v">' + money(sd.amount) + '</span></div>' +
+        '<div class="row"><span class="k">Refundable</span><span class="v">Yes, on exit</span></div>' +
+        '<div class="row"><span class="k">Quote valid for</span><span class="v">24 hours</span></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="sd-pay">Proceed to pay ' + money(sd.amount) + ' →</button></div>';
+  }
+
+  return {
+    left: phaseHeader(r, "Security deposit", "Final deposit and receipt.") +
+          cardWrap("Security deposit", "Refundable deposit held against the hub.", inner),
+    side: sideDefault(r)
+  };
+}
+
+/* ------------------------------------------------------------ 6. hub details */
+
+function phaseHUB(r) {
+  var h = r.hub, e = h.errors || {}, fm = r.role === "FM", inner;
+
+  if (h.submitted) {
+    if (fm) {
+      /* FM does NOT mint a hub code here — it is issued later by the design &
+         hub-code mapping system fed by the AM survey. */
+      inner = statusBlock("ok", "Hub details submitted",
+          "Your hub address and map link are recorded.") +
+        '<div class="kv" style="margin-bottom:16px">' +
+          '<div class="row"><span class="k">Hub address</span><span class="v">' + esc(h.address) + '</span></div>' +
+          '<div class="row"><span class="k">Hub pincode</span><span class="v">' + esc(h.pincode) + '</span></div>' +
+          '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
+          '<div class="row"><span class="k">Hub code</span>' +
+            '<span class="v mute">Finalised later</span></div>' +
+        '</div>' +
+        '<div class="notice info" data-testid="fm-no-hubcode"><b>Your hub code is issued later</b>' +
+          'For First Mile hubs the code is assigned during design and hub-code mapping, ' +
+          'after your Area Manager&rsquo;s survey is processed. You will see it on activation.</div>' +
+        '<div style="display:flex;justify-content:flex-end">' +
+          '<button class="btn btn-primary" id="hub-continue">Continue to agreements →</button></div>';
+    } else {
+      inner = statusBlock("ok", "Hub details submitted",
+          "Your hub code has been generated.") +
+        '<div class="kv" style="margin-bottom:16px">' +
+          '<div class="row"><span class="k">Hub code</span><span class="v">' + esc(h.hubCode) + '</span></div>' +
+          '<div class="row"><span class="k">Hub address</span><span class="v">' + esc(h.address) + '</span></div>' +
+          '<div class="row"><span class="k">Hub pincode</span><span class="v">' + esc(h.pincode) + '</span></div>' +
+          '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end">' +
+          '<button class="btn btn-primary" id="hub-continue">Continue to Area Manager verification →</button></div>';
+    }
+  } else {
+    var reconfirm = (!fm && r.am.status === "rejected")
+      ? '<div class="notice warn"><b>Reconfirm your hub details</b>' +
+        'Your Area Manager rejected the facility check: ' + esc(r.am.reason || "details did not match") +
+        '. Correct the details below and resubmit.</div>'
+      : "";
+
+    inner = reconfirm +
+      '<div class="fl"><label>Hub address</label>' +
+        '<div class="box' + (e.address ? ' bad' : '') + '">' +
+        '<input id="hub-address" placeholder="Full address of the proposed hub" ' +
+          'value="' + esc(h.address) + '"></div>' +
+        '<div class="hint' + (e.address ? ' err' : '') + '">' +
+          (e.address || "Enter the full address of the proposed hub.") + '</div></div>' +
+      '<div class="fl"><label>Google Maps link</label>' +
+        '<div class="box' + (e.mapLink ? ' bad' : '') + '">' +
+        '<input id="hub-map" placeholder="https://maps.google.com/?q=..." value="' + esc(h.mapLink) + '"></div>' +
+        '<div class="hint' + (e.mapLink ? ' err' : '') + '">' +
+          (e.mapLink || "Paste a valid Google Maps link.") + '</div></div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Hub pincode</label>' +
+          '<div class="box"><input id="hub-pin" value="' + esc(h.pincode || r.pd.selected || "") + '" disabled></div>' +
+          '<div class="hint">Pre-filled from personal details.</div></div>' +
+        '<div class="fl"><label>City / State</label>' +
+          '<div class="box"><input id="hub-city" value="' + esc(h.city || cityFor(r.pd.selected)) + '" disabled></div>' +
+          '<div class="hint">Resolved from pincode.</div></div>' +
+      '</div>' +
+      '<div class="cfoot"><span class="note">Sensitive details are masked and used only for ' +
+        'onboarding verification.</span>' +
+        '<button class="btn btn-primary" id="hub-submit">Review hub details →</button></div>';
+  }
+
+  return {
+    left: phaseHeader(r, "Hub details", "Add the proposed hub address and map link.") +
+          cardWrap("Hub details",
+                   "Pincode is carried forward from personal details and cannot be edited here.", inner),
+    side: sideDefault(r)
+  };
+}
+
+function cityFor(pin) {
+  var map = {
+    "560076":"Bengaluru, Karnataka", "560034":"Bengaluru, Karnataka",
+    "560102":"Bengaluru, Karnataka", "560001":"Bengaluru, Karnataka",
+    "110017":"New Delhi, Delhi", "400059":"Mumbai, Maharashtra"
+  };
+  return map[pin] || (pin ? "Resolved from pincode" : "");
+}
+
+/* --------------------------------------------- 7. Area Manager verification (LM) */
+
+function phaseAM(r) {
+  var am = r.am, inner;
+
+  if (am.status === "approved") {
+    inner = statusBlock("ok", "Area Manager verification passed", "Your facility cleared the physical check.") +
+      '<div class="tl">' +
+        tlRow("ok", "Facility check", "Space, safety and layout verified on site.") +
+        tlRow("ok", "Hub mapping", "Hub recorded against your pincode.") +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
+        '<button class="btn btn-primary" id="am-continue">Continue to agreements →</button></div>';
+  } else if (am.status === "escalated") {
+    inner = statusBlock("wait", "Escalated to Cluster Head",
+        "Your facility was rejected twice by the Area Manager, so the case has been escalated " +
+        "to your Cluster Head for a final decision.") +
+      '<div class="notice warn" data-testid="am-escalated"><b>Two-strike rule</b>' +
+        'After two Area Manager rejections a request no longer sits with the AM — ' +
+        'the Cluster Head decides whether to proceed, rework or close it.</div>' +
+      '<div class="tl">' +
+        tlRow("bad", "Area Manager rejection 1", "Facility did not meet requirements.") +
+        tlRow("bad", "Area Manager rejection 2", esc(am.reason || "Facility did not meet requirements.")) +
+        tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Reviewing the escalated case.") +
+      '</div>';
+  } else if (am.status === "rejected") {
+    inner = statusBlock("bad", "Area Manager rejected the facility check",
+        am.reason || "Your hub facility did not meet the requirements.") +
+      '<div class="notice bad"><b>Rejection ' + am.rejections + ' of 2</b>' +
+        esc(am.reason || "Correct the hub details and resubmit.") +
+        ' A second rejection escalates the case to your Cluster Head.</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="am-fix-hub">Reconfirm hub details</button></div>';
+  } else {
+    inner = statusBlock("run", "Area Manager verification in progress",
+        "An Area Manager will visit your hub to verify the facility. " +
+        "This usually happens within 3 working days.") +
+      '<div class="tl">' +
+        tlRow("ok", "Hub details submitted", "Hub code " + esc(r.hub.hubCode || "—") + " generated.") +
+        tlRow("now", "Facility check", "Area Manager site visit pending.") +
+        tlRow("", "Next: agreements", "Rate card and service agreement follow approval.") +
+      '</div>';
+  }
+
+  return {
+    left: phaseHeader(r, "Area Manager verification", "Facility check at your hub.") +
+          cardWrap("Area Manager verification", "Facility check at your hub.", inner),
+    side: sideDefault(r)
+  };
+}
+
+/* ------------------------------------------------------------ 8. agreements */
+
+function phaseAG(r) {
+  var ag = r.ag, fm = r.role === "FM";
+
+  var rateBoxes;
+  if (fm && r.ch.category) {
+    var meta = HUB_CATEGORIES[r.ch.category];
+    rateBoxes =
+      '<div class="rate-grid">' +
+        '<div class="rate-box"><span>Hub category</span><b style="font-size:16px">' +
+          esc(meta.label) + '</b></div>' +
+        '<div class="rate-box"><span>Agreed rate (' + esc(r.ch.rateMode) + ')</span><b>' +
+          money(r.ch.rate) + '</b></div>' +
+      '</div>' +
+      (r.ch.rateMode === "split"
+        ? '<div class="notice warn" data-testid="split-caveat-ag"><b>Indicative — formula being confirmed</b>' +
+          'The captain-side split figure is a placeholder pending confirmation from the payouts team.</div>'
+        : '');
+  } else {
+    rateBoxes =
+      '<div class="rate-grid">' +
+        '<div class="rate-box"><span>Forward rate</span><b>₹14.50</b></div>' +
+        '<div class="rate-box"><span>Reverse rate</span><b>₹8.00</b></div>' +
+      '</div>';
+  }
+
+  var inner = rateBoxes +
+    '<div class="scrollbox" id="ag-scroll">' +
+      '<p><b>Service Agreement</b></p>' +
+      '<p>This agreement records your hub details, rate card, ' +
+        (fm ? "" : "security deposit receipt, ") +
+        'and operational responsibilities as a VALMO ' + (fm ? "FM" : "LM") + ' Captain.</p>' +
+      '<p>Please read the full agreement below. Accept becomes available once you have ' +
+        'scrolled to the end.</p>' +
+      '<p>You agree to operate the hub in line with VALMO&rsquo;s operating standards, to maintain ' +
+        'the agreed processing capacity, and to keep the facility available during published ' +
+        'operating windows.</p>' +
+      '<p>You agree that shipment handling, scanning and handover follow the standard operating ' +
+        'procedure issued to you at activation, and that deviations may affect payouts.</p>' +
+      '<p>Rate card revisions follow the approval path defined for your hub category. Revisions ' +
+        'above the benchmark ceiling require Zonal Head approval.</p>' +
+      '<p>Either party may terminate with 30 days written notice. ' +
+        (fm ? "" : "Security deposits are refunded on exit after reconciliation. ") +
+        'Outstanding dues are settled against the final invoice.</p>' +
+      '<p>Your acceptance is recorded securely with a timestamp, for your records.</p>' +
+      '<p><b>End of agreement.</b></p>' +
+    '</div>' +
+
+    '<div class="check-row">' +
+      '<input type="checkbox" id="ag-rate"' + (ag.rateAccepted ? ' checked' : '') + '>' +
+      '<div class="cl"><b>I accept the rate card.</b>' +
+        '<span>Rate card values are captured during Cluster Head review.</span></div></div>' +
+
+    '<div class="check-row' + (ag.serviceRead ? '' : ' off') + '">' +
+      '<input type="checkbox" id="ag-service"' + (ag.serviceAccepted ? ' checked' : '') +
+        (ag.serviceRead ? '' : ' disabled') + '>' +
+      '<div class="cl"><b>I have read and accept the service agreement.</b>' +
+        '<span>' + (ag.serviceRead
+          ? "You have read the agreement to the end."
+          : "Enabled once you&rsquo;ve read the agreement to the end.") + '</span></div></div>' +
+
+    '<div class="cfoot"><span class="note">Both acceptances are stored separately for audit.</span>' +
+      '<button class="btn btn-primary" id="ag-activate"' + (agCanActivate(r) ? '' : ' disabled') +
+        '>Accept and activate hub →</button></div>';
+
+  return {
+    left: phaseHeader(r, "Agreements", "Accept the rate card and service agreement separately.") +
+          cardWrap("Rate card and service agreement",
+                   "Accept both documents separately to start activation.", inner,
+                   "Explicit consent required"),
+    side: sideDefault(r)
+  };
+}
+
+/* ------------------------------------------------------------ 9. activation */
+
+function phaseACT(r) {
+  var a = r.act, fm = r.role === "FM", list = FANOUT[r.role], inner;
+
+  var fan = list.map(function (f) {
+    var st = a.done[f.id] ? "ok" : (a.status === "running" ? "now" : "");
+    if (a.failed && !a.done[f.id]) st = "bad";
+    var sub = f.desc + (f.passive ? "" : "");
+    return tlRow(st, f.label + (f.passive ? " · external system" : ""), sub);
+  }).join("");
+
+  if (a.status === "active") {
+    inner = statusBlock("ok", "Your hub is active",
+        "Your hub is live. Captain Panel access is unlocked and you can start " +
+        (fm ? "receiving first mile pickups." : "receiving orders.")) +
+      '<div class="kv" style="margin-bottom:16px">' +
+        '<div class="row"><span class="k">Hub code</span><span class="v">' +
+          esc(r.hub.hubCode || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Hub name</span><span class="v">' +
+          esc((r.pd.selected || "") + " Hub") + '</span></div>' +
+        (fm
+          ? '<div class="row"><span class="k">Partner ID</span><span class="v">' +
+            esc(a.partnerId || "—") + '</span></div>'
+          : '<div class="row"><span class="k">Oracle vendor ID</span><span class="v">' +
+            esc(a.vendorId || "—") + '</span></div>') +
+        '<div class="row"><span class="k">Activated on</span><span class="v">' +
+          esc(a.activatedOn || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Captain Panel access</span>' +
+          '<span class="v ok">Unlocked</span></div>' +
+      '</div>' +
+      (fm
+        ? '<div class="notice info" data-testid="fm-partner-id"><b>Auto-payouts key off your Partner ID</b>' +
+          'First Mile hubs do not get an Oracle vendor ID. Your internal Partner ID ' +
+          '(' + esc(a.partnerId || "—") + ') is what payouts are keyed against.</div>'
+        : '') +
+      '<div class="tl">' + fan + '</div>' +
+      '<div style="display:flex;justify-content:center;margin-top:20px">' +
+        '<button class="btn btn-primary" id="act-panel">Open Captain Panel →</button></div>';
+
+  } else if (a.failed) {
+    inner = statusBlock("bad", "Activation failed",
+        "One or more systems did not complete. Nothing is lost — you can retry activation.") +
+      '<div class="tl">' + fan + '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
+        '<button class="btn btn-primary" id="act-retry">Retry activation</button></div>';
+
+  } else {
+    inner = statusBlock("run", "Activation in progress",
+        "We are enabling your hub and unlocking Captain Panel access. This can take up to " +
+        "30 minutes. You can safely close this page — we will notify you at " +
+        maskPhone(S.phone) + " the moment your hub is live.") +
+      (fm
+        ? '<div class="notice info" data-testid="fm-design-passive"><b>Design &amp; hub-code mapping ' +
+          'runs outside this flow</b>It is completed by the system fed by your Area Manager&rsquo;s ' +
+          'survey. Your FM hub code is issued when that step finishes.</div>'
+        : '') +
+      '<div class="tl">' + fan + '</div>';
+  }
+
+  return {
+    left: phaseHeader(r, "Activation", a.status === "active" ? "Your hub is active." : "Activation in progress.") +
+          cardWrap("Activation",
+                   a.status === "active" ? "Your hub is active." : "Activation in progress.", inner),
+    side: sideDefault(r)
+  };
+}
+
+/* =========================================================================
+   ACTIONS
+   ====================================================================== */
+
+var A = {
+
+  /* ---- auth ---- */
+  submitPhone: function () {
+    if (!V.phone(S.phone)) { S.loginError = ERR.phone; save(); render(); return; }
+    S.loginError = ""; S.screen = "otp"; S.otp = ["","","","","",""];
+    S.otpAttempts = 0; S.otpLocked = false; S.otpError = ""; S.otpSeconds = 25;
+    save(); render(); startOtpTimer();
+  },
+  verifyOtp: function () {
+    if (S.otpLocked) return;
+    var code = S.otp.join("");
+    if (code === "000000") {
+      S.otpError = ""; S.screen = "roles"; stopOtpTimer(); save(); render(); return;
+    }
+    S.otpAttempts++;
+    if (S.otpAttempts >= 3) { S.otpLocked = true; S.otpError = ERR.otpLocked; }
+    else S.otpError = ERR.otpWrong + " (" + (3 - S.otpAttempts) + " left)";
+    S.otp = ["","","","","",""];
+    save(); render();
+  },
+  resendOtp: function () {
+    S.otpSeconds = 25; S.otpError = ""; S.otpAttempts = 0; S.otpLocked = false;
+    save(); render(); startOtpTimer();
+  },
+  logout: function () {
+    stopOtpTimer();
+    S.screen = "login"; S.activeRole = null;
+    S.otp = ["","","","","",""]; S.otpAttempts = 0; S.otpLocked = false; S.otpError = "";
+    save(); render();
+  },
+
+  /* ---- role selection ---- */
+  pickRole: function (code) {
+    S.activeRole = code;
+    var r = S.roles[code];
+    if (!r.started) { r.started = true; r.requestId = makeRequestId(); }
+    S.screen = "flow";
+    save(); render();
+  },
+  switchRole: function () { S.screen = "roles"; save(); render(); },
+
+  /* ---- personal details ---- */
+  addPincode: function (val) {
+    var r = R(), pd = r.pd;
+    pd.errors = {};
+    val = (val || "").trim();
+    if (!V.pincode(val))            { pd.errors.pincode = ERR.pincodeFormat; save(); render(); return; }
+    if (pd.pincodes.indexOf(val)>=0){ pd.errors.pincode = ERR.pincodeDupe;   save(); render(); return; }
+    if (pd.pincodes.length >= 5)    { pd.errors.pincode = ERR.pincodeMax;    save(); render(); return; }
+    pd.pincodes.push(val);
+    pd.checked = false; pd.selected = null;
+    save(); render();
+  },
+  removePincode: function (p) {
+    var pd = R().pd;
+    pd.pincodes = pd.pincodes.filter(function (x) { return x !== p; });
+    if (pd.selected === p) pd.selected = null;
+    pd.checked = false; pd.errors = {};
+    save(); render();
+  },
+  checkAvailability: function () {
+    var pd = R().pd;
+    pd.checked = true; pd.selected = null;
+    save(); render();
+  },
+  selectPincode: function (p) { R().pd.selected = p; save(); render(); },
+
+  sendEmailOtp: function () {
+    var pd = R().pd;
+    pd.errors = {};
+    if (!V.email(pd.email)) { pd.errors.email = ERR.email; save(); render(); return; }
+    pd.emailOtpOpen = true; pd.emailOtpAttempts = 0;
+    save(); render();
+  },
+  confirmEmailOtp: function (code) {
+    var pd = R().pd;
+    if (code === "000000") {
+      pd.emailVerified = true; pd.emailOtpOpen = false; pd.errors = {};
+    } else {
+      pd.emailOtpAttempts++;
+      if (pd.emailOtpAttempts >= 3) { pd.emailLocked = true; pd.emailOtpOpen = false; }
+    }
+    save(); render();
+  },
+  pdContinue: function () {
+    var r = R(), pd = r.pd;
+    pd.errors = {};
+    if (!pd.name.trim())   pd.errors.name = "Name is required.";
+    if (pd.altPhone && !V.phone(pd.altPhone)) pd.errors.altPhone = ERR.phone;
+    if (!pd.emailVerified) pd.errors.email = "Verify your email before continuing.";
+    if (!pd.selected)      pd.errors.pincode = "Select an available pincode.";
+    if (Object.keys(pd.errors).length) { save(); render(); return; }
+    r.hub.pincode = pd.selected;
+    r.hub.city = cityFor(pd.selected);
+    nextPhase();
+  },
+
+  /* ---- KYC ---- */
+  aadhaarStart: function (val) {
+    var k = R().kyc; k.errors = {};
+    if (!V.aadhaar(val)) { k.errors.aadhaar = ERR.aadhaar; save(); render(); return; }
+    k.aadhaar.value = val; k.aadhaar.otpOpen = true;
+    save(); render();
+  },
+  aadhaarConfirm: function (code) {
+    var k = R().kyc; k.errors = {};
+    if (code !== "000000") { k.errors.aadhaar = ERR.otpWrong; save(); render(); return; }
+    k.aadhaar.done = true; k.aadhaar.otpOpen = false;
+    save(); render();
+  },
+  panVerify: function (pan, father) {
+    var k = R().kyc; k.errors = {};
+    pan = (pan || "").toUpperCase().trim();
+    if (!V.pan(pan))            k.errors.pan = ERR.pan;
+    if (!(father || "").trim()) k.errors.panFather = ERR.panFather;
+    if (Object.keys(k.errors).length) { k.pan.value = pan; k.pan.father = father || ""; save(); render(); return; }
+    k.pan.value = pan; k.pan.father = father.trim(); k.pan.done = true;
+    save(); render();
+  },
+  bankVerify: function (acc, ifsc) {
+    var k = R().kyc; k.errors = {};
+    ifsc = (ifsc || "").toUpperCase().trim();
+    if (!V.account(acc)) k.errors.account = ERR.account;
+    if (!V.ifsc(ifsc))   k.errors.ifsc = ERR.ifsc;
+    if (Object.keys(k.errors).length) { k.bank.acc = acc || ""; k.bank.ifsc = ifsc; save(); render(); return; }
+    k.bank.acc = acc; k.bank.ifsc = ifsc; k.bank.pennyDone = true; k.bank.done = true;
+    save(); render();
+  },
+  gstSet: function (registered) {
+    var k = R().kyc; k.errors = {};
+    k.gst.registered = registered;
+    if (registered === false) k.gst.done = false;
+    save(); render();
+  },
+  gstVerify: function (gstin) {
+    var r = R(), k = r.kyc; k.errors = {};
+    if (k.gst.registered === false && r.role === "LM") {
+      k.gst.done = true; save(); render(); return;
+    }
+    gstin = (gstin || "").toUpperCase().trim();
+    if (!V.gstin(gstin)) { k.errors.gstin = ERR.gstin; k.gst.gstin = gstin; save(); render(); return; }
+    k.gst.gstin = gstin; k.gst.registered = true; k.gst.done = true;
+    save(); render();
+  },
+  uploadMsme: function () {
+    var k = R().kyc; k.errors = {};
+    k.msme.done = true; k.msme.fileName = "udyam-registration.pdf";
+    save(); render();
+  },
+  uploadCheque: function () {
+    var k = R().kyc;
+    k.cheque.done = true; k.cheque.fileName = "cancelled-cheque.pdf";
+    save(); render();
+  },
+  kycContinue: function () {
+    var r = R();
+    if (!kycComplete(r)) {
+      r.kyc.errors = r.kyc.errors || {};
+      if (r.role === "FM") {
+        if (!r.kyc.gst.done)  r.kyc.errors.gstin = ERR.gstRequired;
+        if (!r.kyc.msme.done) r.kyc.errors.msme  = ERR.msmeRequired;
+      }
+      save(); render(); return;
+    }
+    r.bgv.status = "pending";
+    nextPhase();
+  },
+
+  /* ---- BGV ---- */
+  bgvSet: function (status) { R().bgv.status = status; save(); render(); },
+  bgvContinue: function () {
+    var r = R();
+    if (r.bgv.status !== "passed") return;
+    nextPhase();
+  },
+  bgvRetry: function () { R().bgv.status = "pending"; save(); render(); },
+
+  /* ---- Cluster Head ---- */
+  chSetCategory: function (cat) {
+    var r = R();
+    if (r.role !== "FM") return;
+    r.ch.category = cat;
+    save(); render();
+  },
+  chApprove: function (mode) {
+    var r = R();
+    if (!chCanDecide(r)) return;
+    if (r.role === "FM") {
+      var ceil = ceilingFor(r);
+      r.ch.rateMode = mode || "combined";
+      // A within-benchmark approval books the rate at the ceiling.
+      if (r.ch.rate == null || r.ch.rate > ceil) r.ch.rate = ceil;
+      r.ch.slab = r.ch.rate;
+    }
+    r.ch.status = "approved"; r.ch.decidedBy = "ch"; r.ch.reason = "";
+    save(); render();
+  },
+  chEscalate: function (mode, rate) {
+    var r = R();
+    if (r.role !== "FM" || !chCanDecide(r)) return;
+    var ceil = ceilingFor(r);
+    r.ch.rateMode = mode || "combined";
+    r.ch.rate = rate != null ? rate : +(ceil + 1.5).toFixed(2);
+    r.ch.slab = r.ch.rate;
+    r.ch.status = "escalated"; r.ch.decidedBy = null;
+    save(); render();
+  },
+  chReject: function (reason) {
+    var r = R();
+    r.ch.status = "rejected";
+    r.ch.reason = reason || "Details need correction before this can proceed.";
+    save(); render();
+  },
+  chResubmit: function () {
+    var r = R();
+    r.ch.status = "pending"; r.ch.reason = "";
+    save(); render();
+  },
+  zhApprove: function () {
+    var r = R();
+    if (r.ch.status !== "escalated") return;
+    r.ch.status = "approved"; r.ch.decidedBy = "zh"; r.ch.reason = "";
+    save(); render();
+  },
+  zhReject: function (reason) {
+    var r = R();
+    if (r.ch.status !== "escalated") return;
+    r.ch.status = "zh_rejected";
+    r.ch.reason = reason || "Proposed rate exceeds what this hub category supports.";
+    save(); render();
+  },
+  chContinue: function () {
+    var r = R();
+    if (r.ch.status !== "approved") return;
+    nextPhase();
+  },
+
+  /* ---- security deposit (LM) ---- */
+  sdSet: function (status) { R().sd.status = status; save(); render(); },
+  sdContinue: function () {
+    var r = R();
+    if (r.sd.status !== "paid") return;
+    nextPhase();
+  },
+  sdRequote: function () { R().sd.status = "pending"; save(); render(); },
+
+  /* ---- hub details ---- */
+  hubSubmit: function (address, mapLink) {
+    var r = R(), h = r.hub;
+    h.errors = {};
+    if (!(address || "").trim()) h.errors.address = ERR.hubAddress;
+    if (!V.mapLink(mapLink))     h.errors.mapLink = ERR.mapLink;
+    h.address = address || ""; h.mapLink = mapLink || "";
+    if (Object.keys(h.errors).length) { save(); render(); return; }
+    h.pincode = r.pd.selected || h.pincode;
+    h.city = cityFor(h.pincode);
+    h.submitted = true;
+    // LM gets its hub code at submit. FM does not — it is issued during
+    // design & hub-code mapping at activation.
+    if (r.role === "LM") h.hubCode = h.hubCode || makeHubCode();
+    save(); render();
+  },
+  hubContinue: function () {
+    var r = R();
+    if (!r.hub.submitted) return;
+    if (r.role === "LM") r.am.status = "pending";
+    nextPhase();
+  },
+  hubReopen: function () {
+    var r = R();
+    r.hub.submitted = false;
+    goPhase("hub");
+  },
+
+  /* ---- Area Manager (LM) ---- */
+  amApprove: function () {
+    var r = R();
+    if (r.role !== "LM") return;
+    r.am.status = "approved"; r.am.reason = "";
+    save(); render();
+  },
+  amReject: function (reason) {
+    var r = R();
+    if (r.role !== "LM") return;
+    r.am.rejections++;
+    r.am.reason = reason || "Facility did not meet requirements.";
+    // Two-strike rule: the second rejection leaves the AM and goes to the CH.
+    if (r.am.rejections >= 2) { r.am.status = "escalated"; r.am.escalated = true; }
+    else r.am.status = "rejected";
+    save(); render();
+  },
+  amContinue: function () {
+    var r = R();
+    if (r.am.status !== "approved") return;
+    nextPhase();
+  },
+
+  /* ---- agreements ---- */
+  markAgreementRead: function () {
+    var r = R();
+    if (r.ag.serviceRead) return;
+    r.ag.serviceRead = true;
+    save(); render();
+  },
+  setRateAccepted: function (v) { R().ag.rateAccepted = !!v; save(); render(); },
+  setServiceAccepted: function (v) {
+    var r = R();
+    if (!r.ag.serviceRead) return;
+    r.ag.serviceAccepted = !!v;
+    save(); render();
+  },
+  activate: function () {
+    var r = R();
+    if (!agCanActivate(r)) return;
+    r.act.status = "running"; r.act.failed = false; r.act.done = {};
+    nextPhase();
+    runFanout();
+  },
+
+  /* ---- activation ---- */
+  actFail: function () {
+    var r = R();
+    if (r.act.status === "active") return;
+    stopFanout();
+    r.act.status = "failed"; r.act.failed = true;
+    save(); render();
+  },
+  actRetry: function () {
+    var r = R();
+    r.act.status = "running"; r.act.failed = false; r.act.done = {};
+    save(); render();
+    runFanout();
+  },
+  finishActivation: function () {
+    var r = R();
+    var list = FANOUT[r.role];
+    list.forEach(function (f) { r.act.done[f.id] = true; });
+    if (r.role === "FM") {
+      r.act.partnerId = r.act.partnerId || makePartnerId();
+      // FM hub code is minted by design & hub-code mapping, not at hub submit.
+      r.hub.hubCode = r.hub.hubCode || makeHubCode();
+    } else {
+      r.act.vendorId = r.act.vendorId || makeVendorId();
+    }
+    r.act.status = "active";
+    r.act.failed = false;
+    r.act.activatedOn = new Date().toLocaleString("en-IN",
+      { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+    r.complete = true;
+    save(); render();
+  },
+
+  resetAll: resetAll
+};
+
+/* Fan-out animation. Tests call finishActivation() directly instead of waiting. */
+var fanTimers = [];
+function stopFanout() { fanTimers.forEach(clearTimeout); fanTimers = []; }
+function runFanout() {
+  stopFanout();
+  var r = R(), role = S.activeRole, list = FANOUT[r.role];
+  list.forEach(function (f, i) {
+    fanTimers.push(setTimeout(function () {
+      var rr = S.roles[role];
+      if (rr.act.status !== "running") return;
+      rr.act.done[f.id] = true;
+      if (i === list.length - 1) {
+        var keep = S.activeRole; S.activeRole = role;
+        A.finishActivation();
+        S.activeRole = keep;
+      } else { save(); render(); }
+    }, 420 * (i + 1)));
+  });
+}
+
+/* OTP countdown */
+function startOtpTimer() {
+  stopOtpTimer();
+  otpTimer = setInterval(function () {
+    if (S.screen !== "otp") { stopOtpTimer(); return; }
+    S.otpSeconds--;
+    if (S.otpSeconds <= 0) { S.otpSeconds = 0; stopOtpTimer(); }
+    render();
+  }, 1000);
+}
+function stopOtpTimer() { if (otpTimer) { clearInterval(otpTimer); otpTimer = null; } }
+
+/* =========================================================================
+   EVENT BINDING
+   ====================================================================== */
+
+function on(id, ev, fn) {
+  var el = document.getElementById(id);
+  if (el) el.addEventListener(ev, fn);
+}
+function val(id) {
+  var el = document.getElementById(id);
+  return el ? el.value : "";
+}
+
+function bind() {
+  /* login */
+  on("phone", "input", function (e) {
+    S.phone = e.target.value.replace(/\D/g, "").slice(0, 10);
+    S.loginError = "";
+    var btn = document.getElementById("go-otp");
+    if (btn) btn.disabled = !V.phone(S.phone);
+    if (e.target.value !== S.phone) e.target.value = S.phone;
+  });
+  on("phone", "keydown", function (e) { if (e.key === "Enter") A.submitPhone(); });
+  on("go-otp", "click", A.submitPhone);
+
+  /* otp */
+  Array.prototype.forEach.call(document.querySelectorAll(".otp-cell[data-i]"), function (el) {
+    el.addEventListener("input", function (e) {
+      var i = +el.getAttribute("data-i");
+      var d = e.target.value.replace(/\D/g, "").slice(-1);
+      S.otp[i] = d; e.target.value = d;
+      S.otpError = "";
+      if (d && i < 5) {
+        var nx = document.querySelector('.otp-cell[data-i="' + (i + 1) + '"]');
+        if (nx) nx.focus();
+      }
+      var vb = document.getElementById("verify-otp");
+      if (vb) vb.disabled = !S.otp.every(function (x) { return x !== ""; });
+    });
+    el.addEventListener("keydown", function (e) {
+      var i = +el.getAttribute("data-i");
+      if (e.key === "Backspace" && !el.value && i > 0) {
+        var pv = document.querySelector('.otp-cell[data-i="' + (i - 1) + '"]');
+        if (pv) pv.focus();
+      }
+      if (e.key === "Enter" && S.otp.every(function (x) { return x !== ""; })) A.verifyOtp();
+    });
+  });
+  on("verify-otp", "click", A.verifyOtp);
+  on("resend", "click", A.resendOtp);
+  on("otp-back", "click", function () { stopOtpTimer(); S.screen = "login"; save(); render(); });
+
+  /* roles */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pick]"), function (el) {
+    el.addEventListener("click", function () { A.pickRole(el.getAttribute("data-pick")); });
+  });
+  on("logout", "click", A.logout);
+  on("switch-role", "click", A.switchRole);
+  on("save-exit", "click", A.switchRole);
+
+  if (S.screen !== "flow") return;
+  var r = R();
+
+  /* personal details */
+  on("pd-name", "input", function (e) { r.pd.name = e.target.value; save(); });
+  on("pd-alt", "input", function (e) {
+    r.pd.altPhone = e.target.value.replace(/\D/g, "").slice(0, 10);
+    if (e.target.value !== r.pd.altPhone) e.target.value = r.pd.altPhone;
+    save();
+  });
+  on("pd-email", "input", function (e) {
+    r.pd.email = e.target.value;
+    var b = document.getElementById("pd-verify-email");
+    if (b) b.disabled = !V.email(r.pd.email);
+    save();
+  });
+  on("pd-verify-email", "click", A.sendEmailOtp);
+  on("pd-email-otp-go", "click", function () { A.confirmEmailOtp(val("pd-email-otp")); });
+  on("pd-addpin", "click", function () { A.addPincode(val("pd-pin")); });
+  on("pd-pin", "keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); A.addPincode(val("pd-pin")); }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rmpin]"), function (el) {
+    el.addEventListener("click", function () { A.removePincode(el.getAttribute("data-rmpin")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-selpin]"), function (el) {
+    el.addEventListener("click", function () { A.selectPincode(el.getAttribute("data-selpin")); });
+  });
+  on("pd-check", "click", A.checkAvailability);
+  on("pd-continue", "click", A.pdContinue);
+
+  /* kyc */
+  on("kyc-aadhaar-go", "click", function () { A.aadhaarStart(val("kyc-aadhaar")); });
+  on("kyc-aadhaar-confirm", "click", function () { A.aadhaarConfirm(val("kyc-aadhaar-otp")); });
+  on("kyc-pan-go", "click", function () { A.panVerify(val("kyc-pan"), val("kyc-pan-father")); });
+  on("kyc-bank-go", "click", function () { A.bankVerify(val("kyc-acc"), val("kyc-ifsc")); });
+  on("kyc-gst-yes", "click", function () { A.gstSet(true); });
+  on("kyc-gst-no", "click", function () { A.gstSet(false); });
+  on("kyc-gst-go", "click", function () { A.gstVerify(val("kyc-gstin")); });
+  on("kyc-msme-go", "click", A.uploadMsme);
+  on("kyc-cheque-go", "click", A.uploadCheque);
+  on("kyc-continue", "click", A.kycContinue);
+
+  /* bgv */
+  on("bgv-continue", "click", A.bgvContinue);
+  on("bgv-retry", "click", A.bgvRetry);
+  on("bgv-back-kyc", "click", function () { goPhase("kyc"); });
+
+  /* cluster head */
+  on("ch-continue", "click", A.chContinue);
+  on("ch-resubmit", "click", A.chResubmit);
+  on("ch-back-pd", "click", function () { goPhase("pd"); });
+
+  /* security deposit */
+  on("sd-pay", "click", function () { A.sdSet("paid"); });
+  on("sd-retry", "click", function () { A.sdSet("pending"); });
+  on("sd-requote", "click", A.sdRequote);
+  on("sd-continue", "click", A.sdContinue);
+
+  /* hub */
+  on("hub-address", "input", function (e) { r.hub.address = e.target.value; save(); });
+  on("hub-map", "input", function (e) { r.hub.mapLink = e.target.value; save(); });
+  on("hub-submit", "click", function () { A.hubSubmit(val("hub-address"), val("hub-map")); });
+  on("hub-continue", "click", A.hubContinue);
+
+  /* area manager */
+  on("am-continue", "click", A.amContinue);
+  on("am-fix-hub", "click", A.hubReopen);
+
+  /* agreements */
+  var sc = document.getElementById("ag-scroll");
+  if (sc) {
+    sc.addEventListener("scroll", function () {
+      if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 8) A.markAgreementRead();
+    });
+  }
+  on("ag-rate", "change", function (e) { A.setRateAccepted(e.target.checked); });
+  on("ag-service", "change", function (e) { A.setServiceAccepted(e.target.checked); });
+  on("ag-activate", "click", A.activate);
+
+  /* activation */
+  on("act-retry", "click", A.actRetry);
+  on("act-panel", "click", A.switchRole);
+}
+
+/* =========================================================================
+   DEV PANEL — stands in for the cluster head / area manager / zonal head
+   consoles. See README for why this exists.
+   ====================================================================== */
+
+var devOpen = true;
+
+function devBtn(label, action, kind, disabled) {
+  return '<button class="da' + (kind ? " " + kind : "") + '" data-dev="' + action + '"' +
+         (disabled ? ' disabled' : '') + '>' + label + '</button>';
+}
+
+function devActions() {
+  if (S.screen !== "flow") {
+    return { ctx: "Not in an onboarding flow.", groups: [] };
+  }
+  var r = R(), id = phaseId(), fm = r.role === "FM";
+  var ctx = "<b>" + ROLE_META[r.role].name + "</b> · " + phases()[r.phaseIdx].title;
+  var groups = [];
+
+  if (id === "bgv") {
+    groups.push({ title: "Background verification", html:
+      devBtn("Mark BGV passed", "bgv:passed", "ok") +
+      devBtn("Mark BGV failed", "bgv:failed", "bad") });
+  }
+
+  if (id === "ch") {
+    if (fm) {
+      if (!r.ch.category) {
+        groups.push({ title: "Area Manager · set hub category", html:
+          CATEGORY_ORDER.map(function (c) {
+            var m = HUB_CATEGORIES[c];
+            return devBtn(m.label + " · ceiling " + money(m.ceiling), "cat:" + c);
+          }).join("") });
+      } else {
+        var m = HUB_CATEGORIES[r.ch.category];
+        groups.push({ title: "Hub category (AM input)", html:
+          '<p class="dnone">' + m.label + " · ceiling " + money(m.ceiling) +
+          " · touchpoint " + money(m.tp) + '</p>' +
+          devBtn("Clear hub category", "cat:clear") });
+
+        if (r.ch.status === "escalated") {
+          groups.push({ title: "Zonal Head decision", html:
+            devBtn("Approve as ZH", "zh:approve", "ok") +
+            devBtn("Reject as ZH", "zh:reject", "bad") });
+        } else if (r.ch.status === "zh_rejected") {
+          groups.push({ title: "Cluster Head rework", html:
+            devBtn("Approve combined (within ceiling)", "ch:combined", "ok") +
+            devBtn("Approve split (within ceiling)", "ch:split", "ok") +
+            devBtn("Resubmit above benchmark → ZH", "ch:escalate", "warn") });
+        } else if (r.ch.status !== "approved") {
+          groups.push({ title: "Cluster Head decision", html:
+            devBtn("Approve combined (within ceiling)", "ch:combined", "ok") +
+            devBtn("Approve split (within ceiling)", "ch:split", "ok") +
+            devBtn("Submit above benchmark → ZH", "ch:escalate", "warn") +
+            devBtn("Reject", "ch:reject", "bad") });
+        } else {
+          groups.push({ title: "Cluster Head decision", html:
+            '<p class="dnone">Approved' +
+            (r.ch.decidedBy === "zh" ? " by Zonal Head" : " by Cluster Head") + '.</p>' +
+            devBtn("Reject (send back)", "ch:reject", "bad") });
+        }
+      }
+    } else {
+      groups.push({ title: "Cluster Head decision", html:
+        devBtn("Approve", "ch:approve", "ok") +
+        devBtn("Reject", "ch:reject", "bad") });
+    }
+  }
+
+  if (id === "sd" && !fm) {
+    groups.push({ title: "Security deposit", html:
+      devBtn("Force success", "sd:paid", "ok") +
+      devBtn("Force failure", "sd:failed", "bad") +
+      devBtn("Force quote expired", "sd:expired", "warn") });
+  }
+
+  if (id === "am" && !fm) {
+    groups.push({ title: "Area Manager decision", html:
+      devBtn("Approve", "am:approve", "ok") +
+      devBtn("Reject (" + r.am.rejections + " of 2 used)", "am:reject", "bad") });
+  }
+
+  if (id === "act") {
+    groups.push({ title: "Activation", html:
+      devBtn("Force failure", "act:fail", "bad") +
+      devBtn("Force success", "act:done", "ok") });
+  }
+
+  if (id === "ag") {
+    groups.push({ title: "Agreements", html:
+      devBtn("Mark agreement scrolled to end", "ag:read") });
+  }
+
+  if (!groups.length) {
+    groups.push({ title: "This phase", html:
+      '<p class="dnone">No backend actors act on this phase — it is entirely ' +
+      'captain-driven.</p>' });
+  }
+  return { ctx: ctx, groups: groups };
+}
+
+function renderDev() {
+  var host = document.getElementById("dev");
+  if (!host) return;
+  var d = devActions();
+
+  var body = devOpen
+    ? '<div class="db">' +
+        '<p class="dctx">' + d.ctx + '</p>' +
+        d.groups.map(function (g) {
+          return '<div class="dgrp"><span>' + esc(g.title) + '</span>' + g.html + '</div>';
+        }).join("") +
+        '<button class="dreset" data-dev="reset">Reset entire demo</button>' +
+      '</div>'
+    : "";
+
+  host.innerHTML =
+    '<div class="dp">' +
+      '<button class="dh" id="dev-toggle"><b>⚙ Simulate backend</b>' +
+        '<i>' + (devOpen ? "hide" : "show") + '</i></button>' +
+      body +
+    '</div>';
+
+  on("dev-toggle", "click", function () { devOpen = !devOpen; renderDev(); });
+  Array.prototype.forEach.call(host.querySelectorAll("[data-dev]"), function (el) {
+    el.addEventListener("click", function () { devDo(el.getAttribute("data-dev")); });
+  });
+}
+
+function devDo(cmd) {
+  var parts = cmd.split(":"), ns = parts[0], arg = parts[1];
+
+  if (cmd === "reset") { A.resetAll(); return; }
+
+  switch (ns) {
+    case "bgv": A.bgvSet(arg); break;
+    case "cat":
+      if (arg === "clear") { R().ch.category = null; save(); render(); }
+      else A.chSetCategory(arg);
+      break;
+    case "ch":
+      if (arg === "approve")       A.chApprove("combined");
+      else if (arg === "combined") A.chApprove("combined");
+      else if (arg === "split")    A.chApprove("split");
+      else if (arg === "escalate") A.chEscalate(R().ch.rateMode === "split" ? "split" : "combined");
+      else if (arg === "reject")   A.chReject();
+      break;
+    case "zh":
+      if (arg === "approve") A.zhApprove(); else A.zhReject();
+      break;
+    case "sd": A.sdSet(arg); break;
+    case "am":
+      if (arg === "approve") A.amApprove(); else A.amReject();
+      break;
+    case "ag": A.markAgreementRead(); break;
+    case "act":
+      if (arg === "fail") A.actFail();
+      else { stopFanout(); A.finishActivation(); }
+      break;
+  }
+}
+
+/* =========================================================================
+   BOOT
+   ====================================================================== */
+
+function boot() {
+  app = document.getElementById("app");
+  load();
+  if (S.screen === "flow" && !S.activeRole) S.screen = "roles";
+  render();
+  if (S.screen === "otp") startOtpTimer();
+}
+
+if (typeof window !== "undefined") {
+  // Test surface — lets a headless run drive the app without simulating scroll,
+  // timers or file pickers.
+  window.__APP__ = {
+    get state() { return S; },
+    set state(v) { S = v; },
+    actions: A,
+    validate: V,
+    errors: ERR,
+    config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT, SERVICEABLE: SERVICEABLE },
+    helpers: {
+      kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
+      isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
+      phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase
+    },
+    render: render,
+    reset: resetAll,
+    stopTimers: function () { stopOtpTimer(); stopFanout(); },
+    STORE_KEY: STORE_KEY
+  };
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "fm-onboarding-prototype",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Valmo captain self-serve onboarding prototype — LM and FM flows in one self-contained HTML file.",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}
