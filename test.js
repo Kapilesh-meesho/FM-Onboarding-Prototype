@@ -1204,6 +1204,238 @@ async function testHubFacilityInputs() {
   win.close();
 }
 
+/* =========================================================================
+   11. Captain Hub — logged-in Profile & Hubs (Figma page 96:2)
+   ====================================================================== */
+
+function devClick(doc, action) {
+  const el = doc.querySelector('[data-dev="' + action + '"]');
+  if (!el) throw new Error('dev action "' + action + '" not offered');
+  if (el.disabled) throw new Error('dev action "' + action + '" is disabled');
+  el.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
+}
+const devText = (doc) => $(doc, "dev").textContent.replace(/\s+/g, " ");
+
+async function testCaptainHub() {
+  section("11. Captain Hub — login switch, profile, hubs");
+  const { win, doc, api } = await boot();
+  const E = api.errors;
+
+  /* --- the dev panel offers the login switch before signing in --- */
+  check(devText(doc).indexOf("Log in as") >= 0, "login screen offers a 'Log in as' switch");
+  check(devText(doc).indexOf("New captain") >= 0, "'new captain' option offered");
+  check(devText(doc).indexOf("Existing captain") >= 0, "'existing captain' option offered");
+
+  /* --- new captain goes to onboarding, as before --- */
+  devClick(doc, "as:new");
+  login(doc);
+  eq(api.state.screen, "roles", "a new captain lands on role selection");
+  eq(api.state.hubs.length, 0, "a new captain owns no hubs");
+
+  /* --- existing captain lands in the Captain Hub --- */
+  api.reset();
+  devClick(doc, "as:existing");
+  eq(api.state.hubs.length, 3, "existing captain is seeded with 3 hubs");
+  login(doc);
+  eq(api.state.screen, "panel", "an existing captain lands in the Captain Hub, not onboarding");
+  eq(api.state.panel.section, "hubs", "and lands on My Hubs");
+
+  /* --- HB-01 --- */
+  let body = txt(doc);
+  check(body.indexOf("Active hubs (2)") >= 0, "HB-01 groups two active hubs");
+  check(body.indexOf("Inactive hubs (1)") >= 0, "HB-01 groups one inactive hub");
+  ["AQT","BEU","JYP"].forEach(c =>
+    check(body.indexOf("Hub " + c) >= 0, "hub code " + c + " listed"));
+  check(body.indexOf("29ABCDE1234F1Z5") >= 0, "a GST-registered hub shows its GSTIN");
+  check(body.indexOf("Non-GST") >= 0, "a Non-GST hub is labelled as such");
+  check(body.indexOf("Deactivated on 12 Apr 2026") >= 0, "the inactive hub shows its end date");
+  check(exists(doc, "#hub-add"), "Add new hub button present");
+  check(!!sel(doc, '[data-gst="hub-aqt"]'), "GST-registered hub offers Manage GSTIN");
+  check(sel(doc, '[data-gst="hub-beu"]').textContent.indexOf("Add GSTIN") >= 0,
+        "Non-GST hub offers Add GSTIN instead");
+  check(!sel(doc, '[data-gst="hub-jyp"]'), "an inactive hub offers no GST action");
+
+  /* --- the sidebar shows the active hub and switches to the profile tab --- */
+  check(sel(doc, ".hub-user").textContent.indexOf("Karan Verma") >= 0, "sidebar shows the captain");
+  check(sel(doc, ".hub-user .hbadge").textContent.indexOf("AQT") >= 0,
+        "sidebar badge shows the active hub code");
+  click(doc, "hub-user");
+  eq(api.state.panel.tab, "personal", "the sidebar user card opens Personal Details");
+
+  /* --- PR-01 --- */
+  body = txt(doc);
+  check(body.indexOf("KYC details") >= 0, "PR-01 shows the KYC card");
+  check(body.indexOf("shared across all your hubs") >= 0, "KYC is stated as captain-level");
+  check(body.indexOf("XXXX XXXX 1234") >= 0, "Aadhaar is masked");
+  check(body.indexOf("ABCDE••••F") >= 0, "PAN is masked");
+  check(body.indexOf("HDFC Bank •••• 4321") >= 0, "bank account is masked");
+  check(exists(doc, "#bank-edit"), "bank account is editable");
+
+  /* --- PR-02…PR-04: OTP challenge, wrong code, lockout --- */
+  click(doc, "bank-edit");
+  check(exists(doc, '[data-testid="bank-edit"]'), "editing bank opens the OTP challenge");
+  check(exists(doc, "#bank-otp"), "OTP field shown before any account change");
+  api.actions.bankOtp("111111");
+  check(txt(doc).indexOf(E.otpWrong) >= 0, "a wrong bank OTP is rejected");
+  api.actions.bankOtp("222222");
+  api.actions.bankOtp("333333");
+  check(exists(doc, '[data-testid="bank-otp-locked"]'), "three wrong codes lock the bank change");
+  check(api.state.profile.bank.acc === "123456784321", "the bank account is untouched while locked");
+
+  /* --- PR-05…PR-08: form, penny-drop, failure, success --- */
+  api.actions.bankCancel();
+  click(doc, "bank-edit");
+  api.actions.bankOtp("000000");
+  check(exists(doc, "#bank-acc"), "a correct OTP opens the new-account form");
+
+  api.actions.bankSubmit("12", "BADIFSC", "Karan Verma");
+  check(txt(doc).indexOf(E.account) >= 0, "a bad account number is rejected");
+  api.actions.bankSubmit("987654321098", "BADIFSC", "Karan Verma");
+  check(txt(doc).indexOf(E.ifsc) >= 0, "a bad IFSC is rejected");
+  api.actions.bankSubmit("987654321098", "ICIC0004321", "");
+  check(txt(doc).indexOf("Account holder name is required") >= 0, "holder name is required");
+
+  api.actions.bankSubmit("987654321098", "ICIC0004321", "Karan Verma");
+  eq(api.state.panel.bank.step, "verifying", "a valid form starts the penny-drop");
+  check(devText(doc).indexOf("Penny-drop") >= 0, "dev panel offers the penny-drop outcome");
+
+  devClick(doc, "bank:fail");
+  eq(api.state.panel.bank.step, "failed", "a failed penny-drop is surfaced");
+  eq(api.state.profile.bank.acc, "123456784321", "a failed penny-drop does not change the account");
+
+  click(doc, "bank-retry");
+  eq(api.state.panel.bank.step, "form", "the captain can go back to the form after a failure");
+  api.actions.bankSubmit("987654321098", "ICIC0004321", "Karan Verma");
+  devClick(doc, "bank:ok");
+  eq(api.state.panel.bank.step, "done", "a successful penny-drop confirms the change");
+  eq(api.state.profile.bank.acc, "987654321098", "the new account is saved");
+  eq(api.state.profile.bank.ifsc, "ICIC0004321", "the new IFSC is saved");
+  click(doc, "bank-done");
+  check(!api.state.panel.bank.open, "the bank editor closes");
+
+  /* --- HB-02…HB-06: per-hub GSTIN --- */
+  api.actions.panelTab("hubs");
+  clickSel(doc, '[data-gst="hub-beu"]');
+  check(exists(doc, '[data-testid="gst-edit"]'), "Add GSTIN opens the editor on that hub");
+  api.actions.gstSave("TOOSHORT");
+  check(txt(doc).indexOf(E.gstin) >= 0, "an invalid GSTIN is rejected");
+  check(!api.helpers.hubById("hub-beu").gst.registered, "the hub stays Non-GST on a bad GSTIN");
+  api.actions.gstSave("29ZZZZZ9999Z1Z9");
+  eq(api.helpers.hubById("hub-beu").gst,
+     { registered:true, gstin:"29ZZZZZ9999Z1Z9" }, "a valid GSTIN is added to that hub only");
+  eq(api.helpers.hubById("hub-aqt").gst.gstin, "29ABCDE1234F1Z5",
+     "the other hub's GSTIN is untouched");
+
+  clickSel(doc, '[data-gst="hub-aqt"]');
+  api.actions.gstAskRemove();
+  check(exists(doc, '[data-testid="gst-remove-confirm"]'), "removing a GSTIN asks for confirmation");
+  click(doc, "gst-remove-go");
+  eq(api.helpers.hubById("hub-aqt").gst, { registered:false, gstin:"" }, "the GSTIN is removed");
+  api.actions.gstOpen("hub-aqt");
+  api.actions.gstSave("29ABCDE1234F1Z5");
+  check(api.helpers.hubById("hub-aqt").gst.registered, "and can be added back");
+
+  /* --- HB-07: add a new hub --- */
+  click(doc, "hub-add");
+  eq(api.state.panel.section, "addhub", "Add new hub opens the GST choice screen");
+  body = txt(doc);
+  check(body.indexOf("How is this hub registered for GST?") >= 0, "HB-07 heading present");
+  check(body.indexOf("Your KYC and bank details carry over automatically") >= 0,
+        "HB-07 states that KYC and bank carry over");
+  ["existing","none","new"].forEach(c =>
+    check(!!sel(doc, '[data-choice="' + c + '"]'), "GST choice offered: " + c));
+  check(api.helpers.knownGstins().length > 0, "existing verified GSTINs are available to map");
+
+  /* FM cannot be Non-GST — the rule from onboarding holds here too */
+  api.actions.addHubRole("FM");
+  check(sel(doc, '[data-choice="none"]').disabled,
+        "Non-GST is not offered for an FM hub");
+  check(txt(doc).indexOf("mandatory for First Mile") >= 0, "and says why");
+  api.actions.addHubChoice("none");
+  check(api.state.panel.addHub.choice !== "none", "choosing Non-GST for FM is refused");
+
+  api.actions.addHubChoice("new");
+  api.actions.addHubContinue();
+  check(txt(doc).indexOf(E.gstin) >= 0, "a new GSTIN must be valid before continuing");
+  eq(api.state.screen, "panel", "and the captain stays on the add-hub screen");
+
+  /* --- the bridge back into the ORIGINAL onboarding flow --- */
+  api.actions.addHubRole("LM");
+  api.actions.addHubChoice("existing");
+  const hubsBefore = api.state.hubs.length;
+  click(doc, "addhub-go");
+  eq(api.state.screen, "flow", "Add new hub hands off to the onboarding flow");
+  eq(api.state.activeRole, "LM", "into the role chosen for the new hub");
+  eq(api.helpers.phaseId(), "ch", "starting at Cluster Head review, the first hub-specific phase");
+
+  const nr = api.helpers.R();
+  check(nr.pd.name === "Karan Verma" && nr.pd.emailVerified,
+        "personal details carry over from the captain record");
+  check(nr.kyc.aadhaar.done && nr.kyc.pan.done && nr.kyc.bank.done,
+        "KYC carries over and is not asked again");
+  eq(nr.bgv.status, "passed", "background verification carries over");
+  eq(nr.kyc.gst.gstin, "29ABCDE1234F1Z5", "the chosen GSTIN is applied to the new hub");
+  check(txt(doc).indexOf("Cluster Head review") >= 0, "the onboarding rail is back on screen");
+
+  /* finish it and confirm the hub joins My Hubs */
+  api.actions.chApprove();
+  click(doc, "ch-continue");
+  click(doc, "sd-pay");
+  click(doc, "sd-continue");
+  api.helpers.R().pd.selected = "560076";
+  doHubDetails(doc, { address: "12, 1st Main, Jayanagar, Bengaluru" });
+  click(doc, "hub-continue");
+  api.actions.amApprove();
+  click(doc, "am-continue");
+  doAgreements(doc, api);
+  api.stopTimers();
+  api.actions.finishActivation();
+
+  eq(api.state.hubs.length, hubsBefore + 1, "the finished hub is added to My Hubs");
+  const added = api.state.hubs[api.state.hubs.length - 1];
+  check(!!added.code, "the new hub has a hub code (" + added.code + ")");
+  eq(added.role, "LM", "with the role it was created for");
+  eq(added.gst, { registered:true, gstin:"29ABCDE1234F1Z5" }, "and the GST setup chosen at HB-07");
+  eq(added.status, "active", "and is active");
+
+  click(doc, "act-panel");
+  eq(api.state.screen, "panel", "Open Captain Panel now goes to the Captain Hub");
+  check(txt(doc).indexOf("Active hubs (3)") >= 0, "My Hubs shows the new hub alongside the others");
+
+  /* --- a first-time captain also ends up with a hub --- */
+  api.reset();
+  devClick(doc, "as:new");
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  api.actions.bgvSet("passed");
+  click(doc, "bgv-continue");
+  api.actions.chSetCategory("standalone");
+  api.actions.chApprove("combined");
+  click(doc, "ch-continue");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  click(doc, "hub-continue");
+  doAgreements(doc, api);
+  api.stopTimers();
+  api.actions.finishActivation();
+  eq(api.state.hubs.length, 1, "a first-time captain's onboarding produces their first hub");
+  eq(api.state.hubs[0].role, "FM", "recorded against the right role");
+  check(!!api.state.profile.name, "and fills in the captain record the Captain Hub reads");
+  click(doc, "act-panel");
+  check(txt(doc).indexOf("Active hubs (1)") >= 0, "which then shows in My Hubs");
+
+  /* --- out-of-scope sidebar sections say so rather than 404ing --- */
+  api.actions.panelNav("payments");
+  check(txt(doc).indexOf("Not part of this prototype") >= 0,
+        "Payments is honestly marked out of scope");
+  api.actions.panelNav("hubs");
+  check(txt(doc).indexOf("Active hubs") >= 0, "and you can get back to My Hubs");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -1220,6 +1452,7 @@ async function testHubFacilityInputs() {
     await testDevPanel();
     await testBulkPincodes();
     await testHubFacilityInputs();
+    await testCaptainHub();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

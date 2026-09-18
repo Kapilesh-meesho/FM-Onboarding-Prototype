@@ -559,6 +559,143 @@ img{max-width:100%}
 .notice.bad{background:var(--err-bg);border:1px solid var(--err-br);color:var(--err)}
 .notice.ok{background:var(--ok-bg);border:1px solid var(--ok-br);color:var(--ok-ink)}
 
+/* =========================================================================
+   Captain Hub — the logged-in shell (Figma page 96:2 "Logged-in · Profile & Hubs")
+   A different surface from onboarding: 1280-wide, its own dark sidebar.
+   ====================================================================== */
+.hub-shell{display:flex;align-items:stretch;min-height:100vh;background:var(--page-alt)}
+.hub-side{
+  width:224px;flex:none;position:sticky;top:0;height:100vh;
+  background:linear-gradient(180deg,#0c2247,#0a1734);
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:16px 12px;
+}
+.hub-side .top{display:flex;flex-direction:column;gap:6px;width:100%}
+.hub-user{
+  display:flex;gap:10px;align-items:center;width:100%;padding:10px;text-align:left;
+  background:#14294c;border:1.5px solid rgba(21,182,232,.35);border-radius:12px;
+}
+.hub-user:hover{border-color:rgba(21,182,232,.6)}
+.hub-user .av{
+  width:40px;height:40px;border-radius:20px;flex:none;
+  background:linear-gradient(90deg,#e6177f,#15b6e8);
+}
+.hub-user .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.hub-user .who b{font-size:15px;font-weight:700;color:#fff;line-height:1.1}
+.hub-user .hbadge{
+  display:inline-flex;gap:6px;align-items:center;
+  background:#12294d;border:1px solid #2e4372;border-radius:6px;
+  padding:3px 8px 3px 10px;white-space:nowrap;
+}
+.hub-user .hbadge b{font-size:12px;font-weight:700;color:#fff}
+.hub-user .hbadge i{font-size:10px;color:#b2c7e5;font-style:normal}
+.hub-user .chev{font-size:20px;font-weight:700;color:#15b6e8;flex:none}
+.hub-rule{height:1px;background:#fff;opacity:.1;width:100%;margin:4px 0}
+.hub-nav{
+  display:flex;gap:12px;align-items:center;width:100%;
+  padding:11px 14px;border-radius:10px;color:#9aa7be;text-align:left;
+}
+.hub-nav .ic{font-size:15px;flex:none}
+.hub-nav .lb{font-size:14px;font-weight:500}
+.hub-nav:hover{background:rgba(255,255,255,.05);color:#cfdcef}
+.hub-nav.on{background:#2b3d60;color:#fff}
+.hub-nav.on .lb{font-weight:700}
+.hub-side .bot{display:flex;flex-direction:column;gap:10px;width:100%}
+.hub-brand{display:flex;gap:8px;align-items:center;padding:6px 0 0 14px}
+.hub-brand b{font-size:16px;font-weight:700;color:#fff;letter-spacing:1.28px}
+.hub-brand span{font-size:11px;font-weight:500;color:#9aa7be}
+
+.hub-main{flex:1;min-width:0;padding:26px 32px 60px}
+.hub-wrap{max-width:800px}
+.crumbs{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:10px}
+.crumbs b{color:var(--ink);font-weight:600}
+.crumbs .sep{margin:0 6px;color:#c3ccd9}
+.hub-h1{
+  display:flex;align-items:center;gap:8px;margin:0 0 16px;
+  font-size:22px;font-weight:700;color:var(--ink);
+}
+.hub-h1 button{font-size:20px;color:var(--ink);padding:0;line-height:1}
+.tabs{display:flex;gap:22px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.tabs button{
+  padding:0 0 10px;font-size:14px;font-weight:600;color:var(--muted);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--navy);border-bottom-color:var(--navy);font-weight:700}
+
+.pcard{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:16px}
+.pcard > .ph{padding:18px 20px 14px}
+.pcard > .ph b{display:block;font-size:15px;font-weight:700;color:var(--ink)}
+.pcard > .ph span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:3px}
+.prow{
+  display:flex;align-items:center;gap:16px;justify-content:space-between;
+  padding:14px 20px;border-top:1px solid var(--line-soft);
+}
+.prow .pl{flex:1;min-width:0}
+.prow .pl .k{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-bottom:3px}
+.prow .pl .v{display:block;font-size:14px;font-weight:700;color:var(--ink)}
+.prow .pl .s{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:3px}
+.prow .pr{display:flex;align-items:center;gap:10px;flex:none}
+.pill-ok{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--ok-bg);border:1px solid var(--ok-br);color:var(--ok-ink);
+  border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;white-space:nowrap;
+}
+.pill-mute{
+  display:inline-flex;align-items:center;gap:5px;
+  background:#eef1f6;border:1px solid var(--line);color:var(--muted);
+  border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;white-space:nowrap;
+}
+.pnote{
+  display:flex;gap:10px;align-items:flex-start;
+  background:var(--cyan-bg);border:1px solid var(--cyan-br);border-radius:10px;
+  padding:13px 15px;font-size:12px;font-weight:500;color:var(--cyan-ink);line-height:18px;
+}
+
+/* My Hubs */
+.hubs-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:14px}
+.hubs-head b{font-size:15px;font-weight:700;color:var(--ink)}
+.hub-card{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:14px}
+.hub-card.off{opacity:.62}
+.hub-card > .hh{display:flex;align-items:flex-start;gap:12px;padding:16px 20px}
+.hcode{
+  background:var(--navy);color:#fff;border-radius:6px;padding:4px 9px;
+  font-size:11px;font-weight:700;white-space:nowrap;flex:none;
+}
+.hub-card.off .hcode{background:#8e9bb0}
+.hub-card > .hh .ht{flex:1;min-width:0}
+.hub-card > .hh .ht b{display:block;font-size:15px;font-weight:700;color:var(--ink)}
+.hub-card > .hh .ht span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:3px}
+/* more specific than the `.ht span{display:block}` rule above, so the chip
+   hugs its text instead of stretching the full card width */
+.hub-card > .hh .ht span.hrole{
+  display:inline-block;width:auto;margin-top:6px;
+  background:var(--cyan-bg);border:1px solid var(--cyan-br);
+  color:var(--cyan-ink);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;
+}
+
+/* Add-new-hub GST choice */
+.choice{
+  display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;
+  border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;
+}
+.choice:hover{border-color:var(--cyan-label)}
+.choice.on{border:1.5px solid var(--cyan-label);background:var(--cyan-bg)}
+.choice .radio{
+  width:18px;height:18px;border-radius:9px;flex:none;margin-top:1px;
+  border:1.5px solid var(--line-field);background:#fff;position:relative;
+}
+.choice.on .radio{border-color:var(--cyan-label)}
+.choice.on .radio::after{
+  content:"";position:absolute;inset:3px;border-radius:5px;background:var(--cyan-label);
+}
+.choice .ct{flex:1;min-width:0}
+.choice .ct b{display:block;font-size:14px;font-weight:700;color:var(--ink)}
+.choice .ct span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:3px;line-height:17px}
+.choice .ct .sub{margin-top:10px}
+.choice[disabled]{opacity:.5;cursor:not-allowed}
+.choice[disabled]:hover{border-color:var(--line)}
+
 /* ------------------------------------------------------------- dev panel -- */
 #dev{
   position:fixed;right:18px;bottom:18px;z-index:9999;width:330px;
@@ -804,6 +941,28 @@ function blankRole(role) {
   };
 }
 
+/* Captain-level record. KYC and bank are captain-wide and shared across hubs —
+   HB-07 states this explicitly ("Your KYC and bank details carry over
+   automatically"). GST, by contrast, is per hub. */
+function blankProfile() {
+  return {
+    name:"", email:"", altPhone:"",
+    aadhaar:"", pan:"",
+    bank:{ bankName:"", acc:"", ifsc:"", holder:"", verified:false }
+  };
+}
+
+function blankPanel() {
+  return {
+    section:"hubs",            // hubs | profile | home | payments | loss | incentive | support | addhub
+    tab:"hubs",                // personal | hubs
+    bank:{ open:false, step:"otp", otp:"", attempts:0, locked:false, error:"",
+           draft:{ acc:"", ifsc:"", holder:"" } },
+    gst:{ hubId:null, mode:"view", value:"", error:"" },   // view | edit | confirmRemove
+    addHub:{ role:"LM", choice:"existing", gstin:"", existing:"", error:"" }
+  };
+}
+
 function blankState() {
   return {
     screen: "login",
@@ -814,9 +973,75 @@ function blankState() {
     otpError: "",
     otpSeconds: 25,
     loginError: "",
+    loginAs: "new",            // dev-panel switch: "new" | "existing"
     activeRole: null,
-    roles: { LM: blankRole("LM"), FM: blankRole("FM") }
+    roles: { LM: blankRole("LM"), FM: blankRole("FM") },
+    profile: blankProfile(),
+    hubs: [],                  // hubs this captain owns
+    activeHubId: null,
+    panel: blankPanel()
   };
+}
+
+/* A hub owned by the captain, as listed on HB-01. */
+function makeHub(o) {
+  return Object.assign({
+    id: "h" + Date.now() + Math.floor(Math.random() * 1000),
+    code:"", name:"", role:"LM",
+    address:"", pincode:"", city:"",
+    status:"active",                       // active | inactive | in_progress
+    gst:{ registered:false, gstin:"" },
+    areaSqft:"", manpower:"", vehicles:[],
+    category:null, activatedOn:"", deactivatedOn:""
+  }, o || {});
+}
+
+/* Seed used by the dev panel's "existing captain" login — mirrors HB-01. */
+function seedExistingCaptain() {
+  S.profile = {
+    name:"Karan Verma", email:"karan.verma@gmail.com", altPhone:"9876543210",
+    aadhaar:"123412341234", pan:"ABCDE1234F",
+    bank:{ bankName:"HDFC Bank", acc:"123456784321", ifsc:"HDFC0001234",
+           holder:"Karan Verma", verified:true }
+  };
+  S.hubs = [
+    makeHub({ id:"hub-aqt", code:"AQT", name:"Koramangala Hub", role:"LM",
+              address:"Koramangala, Bengaluru", pincode:"560034", city:"Bengaluru, Karnataka",
+              status:"active", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
+              areaSqft:"4200", manpower:"14", vehicles:["3.5MT_14FT","7MT_20FT"],
+              activatedOn:"12 Jan 2026" }),
+    makeHub({ id:"hub-beu", code:"BEU", name:"Indiranagar Hub", role:"LM",
+              address:"Indiranagar, Bengaluru", pincode:"560038", city:"Bengaluru, Karnataka",
+              status:"active", gst:{ registered:false, gstin:"" },
+              areaSqft:"3000", manpower:"9", vehicles:["2.2MT_4W_Bolero"],
+              activatedOn:"03 Mar 2026" }),
+    makeHub({ id:"hub-jyp", code:"JYP", name:"HSR Layout Hub", role:"LM",
+              address:"HSR Layout, Bengaluru", pincode:"560102", city:"Bengaluru, Karnataka",
+              status:"inactive", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
+              areaSqft:"2600", manpower:"7", vehicles:["1.5MT_4W_Dost"],
+              activatedOn:"20 Nov 2025", deactivatedOn:"12 Apr 2026" })
+  ];
+  S.activeHubId = "hub-aqt";
+}
+
+function activeHub() {
+  for (var i = 0; i < S.hubs.length; i++) if (S.hubs[i].id === S.activeHubId) return S.hubs[i];
+  return S.hubs[0] || null;
+}
+function hubById(id) {
+  for (var i = 0; i < S.hubs.length; i++) if (S.hubs[i].id === id) return S.hubs[i];
+  return null;
+}
+/* Every GSTIN already verified on this captain's hubs — HB-07 offers these for
+   reuse rather than making them verify the same GSTIN twice. */
+function knownGstins() {
+  var out = [];
+  S.hubs.forEach(function (h) {
+    if (h.gst && h.gst.registered && h.gst.gstin && out.indexOf(h.gst.gstin) < 0) {
+      out.push(h.gst.gstin);
+    }
+  });
+  return out;
 }
 
 var S = blankState();
@@ -844,6 +1069,13 @@ function load() {
       if (role.hub) delete role.hub.maxVehicle;
       next.roles[r] = role;
     });
+    next.profile = Object.assign(blankProfile(), parsed.profile || {});
+    next.profile.bank = Object.assign(blankProfile().bank, (parsed.profile || {}).bank || {});
+    next.hubs = Array.isArray(parsed.hubs) ? parsed.hubs.map(function (h) { return makeHub(h); }) : [];
+    next.panel = Object.assign(blankPanel(), parsed.panel || {});
+    next.panel.bank = Object.assign(blankPanel().bank, (parsed.panel || {}).bank || {});
+    next.panel.gst = Object.assign(blankPanel().gst, (parsed.panel || {}).gst || {});
+    next.panel.addHub = Object.assign(blankPanel().addHub, (parsed.panel || {}).addHub || {});
     S = next;
     return true;
   } catch (e) { return false; }
@@ -984,6 +1216,7 @@ function render() {
   if (S.screen === "login")      html = viewLogin();
   else if (S.screen === "otp")   html = viewOtp();
   else if (S.screen === "roles") html = viewRoles();
+  else if (S.screen === "panel") html = viewPanel();
   else                           html = viewFlow();
   app.innerHTML = html;
   bind();
@@ -1109,6 +1342,368 @@ function viewRoles() {
       inactiveHtml +
     '</div>' +
   '</div>';
+}
+
+/* =========================================================================
+   CAPTAIN HUB (logged-in) — Figma page 96:2
+   ====================================================================== */
+
+var HUB_NAV = [
+  { id:"support",   icon:"🎧", label:"Valmo Support" },
+  { id:"home",      icon:"🏠", label:"Home" },
+  { id:"payments",  icon:"💳", label:"Payments" },
+  { id:"loss",      icon:"📦", label:"Loss Management" },
+  { id:"incentive", icon:"🎯", label:"Incentive Center" }
+];
+
+function hubSidebar() {
+  var p = S.panel, h = activeHub();
+  var nav = HUB_NAV.map(function (n) {
+    return '<button class="hub-nav' + (p.section === n.id ? " on" : "") + '" data-nav="' + n.id + '">' +
+             '<span class="ic">' + n.icon + '</span><span class="lb">' + esc(n.label) + '</span>' +
+           '</button>';
+  }).join("");
+
+  return '<div class="hub-side">' +
+    '<div class="top">' +
+      '<button class="hub-user" id="hub-user">' +
+        '<span class="av"></span>' +
+        '<span class="who">' +
+          '<b>' + esc(S.profile.name || "Captain") + '</b>' +
+          '<span class="hbadge"><b>' + esc(h ? h.code : "—") + '</b><i>▾</i></span>' +
+        '</span>' +
+        '<span class="chev">›</span>' +
+      '</button>' +
+      '<div class="hub-rule"></div>' +
+      nav +
+    '</div>' +
+    '<div class="bot">' +
+      '<button class="hub-nav" id="hub-logout">' +
+        '<span class="ic">⎋</span><span class="lb">Log Out</span></button>' +
+      '<div class="hub-brand"><b>VALMO</b><span>Captain Hub</span></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function viewPanel() {
+  var p = S.panel, body;
+  if (p.section === "profile")      body = p.tab === "hubs" ? panelHubs() : panelPersonal();
+  else if (p.section === "hubs")    body = panelHubs();
+  else if (p.section === "addhub")  body = panelAddHub();
+  else                              body = panelPlaceholder(p.section);
+  return '<div class="hub-shell">' + hubSidebar() +
+         '<div class="hub-main"><div class="hub-wrap">' + body + '</div></div></div>';
+}
+
+function panelTabs(tab) {
+  return '<div class="tabs">' +
+    '<button data-ptab="personal"' + (tab === "personal" ? ' class="on"' : '') + '>Personal Details</button>' +
+    '<button data-ptab="hubs"' + (tab === "hubs" ? ' class="on"' : '') + '>My Hubs</button>' +
+  '</div>';
+}
+
+/* ------------------------------------------------ PR-01 · Personal Details */
+
+function panelPersonal() {
+  var pr = S.profile, b = pr.bank, bk = S.panel.bank;
+  var maskedAadhaar = pr.aadhaar ? "XXXX XXXX " + pr.aadhaar.slice(-4) : "—";
+  var maskedPan = pr.pan ? pr.pan.slice(0, 5) + "••••" + pr.pan.slice(-1) : "—";
+  var maskedAcc = b.acc ? b.bankName + " •••• " + b.acc.slice(-4) : "—";
+
+  return '<div class="crumbs">My Profile<span class="sep">›</span><b>Personal Details</b></div>' +
+    '<h2 class="hub-h1"><button id="hub-back">‹</button>My Profile</h2>' +
+    panelTabs("personal") +
+
+    '<div class="pcard">' +
+      '<div class="ph"><b>KYC details</b>' +
+        '<span>Verified during onboarding · shared across all your hubs</span></div>' +
+      '<div class="prow"><div class="pl"><span class="k">Aadhaar number</span>' +
+        '<span class="v">' + esc(maskedAadhaar) + '</span></div>' +
+        '<div class="pr"><span class="pill-ok">✓ Verified</span></div></div>' +
+      '<div class="prow"><div class="pl"><span class="k">PAN</span>' +
+        '<span class="v">' + esc(maskedPan) + '</span></div>' +
+        '<div class="pr"><span class="pill-ok">✓ Verified</span></div></div>' +
+    '</div>' +
+
+    '<div class="pcard">' +
+      '<div class="ph"><b>Bank account</b><span>Used for all your payouts</span></div>' +
+      '<div class="prow"><div class="pl"><span class="k">Bank account</span>' +
+        '<span class="v">' + esc(maskedAcc) + '</span>' +
+        '<span class="s">IFSC ' + esc(b.ifsc || "—") + ' · ' + esc(b.holder || "—") + '</span></div>' +
+        '<div class="pr">' +
+          (b.verified ? '<span class="pill-ok">✓ Verified</span>' : '<span class="pill-mute">Unverified</span>') +
+          '<button class="btn btn-ghost" id="bank-edit">Edit</button>' +
+        '</div></div>' +
+      (bk.open ? bankEditBlock(bk) : "") +
+    '</div>' +
+
+    '<div class="pnote"><span>ⓘ</span><span>Changing your bank account sends an OTP to your ' +
+      'registered phone ' + esc(maskPhone(S.phone)) + ', then re-verifies the new account ' +
+      'before saving.</span></div>';
+}
+
+/* PR-02 … PR-08 — the bank-edit journey, inline under the bank card. */
+function bankEditBlock(bk) {
+  var inner;
+
+  if (bk.step === "otp") {
+    inner = '<div class="pnote" style="margin-bottom:14px"><span>ⓘ</span>' +
+        '<span>Enter the OTP sent to ' + esc(maskPhone(S.phone)) + ' to change your bank account. ' +
+        'Demo code <b>000000</b>.</span></div>' +
+      (bk.locked
+        ? '<div class="notice bad" data-testid="bank-otp-locked"><b>Bank change locked</b>' +
+          'Three incorrect codes. Contact VALMO Support to unlock.</div>'
+        : '<div class="fl" style="max-width:260px"><label>OTP</label>' +
+            '<div class="box' + (bk.error ? ' bad' : '') + '">' +
+            '<input id="bank-otp" maxlength="6" inputmode="numeric" placeholder="000000" ' +
+              'value="' + esc(bk.otp) + '"></div>' +
+            (bk.error ? '<div class="hint err">' + esc(bk.error) + '</div>' : '') +
+          '</div>' +
+          '<div style="display:flex;gap:10px">' +
+            '<button class="btn btn-ghost" id="bank-cancel">Cancel</button>' +
+            '<button class="btn btn-primary" id="bank-otp-go">Verify OTP</button></div>');
+
+  } else if (bk.step === "form") {
+    inner = '<div class="grid2">' +
+        '<div class="fl"><label>New account number</label>' +
+          '<div class="box' + (bk.error && bk.errField === "acc" ? ' bad' : '') + '">' +
+          '<input id="bank-acc" inputmode="numeric" maxlength="18" placeholder="Account number" ' +
+            'value="' + esc(bk.draft.acc) + '"></div>' +
+          '<div class="hint' + (bk.errField === "acc" ? ' err' : '') + '">' +
+            (bk.errField === "acc" ? esc(bk.error) : "9 to 18 digits.") + '</div></div>' +
+        '<div class="fl"><label>IFSC</label>' +
+          '<div class="box' + (bk.error && bk.errField === "ifsc" ? ' bad' : '') + '">' +
+          '<input id="bank-ifsc" maxlength="11" style="text-transform:uppercase" ' +
+            'placeholder="HDFC0001234" value="' + esc(bk.draft.ifsc) + '"></div>' +
+          '<div class="hint' + (bk.errField === "ifsc" ? ' err' : '') + '">' +
+            (bk.errField === "ifsc" ? esc(bk.error) : "11 characters.") + '</div></div>' +
+      '</div>' +
+      '<div class="fl"><label>Account holder name</label>' +
+        '<div class="box' + (bk.errField === "holder" ? ' bad' : '') + '">' +
+        '<input id="bank-holder" placeholder="As per bank records" value="' + esc(bk.draft.holder) + '"></div>' +
+        '<div class="hint' + (bk.errField === "holder" ? ' err' : '') + '">' +
+          (bk.errField === "holder" ? esc(bk.error) : "Must match the name on the account.") + '</div></div>' +
+      '<div style="display:flex;gap:10px">' +
+        '<button class="btn btn-ghost" id="bank-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="bank-verify">Verify with ₹1 penny-drop</button></div>';
+
+  } else if (bk.step === "verifying") {
+    inner = statusBlock("run", "Verifying the new account",
+      "We have sent ₹1 to the account. This usually takes a few seconds.");
+
+  } else if (bk.step === "failed") {
+    inner = statusBlock("bad", "Verification failed",
+        bk.error || "The penny-drop did not reach that account. Check the details and try again.") +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="bank-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="bank-retry">Back to details</button></div>';
+
+  } else {
+    inner = statusBlock("ok", "Bank account updated",
+      "Future payouts go to the new account.") +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="bank-done">Done</button></div>';
+  }
+
+  return '<div style="padding:18px 20px;border-top:1px solid var(--line-soft);' +
+         'background:var(--sum-bg);border-radius:0 0 12px 12px" data-testid="bank-edit">' +
+         inner + '</div>';
+}
+
+/* ------------------------------------------------------- HB-01 · My Hubs */
+
+function hubCard(h) {
+  var g = S.panel.gst, editing = g.hubId === h.id && g.mode !== "view";
+  var inactive = h.status === "inactive";
+  var pending = h.status === "in_progress";
+
+  var right = pending
+    ? '<span class="pill-mute">In progress</span>'
+    : (inactive ? '<span class="pill-mute">Inactive</span>' : '<span class="pill-ok">Active</span>');
+
+  var gstRow;
+  if (pending) {
+    gstRow = '<div class="prow"><div class="pl"><span class="k">Onboarding</span>' +
+      '<span class="v">Step ' + (S.roles[h.role].phaseIdx + 1) + ' of ' +
+      PHASES[h.role].length + '</span></div>' +
+      '<div class="pr"><button class="btn btn-primary" data-resume="' + esc(h.id) + '">' +
+      'Resume onboarding</button></div></div>';
+  } else {
+    gstRow = '<div class="prow"><div class="pl"><span class="k">GST registration</span>' +
+      '<span class="v">' + esc(h.gst.registered ? h.gst.gstin : "Non-GST") + '</span></div>' +
+      '<div class="pr">' +
+        (inactive
+          ? '<span class="s" style="font-size:11px;color:var(--muted)">Deactivated on ' +
+            esc(h.deactivatedOn || "—") + '</span>'
+          : '<button class="btn btn-ghost" data-gst="' + esc(h.id) + '">' +
+            (h.gst.registered ? "Manage GSTIN" : "Add GSTIN") + '</button>') +
+      '</div></div>';
+  }
+
+  return '<div class="hub-card' + (inactive ? " off" : "") + '" data-hub="' + esc(h.id) + '">' +
+    '<div class="hh">' +
+      '<span class="hcode">Hub ' + esc(h.code || "—") + '</span>' +
+      '<span class="ht"><b>' + esc(h.name) + '</b>' +
+        '<span>' + esc(h.address) + (h.pincode ? " · " + esc(h.pincode) : "") + '</span>' +
+        '<span class="hrole">' + esc(h.role) + ' Captain</span></span>' +
+      right +
+    '</div>' +
+    gstRow +
+    (editing ? gstEditBlock(h) : "") +
+  '</div>';
+}
+
+/* HB-02 … HB-06 — per-hub GSTIN management. */
+function gstEditBlock(h) {
+  var g = S.panel.gst, inner;
+
+  if (g.mode === "confirmRemove") {
+    inner = '<div class="notice warn" data-testid="gst-remove-confirm">' +
+        '<b>Remove GSTIN from ' + esc(h.name) + '?</b>' +
+        'This hub becomes Non-GST. Invoices raised after this change will not carry a GSTIN. ' +
+        'You can add one again later.</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="gst-cancel">Keep GSTIN</button>' +
+        '<button class="btn btn-primary" id="gst-remove-go" ' +
+          'style="background:var(--err);box-shadow:none">Remove GSTIN</button></div>';
+  } else {
+    inner = '<div class="fl" style="max-width:320px"><label>GSTIN</label>' +
+        '<div class="box' + (g.error ? ' bad' : '') + '">' +
+        '<input id="gst-input" maxlength="15" style="text-transform:uppercase" ' +
+          'placeholder="15-character GSTIN" value="' + esc(g.value) + '"></div>' +
+        '<div class="hint' + (g.error ? ' err' : '') + '">' +
+          (g.error || "Verified via Cashfree before it is saved.") + '</div></div>' +
+      '<div style="display:flex;gap:10px">' +
+        '<button class="btn btn-ghost" id="gst-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="gst-save">' +
+          (h.gst.registered ? "Update GSTIN" : "Verify and add GSTIN") + '</button>' +
+        (h.gst.registered
+          ? '<button class="btn-link" id="gst-remove" style="color:var(--err);margin-left:6px">' +
+            'Remove GSTIN</button>'
+          : '') +
+      '</div>';
+  }
+  return '<div style="padding:16px 20px;border-top:1px solid var(--line-soft);' +
+         'background:var(--sum-bg);border-radius:0 0 12px 12px" data-testid="gst-edit">' +
+         inner + '</div>';
+}
+
+function panelHubs() {
+  var active = S.hubs.filter(function (h) { return h.status === "active"; });
+  var pending = S.hubs.filter(function (h) { return h.status === "in_progress"; });
+  var inactive = S.hubs.filter(function (h) { return h.status === "inactive"; });
+
+  var out = '<div class="crumbs">My Profile<span class="sep">›</span><b>My Hubs</b></div>' +
+    '<h2 class="hub-h1"><button id="hub-back">‹</button>My Profile</h2>' +
+    panelTabs("hubs") +
+    '<div class="hubs-head"><b>Active hubs (' + active.length + ')</b>' +
+      '<button class="btn btn-primary" id="hub-add">＋ Add new hub</button></div>';
+
+  out += active.length
+    ? active.map(hubCard).join("")
+    : '<div class="rs-empty" style="margin-bottom:22px"><b>No active hubs yet</b>' +
+      '<span>Add a hub to start operating for VALMO.</span></div>';
+
+  if (pending.length) {
+    out += '<div class="hubs-head" style="margin-top:24px">' +
+           '<b>Onboarding in progress (' + pending.length + ')</b></div>' +
+           pending.map(hubCard).join("");
+  }
+  if (inactive.length) {
+    out += '<div class="hubs-head" style="margin-top:24px">' +
+           '<b>Inactive hubs (' + inactive.length + ')</b></div>' +
+           inactive.map(hubCard).join("");
+  }
+  return out;
+}
+
+/* ----------------------------------------------- HB-07 · Add a new hub */
+
+function panelAddHub() {
+  var a = S.panel.addHub, known = knownGstins();
+  var fm = a.role === "FM";
+
+  // FM hubs must be GST registered, so Non-GST is not offered for them.
+  var nonGstDisabled = fm;
+
+  var opt = function (id, title, sub, extra, dis) {
+    return '<button class="choice' + (a.choice === id ? " on" : "") + '" data-choice="' + id + '"' +
+           (dis ? " disabled" : "") + '>' +
+             '<span class="radio"></span>' +
+             '<span class="ct"><b>' + title + '</b><span>' + sub + '</span>' +
+               (extra ? '<span class="sub">' + extra + '</span>' : '') + '</span>' +
+           '</button>';
+  };
+
+  var gstinSelect = known.length
+    ? '<select id="addhub-existing" class="ms-search" style="max-width:280px;margin:0">' +
+      known.map(function (g) {
+        return '<option value="' + esc(g) + '"' + (a.existing === g ? " selected" : "") + '>' +
+               esc(g) + ' · Karnataka</option>';
+      }).join("") + '</select>'
+    : '<span style="font-size:11px;color:var(--muted)">No verified GSTIN on your account yet.</span>';
+
+  return '<div class="crumbs">My Profile<span class="sep">›</span>My Hubs' +
+      '<span class="sep">›</span><b>Add new hub</b></div>' +
+    '<h2 class="hub-h1"><button id="hub-back-hubs">‹</button>Add a new hub</h2>' +
+
+    '<div class="pcard" style="max-width:520px"><div style="padding:22px 24px">' +
+      '<div style="margin-bottom:22px">' +
+        '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);' +
+          'margin-bottom:8px">Role for this hub</span>' +
+        '<div class="toggle-row" style="margin:0">' +
+          '<button data-addrole="LM"' + (a.role === "LM" ? ' class="on"' : '') + '>LM Captain</button>' +
+          '<button data-addrole="FM"' + (a.role === "FM" ? ' class="on"' : '') + '>FM Captain</button>' +
+        '</div></div>' +
+
+      '<b style="display:block;font-size:17px;font-weight:700;color:var(--ink);margin-bottom:8px">' +
+        'How is this hub registered for GST?</b>' +
+      '<p style="margin:0 0 18px;font-size:13px;font-weight:500;color:var(--muted);line-height:19px">' +
+        'Your KYC and bank details carry over automatically. Choose the GST setup for this new hub ' +
+        '— you can change it later.</p>' +
+
+      opt("existing", "Use an existing GSTIN",
+          "Map one of your already-verified GSTINs to this hub.", gstinSelect, !known.length) +
+      opt("none", "Continue as Non-GST",
+          nonGstDisabled
+            ? "Not available for FM hubs — GST registration is mandatory for First Mile."
+            : "This hub won&rsquo;t have a GSTIN. You can add one later from My Hubs.",
+          "", nonGstDisabled) +
+      opt("new", "Add a new GSTIN",
+          "Enter and verify a new GSTIN for this hub via Cashfree.",
+          a.choice === "new"
+            ? '<span class="fl" style="display:block;margin:0"><span class="box' +
+              (a.error ? ' bad' : '') + '" style="max-width:280px">' +
+              '<input id="addhub-gstin" maxlength="15" style="text-transform:uppercase" ' +
+              'placeholder="15-character GSTIN" value="' + esc(a.gstin) + '"></span>' +
+              (a.error ? '<span class="hint err" style="display:block">' + esc(a.error) + '</span>' : '') +
+              '</span>'
+            : "") +
+
+      '<div style="margin-top:20px">' +
+        '<button class="btn btn-primary" id="addhub-go">Continue to onboarding →</button>' +
+        '<div style="margin-top:10px;font-size:11px;color:var(--muted)">' +
+          'Personal details, KYC and background verification carry over — you start at ' +
+          esc(PHASES[a.role][3].title) + '.</div>' +
+      '</div>' +
+    '</div></div>';
+}
+
+function panelPlaceholder(section) {
+  var meta = {};
+  HUB_NAV.forEach(function (n) { meta[n.id] = n; });
+  var m = meta[section] || { label:"Captain Hub", icon:"🏠" };
+  return '<div class="crumbs"><b>' + esc(m.label) + '</b></div>' +
+    '<h2 class="hub-h1">' + m.icon + ' ' + esc(m.label) + '</h2>' +
+    '<div class="pcard"><div style="padding:36px 24px;text-align:center">' +
+      '<b style="display:block;font-size:15px;color:var(--ink);margin-bottom:6px">' +
+        'Not part of this prototype</b>' +
+      '<span style="font-size:13px;color:var(--muted)">' +
+        esc(m.label) + ' is designed in the Captain Hub but out of scope here. ' +
+        'This build covers Profile &amp; Hubs.</span>' +
+      '<div style="margin-top:18px"><button class="btn btn-primary" data-nav="hubs">' +
+        'Go to My Hubs</button></div>' +
+    '</div></div>';
 }
 
 /* ------------------------------------------------------------------- flow */
@@ -1707,7 +2302,7 @@ function phaseCH(r) {
         'you fill in. Once it is set, your benchmark rate ceiling is determined automatically.</div>' +
       '<div class="tl">' +
         tlRow("ok", "Background verification passed", "Identity and risk checks cleared.") +
-        tlRow("now", "Area Manager survey", "Hub category pending from the AM&rsquo;s site survey.") +
+        tlRow("now", "Area Manager survey", "Hub category pending from the AM’s site survey.") +
         tlRow("", "Cluster Head review", "Rate card review starts once the category arrives.") +
       '</div>';
     side = sideDefault(r, chContactCard("ch"));
@@ -2295,7 +2890,11 @@ var A = {
     if (S.otpLocked) return;
     var code = S.otp.join("");
     if (code === "000000") {
-      S.otpError = ""; S.screen = "roles"; stopOtpTimer(); save(); render(); return;
+      S.otpError = ""; stopOtpTimer();
+      // An existing captain lands in the Captain Hub; a new one starts onboarding.
+      S.screen = S.hubs.length ? "panel" : "roles";
+      if (S.screen === "panel") { S.panel.section = "hubs"; S.panel.tab = "hubs"; }
+      save(); render(); return;
     }
     S.otpAttempts++;
     if (S.otpAttempts >= 3) { S.otpLocked = true; S.otpError = ERR.otpLocked; }
@@ -2727,6 +3326,218 @@ var A = {
     r.act.activatedOn = new Date().toLocaleString("en-IN",
       { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
     r.complete = true;
+
+    /* Onboarding produces a hub the captain then owns, and fills in the
+       captain-level record the Captain Hub reads from. */
+    if (!S.profile.name) {
+      S.profile = {
+        name: r.pd.name, email: r.pd.email, altPhone: r.pd.altPhone,
+        aadhaar: r.kyc.aadhaar.value, pan: r.kyc.pan.value,
+        bank: { bankName:"HDFC Bank", acc:r.kyc.bank.acc, ifsc:r.kyc.bank.ifsc,
+                holder:r.pd.name, verified:true }
+      };
+    }
+    var gst = r.newHubGst || { registered: !!r.kyc.gst.registered, gstin: r.kyc.gst.gstin || "" };
+    var hub = makeHub({
+      code: r.hub.hubCode, name: (r.pd.selected || "New") + " Hub", role: r.role,
+      address: r.hub.address, pincode: r.hub.pincode, city: r.hub.city,
+      status: "active", gst: gst,
+      areaSqft: r.hub.areaSqft, manpower: r.hub.manpower,
+      vehicles: (r.hub.vehicles || []).slice(),
+      category: r.ch.category, activatedOn: r.act.activatedOn
+    });
+    // replace the in-progress placeholder for this role, if one was listed
+    S.hubs = S.hubs.filter(function (h) {
+      return !(h.status === "in_progress" && h.role === r.role);
+    });
+    S.hubs.push(hub);
+    S.activeHubId = hub.id;
+
+    save(); render();
+  },
+
+  /* ---- Captain Hub: navigation ---- */
+  openPanel: function (section, tab) {
+    S.screen = "panel";
+    S.panel.section = section || "hubs";
+    if (tab) S.panel.tab = tab;
+    if (section === "profile" && !tab) S.panel.tab = "personal";
+    save(); render();
+  },
+  panelNav: function (section) {
+    S.panel.section = section;
+    S.panel.bank.open = false;
+    S.panel.gst = blankPanel().gst;
+    save(); render();
+  },
+  panelTab: function (tab) {
+    S.panel.tab = tab;
+    S.panel.section = tab === "hubs" ? "hubs" : "profile";
+    S.panel.bank.open = false;
+    S.panel.gst = blankPanel().gst;
+    save(); render();
+  },
+  switchHub: function (id) { S.activeHubId = id; save(); render(); },
+
+  /* ---- PR-02…PR-08: bank change ---- */
+  bankEditStart: function () {
+    S.panel.bank = Object.assign(blankPanel().bank, { open:true, step:"otp" });
+    save(); render();
+  },
+  bankCancel: function () { S.panel.bank = blankPanel().bank; save(); render(); },
+  bankOtp: function (code) {
+    var bk = S.panel.bank;
+    if (bk.locked) return;
+    if (String(code).trim() === "000000") {
+      bk.step = "form"; bk.error = ""; bk.otp = "";
+      bk.draft = { acc:"", ifsc:"", holder:S.profile.name || "" };
+    } else {
+      bk.attempts++;
+      if (bk.attempts >= 3) { bk.locked = true; bk.error = ERR.otpLocked; }
+      else bk.error = ERR.otpWrong + " (" + (3 - bk.attempts) + " left)";
+    }
+    save(); render();
+  },
+  bankSubmit: function (acc, ifsc, holder) {
+    var bk = S.panel.bank;
+    bk.draft = { acc:acc || "", ifsc:(ifsc || "").toUpperCase(), holder:holder || "" };
+    bk.error = ""; bk.errField = "";
+    if (!V.account(bk.draft.acc))      { bk.errField = "acc";    bk.error = ERR.account; }
+    else if (!V.ifsc(bk.draft.ifsc))   { bk.errField = "ifsc";   bk.error = ERR.ifsc; }
+    else if (!bk.draft.holder.trim())  { bk.errField = "holder"; bk.error = "Account holder name is required."; }
+    if (bk.error) { save(); render(); return; }
+    bk.step = "verifying";
+    save(); render();
+  },
+  /* Dev panel drives the penny-drop outcome — there is no real bank here. */
+  bankPennyResult: function (ok, reason) {
+    var bk = S.panel.bank;
+    if (bk.step !== "verifying") return;
+    if (ok) {
+      S.profile.bank = {
+        bankName:"HDFC Bank", acc:bk.draft.acc, ifsc:bk.draft.ifsc,
+        holder:bk.draft.holder, verified:true
+      };
+      bk.step = "done"; bk.error = "";
+    } else {
+      bk.step = "failed";
+      bk.error = reason || "The penny-drop did not reach that account.";
+    }
+    save(); render();
+  },
+  bankBackToForm: function () { S.panel.bank.step = "form"; save(); render(); },
+
+  /* ---- HB-02…HB-06: per-hub GSTIN ---- */
+  gstOpen: function (hubId) {
+    var h = hubById(hubId);
+    if (!h) return;
+    S.panel.gst = { hubId:hubId, mode:"edit", value:h.gst.gstin || "", error:"" };
+    save(); render();
+  },
+  gstCancel: function () { S.panel.gst = blankPanel().gst; save(); render(); },
+  gstSave: function (value) {
+    var g = S.panel.gst, h = hubById(g.hubId);
+    if (!h) return;
+    value = (value || "").toUpperCase().trim();
+    g.value = value;
+    if (!V.gstin(value)) { g.error = ERR.gstin; save(); render(); return; }
+    h.gst = { registered:true, gstin:value };
+    S.panel.gst = blankPanel().gst;
+    save(); render();
+  },
+  gstAskRemove: function () { S.panel.gst.mode = "confirmRemove"; save(); render(); },
+  gstRemove: function () {
+    var h = hubById(S.panel.gst.hubId);
+    if (h) h.gst = { registered:false, gstin:"" };
+    S.panel.gst = blankPanel().gst;
+    save(); render();
+  },
+
+  /* ---- HB-07: add a new hub, then hand off to onboarding ---- */
+  addHubOpen: function () {
+    var known = knownGstins();
+    S.panel.section = "addhub";
+    S.panel.addHub = Object.assign(blankPanel().addHub, {
+      role:"LM",
+      choice: known.length ? "existing" : "new",
+      existing: known[0] || ""
+    });
+    save(); render();
+  },
+  addHubRole: function (role) {
+    var a = S.panel.addHub;
+    a.role = role;
+    // FM hubs must be GST registered — drop a Non-GST choice if the role flips.
+    if (role === "FM" && a.choice === "none") a.choice = knownGstins().length ? "existing" : "new";
+    a.error = "";
+    save(); render();
+  },
+  addHubChoice: function (choice) {
+    var a = S.panel.addHub;
+    if (choice === "none" && a.role === "FM") return;     // not offered for FM
+    if (choice === "existing" && !knownGstins().length) return;
+    a.choice = choice; a.error = "";
+    save(); render();
+  },
+  addHubExisting: function (g) { S.panel.addHub.existing = g; save(); },
+
+  /* Create the draft hub and drop the captain into the ORIGINAL onboarding flow.
+     Personal details, KYC and BGV are captain-level and already done, so they are
+     carried over and marked complete; the journey starts at Cluster Head review,
+     which is the first hub-specific phase for both roles. */
+  addHubContinue: function () {
+    var a = S.panel.addHub, pr = S.profile;
+    a.error = "";
+
+    var gst;
+    if (a.choice === "existing") {
+      if (!a.existing) { a.error = "Pick a GSTIN to map to this hub."; save(); render(); return; }
+      gst = { registered:true, gstin:a.existing };
+    } else if (a.choice === "new") {
+      var g = (a.gstin || "").toUpperCase().trim();
+      if (!V.gstin(g)) { a.error = ERR.gstin; save(); render(); return; }
+      gst = { registered:true, gstin:g };
+    } else {
+      if (a.role === "FM") { a.error = ERR.gstRequired; save(); render(); return; }
+      gst = { registered:false, gstin:"" };
+    }
+
+    var role = a.role;
+    var r = blankRole(role);
+    r.started = true;
+    r.requestId = makeRequestId();
+    r.addingHub = true;
+
+    // carry the captain-level record forward
+    r.pd = Object.assign(r.pd, {
+      name: pr.name, email: pr.email, altPhone: pr.altPhone,
+      emailVerified: true, pincodes: [], checked: false, selected: null
+    });
+    r.kyc.aadhaar = { done:true, value:pr.aadhaar, otpOpen:false };
+    r.kyc.pan     = { done:true, value:pr.pan, father:"Suresh Verma" };
+    r.kyc.bank    = { done:true, acc:pr.bank.acc, ifsc:pr.bank.ifsc, pennyDone:true };
+    r.kyc.gst     = { registered:gst.registered, gstin:gst.gstin, done:true };
+    r.kyc.msme    = { done:role === "FM", fileName:role === "FM" ? "udyam-registration.pdf" : "" };
+    r.bgv.status  = "passed";
+    r.newHubGst   = gst;
+
+    // start at Cluster Head review — the first phase that is about this hub
+    var idx = 0;
+    PHASES[role].forEach(function (p, i) { if (p.id === "ch") idx = i; });
+    r.phaseIdx = idx;
+
+    S.roles[role] = r;
+    S.activeRole = role;
+    S.screen = "flow";
+    save(); render();
+  },
+
+  /* HB-08 — resume a hub still mid-onboarding. */
+  resumeHub: function (hubId) {
+    var h = hubById(hubId);
+    if (!h || h.status !== "in_progress") return;
+    S.activeRole = h.role;
+    S.screen = "flow";
     save(); render();
   },
 
@@ -2883,8 +3694,12 @@ function bind() {
   });
   on("logout", "click", A.logout);
   on("switch-role", "click", A.switchRole);
-  on("save-exit", "click", A.switchRole);
+  on("save-exit", "click", function () {
+    // leaving a flow: back to the hub list if the captain already has hubs
+    if (S.hubs.length) A.openPanel("hubs", "hubs"); else A.switchRole();
+  });
 
+  if (S.screen === "panel") { bindPanel(); return; }
   if (S.screen !== "flow") return;
   var r = R();
 
@@ -3005,7 +3820,64 @@ function bind() {
 
   /* activation */
   on("act-retry", "click", A.actRetry);
-  on("act-panel", "click", A.switchRole);
+  on("act-panel", "click", function () { A.openPanel("hubs", "hubs"); });
+}
+
+/* ------------------------------------------------------- Captain Hub bind */
+
+function bindPanel() {
+  Array.prototype.forEach.call(document.querySelectorAll("[data-nav]"), function (el) {
+    el.addEventListener("click", function () { A.panelNav(el.getAttribute("data-nav")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ptab]"), function (el) {
+    el.addEventListener("click", function () { A.panelTab(el.getAttribute("data-ptab")); });
+  });
+  on("hub-user", "click", function () { A.panelTab("personal"); });
+  on("hub-logout", "click", A.logout);
+  on("hub-back", "click", function () { A.panelNav("hubs"); });
+  on("hub-back-hubs", "click", function () { A.panelNav("hubs"); });
+
+  /* bank edit */
+  on("bank-edit", "click", A.bankEditStart);
+  on("bank-cancel", "click", A.bankCancel);
+  on("bank-otp-go", "click", function () { A.bankOtp(val("bank-otp")); });
+  on("bank-otp", "keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); A.bankOtp(val("bank-otp")); }
+  });
+  on("bank-verify", "click", function () {
+    A.bankSubmit(val("bank-acc"), val("bank-ifsc"), val("bank-holder"));
+  });
+  on("bank-retry", "click", A.bankBackToForm);
+  on("bank-done", "click", A.bankCancel);
+
+  /* per-hub GSTIN */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-gst]"), function (el) {
+    el.addEventListener("click", function () { A.gstOpen(el.getAttribute("data-gst")); });
+  });
+  on("gst-cancel", "click", A.gstCancel);
+  on("gst-save", "click", function () { A.gstSave(val("gst-input")); });
+  on("gst-remove", "click", A.gstAskRemove);
+  on("gst-remove-go", "click", A.gstRemove);
+
+  /* hubs list */
+  on("hub-add", "click", A.addHubOpen);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-resume]"), function (el) {
+    el.addEventListener("click", function () { A.resumeHub(el.getAttribute("data-resume")); });
+  });
+
+  /* add new hub */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-addrole]"), function (el) {
+    el.addEventListener("click", function () { A.addHubRole(el.getAttribute("data-addrole")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-choice]"), function (el) {
+    el.addEventListener("click", function () {
+      if (el.disabled) return;
+      A.addHubChoice(el.getAttribute("data-choice"));
+    });
+  });
+  on("addhub-existing", "change", function (e) { A.addHubExisting(e.target.value); });
+  on("addhub-gstin", "input", function (e) { S.panel.addHub.gstin = e.target.value; save(); });
+  on("addhub-go", "click", A.addHubContinue);
 }
 
 /* =========================================================================
@@ -3021,6 +3893,45 @@ function devBtn(label, action, kind, disabled) {
 }
 
 function devActions() {
+  /* Login / OTP: choose who is signing in. This is the only place the prototype
+     decides between a first-time captain and one who already operates hubs. */
+  if (S.screen === "login" || S.screen === "otp") {
+    return {
+      ctx: "Signing in · <b>" + (S.loginAs === "existing" ? "existing captain" : "new captain") + "</b>",
+      groups: [{
+        title: "Log in as",
+        html:
+          devBtn("New captain · no hubs yet", "as:new", S.loginAs === "new" ? "ok" : "") +
+          devBtn("Existing captain · 3 hubs", "as:existing", S.loginAs === "existing" ? "ok" : "") +
+          '<p class="dnone">A new captain lands on role selection and onboards. ' +
+          'An existing captain lands in the Captain Hub with hubs already active.</p>'
+      }]
+    };
+  }
+
+  if (S.screen === "roles") {
+    return { ctx: "Choosing a role.", groups: [] };
+  }
+
+  /* Captain Hub */
+  if (S.screen === "panel") {
+    var bk = S.panel.bank, groups = [];
+    if (bk.open && bk.step === "verifying") {
+      groups.push({ title: "Bank penny-drop", html:
+        devBtn("Penny-drop succeeded", "bank:ok", "ok") +
+        devBtn("Penny-drop failed", "bank:fail", "bad") });
+    } else if (bk.open) {
+      groups.push({ title: "Bank change", html:
+        '<p class="dnone">Step: ' + esc(bk.step) + '. The penny-drop outcome is simulated ' +
+        'once the new account is submitted.</p>' });
+    } else {
+      groups.push({ title: "Captain Hub", html:
+        '<p class="dnone">No backend actors act here — profile and hub edits are ' +
+        'captain-driven. Add a hub to re-enter onboarding.</p>' });
+    }
+    return { ctx: "<b>Captain Hub</b> · " + esc(S.panel.section), groups: groups };
+  }
+
   if (S.screen !== "flow") {
     return { ctx: "Not in an onboarding flow.", groups: [] };
   }
@@ -3144,6 +4055,17 @@ function devDo(cmd) {
   if (cmd === "reset") { A.resetAll(); return; }
 
   switch (ns) {
+    case "as":
+      S.loginAs = arg;
+      if (arg === "existing") { seedExistingCaptain(); }
+      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null;
+             S.roles = { LM: blankRole("LM"), FM: blankRole("FM") }; }
+      save(); render();
+      break;
+    case "bank":
+      A.bankPennyResult(arg === "ok", arg === "ok" ? "" :
+        "Name on the account did not match your KYC records.");
+      break;
     case "bgv": A.bgvSet(arg); break;
     case "cat":
       if (arg === "clear") { R().ch.category = null; save(); render(); }
@@ -3201,7 +4123,9 @@ if (typeof window !== "undefined") {
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
       vehicleTonnage: vehicleTonnage, largestVehicle: largestVehicle,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,
-      vehUI: function () { return vehUI; }
+      vehUI: function () { return vehUI; },
+      activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
+      seedExistingCaptain: seedExistingCaptain
     },
     render: render,
     reset: resetAll,

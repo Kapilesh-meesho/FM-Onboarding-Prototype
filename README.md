@@ -12,10 +12,10 @@ open index.html
 ```
 
 **Design source:** Figma file
-[`Self-serve captain onboarding`](https://www.figma.com/design/T6DMr5qro6WZS908w41Qc9/Self-serve-captain-onboarding),
-page *First time user flows* (`0:1`) — 58 captain-facing frames. Colours, spacing,
-typography and component styling are taken from the frames themselves rather than
-approximated.
+[`Self-serve captain onboarding`](https://www.figma.com/design/T6DMr5qro6WZS908w41Qc9/Self-serve-captain-onboarding)
+— page *First time user flows* (`0:1`, 58 captain-facing onboarding frames) and page
+*Logged-in · Profile & Hubs* (`96:2`, 17 frames). Colours, spacing, typography and
+component styling are taken from the frames themselves rather than approximated.
 
 ---
 
@@ -44,6 +44,17 @@ The role selection screen splits roles into **Active** and **Inactive** sections
 carries its own onboarding state, so a role in flight shows *Continue onboarding* with its
 step number, and a completed role moves up to *Active roles*. **⇄ Switch role** in the rail
 returns you to the picker mid-flow and resumes exactly where you left off.
+
+### Logging in
+
+The dev panel's **Log in as** switch on the login screen decides which journey you get:
+
+- **New captain · no hubs yet** → role selection → full onboarding, as designed.
+- **Existing captain · 3 hubs** → straight into the **Captain Hub**, with the three hubs
+  from `HB-01` already seeded (two active, one inactive).
+
+Onboarding always ends by creating a hub the captain then owns, so a new captain who
+completes a flow lands in the same Captain Hub with one hub.
 
 ### LM Captain — 9 phases
 
@@ -189,6 +200,52 @@ countdown is: a full `render()` would replace the search input and drop focus mi
 
 ---
 
+## Captain Hub — the logged-in area
+
+Figma page `96:2`. A separate surface from onboarding: 1280-wide with its own dark sidebar
+(Valmo Support, Home, Payments, Loss Management, Incentive Center), a user card showing the
+active hub code, and Log Out pinned to the bottom.
+
+**My Profile › Personal Details** (`PR-01`) shows the KYC record — masked Aadhaar and PAN —
+stated as captain-level and *shared across all your hubs*, plus the payout bank account.
+Changing the bank account runs the full designed journey (`PR-02`…`PR-08`): OTP challenge →
+wrong code → lockout after three → new account form with account/IFSC/holder validation →
+₹1 penny-drop → failure → retry → updated. The penny-drop outcome is a dev-panel action.
+
+**My Profile › My Hubs** (`HB-01`) lists the hubs the captain owns, grouped Active /
+Onboarding in progress / Inactive. Each hub carries its own code, address, role and **its
+own GST registration** — one hub can be GST-registered while another is Non-GST. Per-hub
+GSTIN management is the designed flow (`HB-02`…`HB-06`): add, update, reject an invalid
+GSTIN, and remove behind a confirmation.
+
+**Add new hub** (`HB-07`) asks how the new hub is registered for GST — reuse an
+already-verified GSTIN, continue as Non-GST, or verify a new one — then hands off into the
+**original onboarding flow**.
+
+Payments, Loss Management and Incentive Center are in the sidebar because the design has
+them, but they are explicitly marked out of scope rather than faked.
+
+### How adding a hub re-enters onboarding
+
+`HB-07` states that *"Your KYC and bank details carry over automatically"*, so a second hub
+does not re-ask for them. The handoff creates a fresh onboarding draft for the chosen role,
+copies the captain-level record into it (personal details, Aadhaar, PAN, bank, background
+verification) and marks those phases complete, applies the GST choice, and drops the captain
+into the same onboarding flow — same rail, same dev panel, same Cluster Head / Area Manager
+/ Zonal Head logic — starting at **Cluster Head review**, the first phase that is actually
+about this hub. On activation the finished hub joins My Hubs.
+
+Two notes on that screen:
+
+- **The design's button reads "Continue to hub details".** Taken literally that would skip
+  Cluster Head review, which for an FM hub is where the category and rate card are set —
+  so the new hub would have no ceiling and no rate card. The button here reads *Continue to
+  onboarding* and starts at Cluster Head review instead. If skipping straight to hub details
+  is the intent, it is a one-line change.
+- **Role choice is an addition.** `HB-07` assumes a single role context, but this prototype
+  has two, so the screen asks which role the new hub is for. FM hubs cannot choose Non-GST,
+  since GST is mandatory for First Mile — the same rule the onboarding KYC enforces.
+
 ## Why the dev panel exists
 
 There is a floating **⚙ Simulate backend** panel, bottom-right, collapsible.
@@ -211,6 +268,8 @@ The panel is contextual to the current phase and exposes exactly those actors:
 | Area Manager (LM only) | approve / reject (two-strike counter shown) |
 | Agreements | mark agreement scrolled to end |
 | Activation | force failure / force success |
+| Login / OTP | log in as a new captain, or as an existing captain with hubs |
+| Captain Hub · bank change | penny-drop succeeded / failed |
 | Always | reset entire demo |
 
 Every reject path is reachable and routes the captain back to the right earlier phase to
@@ -218,8 +277,8 @@ fix and resubmit.
 
 ### A note on the admin screens
 
-The brief for this build said the admin-side consoles referenced at page `109:2` had no
-design. **They do exist** — that page is called *Admin Panels · Onboarding Approvals* and
+An earlier brief for this build said the admin-side consoles referenced at page `109:2` had
+no design. **They do exist** — that page is called *Admin Panels · Onboarding Approvals* and
 holds 25 frames (`ch-detail`, `ch-reject`, `am-detail`, `am-vls-missing`, `am-reject`,
 `zh-sd-detail`, panel selection, per-role request lists, user mapping, and geo-binding for
 area/cluster/zone).
@@ -239,7 +298,7 @@ build from.
 npm install && npm test
 ```
 
-**290 assertions across 11 groups:**
+**378 assertions across 12 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -267,6 +326,11 @@ npm install && npm test
    (including the 10MT-vs-9MT case a string compare gets wrong); area/manpower/vehicles
    required; range and membership validation; values preserved on a rejected submit and
    prefilled on reopen; captured for both roles
+11. **Captain Hub** — the login switch; existing captain seeding and landing; `HB-01`
+   grouping, per-hub codes and GST state; `PR-01` masking; the full bank-change journey
+   including lockout, validation and a failed penny-drop; per-hub GSTIN add/update/remove;
+   `HB-07` choices with FM's Non-GST block; the handoff into onboarding with carried-over
+   KYC; and a finished hub appearing in My Hubs for both a new and an existing captain
 
 Three notes on how the tests drive the app:
 
