@@ -154,17 +154,24 @@ function doKyc(doc, role) {
   click(doc, "kyc-continue");
 }
 
-/* The picker toggles, and every click re-renders the chip row — so converge on
-   the requested selection one chip at a time, re-querying after each click.
-   Idempotent, which matters when a form is reopened with a selection already on. */
+/* Drive the vehicle dropdown the way a person does: open it, tick the rows that
+   need changing, close it. Idempotent — checkboxes toggle, so a form reopened
+   with a selection already on must not have it flipped back off. */
 function pickVehicles(doc, list) {
+  const api = doc.defaultView.__APP__;
   const want = new Set(list);
+  if (!doc.getElementById("veh-toggle")) throw new Error("pickVehicles: dropdown not on screen");
+  if (!api.helpers.vehUI().open) click(doc, "veh-toggle");
   for (let guard = 0; guard <= 60; guard++) {
-    const next = [...doc.querySelectorAll("[data-veh]")].find(
-      (b) => want.has(b.getAttribute("data-veh")) !== b.classList.contains("on")
+    const next = [...doc.querySelectorAll("#veh-list [data-veh]")].find(
+      (cb) => want.has(cb.getAttribute("data-veh")) !== cb.checked
     );
-    if (!next) return;
-    next.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
+    if (!next) {
+      click(doc, "veh-toggle");                       // close
+      return;
+    }
+    next.checked = !next.checked;
+    next.dispatchEvent(new (doc.defaultView.Event)("change", { bubbles: true }));
   }
   throw new Error("pickVehicles: selection did not settle");
 }
@@ -1016,11 +1023,22 @@ async function testHubFacilityInputs() {
   /* the three inputs are rendered, with every vehicle type selectable */
   check(exists(doc, "#hub-area"), "area input rendered");
   check(exists(doc, "#hub-manpower"), "manpower input rendered");
-  check(exists(doc, "[data-veh]"), "vehicle type picker rendered");
-  const opts = [...doc.querySelectorAll("[data-veh]")].map(b => b.getAttribute("data-veh"));
-  eq(opts.length, 24, "picker offers all 24 vehicle types");
-  eq(opts, list, "picker options match the de-duplicated list, in order");
-  check([...doc.querySelectorAll("[data-veh].on")].length === 0,
+  check(exists(doc, "#veh-toggle"), "vehicle dropdown rendered");
+  check(exists(doc, "#veh-panel"), "dropdown panel present");
+
+  /* closed by default, and the panel is hidden rather than laid out */
+  check(!api.helpers.vehUI().open, "dropdown starts closed");
+  check($(doc, "veh-panel").hidden, "panel is hidden while closed");
+  check(txt(doc).indexOf("Select vehicle types") >= 0, "closed control shows a placeholder");
+
+  /* opening reveals every type exactly once, in list order */
+  click(doc, "veh-toggle");
+  check(api.helpers.vehUI().open, "clicking the control opens the dropdown");
+  check(!$(doc, "veh-panel").hidden, "panel is visible once open");
+  const opts = [...doc.querySelectorAll("#veh-list [data-veh]")].map(c => c.getAttribute("data-veh"));
+  eq(opts.length, 24, "dropdown offers all 24 vehicle types");
+  eq(opts, list, "dropdown options match the de-duplicated list, in order");
+  check([...doc.querySelectorAll("#veh-list [data-veh]")].every(c => !c.checked),
         "nothing is selected to begin with");
 
   /* multi-select: several types at once, kept in list order, and toggleable off */
@@ -1029,11 +1047,46 @@ async function testHubFacilityInputs() {
   api.actions.toggleVehicle("7MT_20FT");
   eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","7MT_20FT","10MT_32FT"],
      "multiple vehicle types can be chosen, stored in list order not click order");
-  eq([...doc.querySelectorAll("[data-veh].on")].length, 3, "three chips show as selected");
+  eq([...doc.querySelectorAll("#veh-list [data-veh]")].filter(c => c.checked).length, 3,
+     "three rows show as checked");
+  check(txt(doc).indexOf("3 of 24 selected") >= 0, "footer reports the count");
   api.actions.toggleVehicle("7MT_20FT");
   eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","10MT_32FT"],
-     "clicking a selected type again removes it");
-  check(txt(doc).indexOf("2 selected") >= 0, "picker reports how many are selected");
+     "ticking a selected type again removes it");
+
+  /* the closed control summarises the selection instead of listing 24 chips */
+  const toks = [...doc.querySelectorAll("#veh-toggle .ms-tok")].map(t => t.textContent);
+  eq(toks, ["2.2MT_4W_Bolero","10MT_32FT"], "control shows the selected types as tokens");
+  api.actions.setVehicles(list.slice(0, 6));
+  eq([...doc.querySelectorAll("#veh-toggle .ms-tok")].length, 3,
+     "control shows at most three tokens");
+  check(sel(doc, "#veh-toggle .ms-more").textContent === "+3 more",
+       "control summarises the remainder as '+N more'");
+  api.actions.setVehicles(["2.2MT_4W_Bolero","10MT_32FT"]);
+
+  /* search filters the list without closing or losing the selection */
+  api.actions.filterVehicles("32FT");
+  const filtered = [...doc.querySelectorAll("#veh-list [data-veh]")].map(c => c.getAttribute("data-veh"));
+  eq(filtered, ["10MT_32FT"], "search narrows the list");
+  check($(doc, "veh-list").querySelector('[data-veh="10MT_32FT"]').checked,
+        "a filtered row keeps its checked state");
+  api.actions.filterVehicles("nothingmatches");
+  check(txt(doc).indexOf("No vehicle type matches") >= 0, "an empty search result says so");
+  api.actions.filterVehicles("");
+  eq([...doc.querySelectorAll("#veh-list [data-veh]")].length, 24, "clearing the search restores all");
+  eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","10MT_32FT"],
+     "searching never changes the selection");
+
+  /* Escape and outside clicks close it */
+  api.actions.openVehicles(true);
+  doc.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  check(!api.helpers.vehUI().open, "Escape closes the dropdown");
+  api.actions.openVehicles(true);
+  doc.body.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  check(!api.helpers.vehUI().open, "a click outside closes the dropdown");
+  api.actions.openVehicles(true);
+  $(doc, "veh-panel").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  check(api.helpers.vehUI().open, "a click inside the panel does not close it");
 
   /* the max vehicle size is derived from the selection, not asked for separately */
   eq(api.helpers.largestVehicle(["2.2MT_4W_Bolero","10MT_32FT"]), "10MT_32FT",
@@ -1045,15 +1098,26 @@ async function testHubFacilityInputs() {
   eq(api.helpers.largestVehicle([]), null, "empty selection has no largest");
   eq(api.helpers.vehicleTonnage("42MT_18W"), 42, "tonnage parsed from the type name");
   eq(api.helpers.vehicleTonnage("0.8MT_4W_TataAce"), 0.8, "fractional tonnage parsed");
-  check(txt(doc).indexOf("largest 10MT_32FT") >= 0,
-        "picker shows the derived largest type live");
+  check(txt(doc).indexOf("Largest selected: 10MT_32FT") >= 0,
+        "field shows the derived largest type live");
 
   /* select-all and clear */
-  click(doc, "hub-veh-all");
+  api.actions.openVehicles(true);
+  api.actions.filterVehicles("");
+  click(doc, "veh-all");
   eq(api.helpers.R().hub.vehicles.length, 24, "Select all picks every type");
-  click(doc, "hub-veh-none");
-  eq(api.helpers.R().hub.vehicles, [], "Clear selection empties the picker");
-  check(disabled(doc, "hub-veh-none"), "Clear is disabled when nothing is selected");
+  click(doc, "veh-none");
+  eq(api.helpers.R().hub.vehicles, [], "Clear empties the selection");
+  check(disabled(doc, "veh-none"), "Clear is disabled when nothing is selected");
+
+  /* Select all respects an active search rather than ignoring it */
+  api.actions.filterVehicles("MT_4W");
+  const visible = [...doc.querySelectorAll("#veh-list [data-veh]")].map(c => c.getAttribute("data-veh"));
+  click(doc, "veh-all");
+  eq(api.helpers.R().hub.vehicles, list.filter(v => visible.indexOf(v) >= 0),
+     "Select all with a search active picks only the visible types");
+  api.actions.filterVehicles("");
+  click(doc, "veh-none");
 
   /* an unknown type cannot be injected */
   api.actions.toggleVehicle("Lorry");
@@ -1110,8 +1174,8 @@ async function testHubFacilityInputs() {
   click(doc, "am-fix-hub");
   eq($(doc, "hub-area").value, "4000", "area is prefilled on reopen");
   eq($(doc, "hub-manpower").value, "12", "manpower is prefilled on reopen");
-  eq([...doc.querySelectorAll("[data-veh].on")].map(b => b.getAttribute("data-veh")),
-     ["7MT_20FT"], "vehicle selection is preserved on reopen");
+  eq(api.helpers.R().hub.vehicles, ["7MT_20FT"], "vehicle selection is preserved on reopen");
+  check(txt(doc).indexOf("7MT_20FT") >= 0, "the reopened control still shows the selection");
 
   /* FM captures the same three fields */
   api.actions.switchRole();
@@ -1124,7 +1188,7 @@ async function testHubFacilityInputs() {
   api.actions.chApprove("combined");
   click(doc, "ch-continue");
   eq(api.helpers.phaseId(), "hub", "FM reached hub details");
-  check(exists(doc, "#hub-area") && exists(doc, "#hub-manpower") && exists(doc, "[data-veh]"),
+  check(exists(doc, "#hub-area") && exists(doc, "#hub-manpower") && exists(doc, "#veh-toggle"),
         "FM hub details captures area, manpower and vehicle types too");
   doHubDetails(doc, { address: "Plot 7, Bommasandra", area: "6500",
                       manpower: "18", vehicles: ["2.2MT_4W_Bolero", "10MT_32FT"] });

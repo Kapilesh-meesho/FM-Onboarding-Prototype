@@ -151,14 +151,22 @@ All three are required to submit, and they appear in the submitted summary along
 address. For FM these are the inputs that feed the Area Manager's survey and, through it,
 the hub categorisation that sets the benchmark ceiling.
 
-Vehicle types are a **multi-select** — a hub can usually take several sizes, so the picker
-is a chip grid with *Select all* and *Clear selection*, and the selection is stored in list
-order rather than click order. The original requirement asked for the hub's *max* vehicle
-size; rather than ask for that separately, it is **derived** from the selection by parsing
-the tonnage out of each type name (`vehicleTonnage` / `largestVehicle`), shown live in the
-picker header and recorded as *Max vehicle size* in the summary next to the full list. A
-saved single selection from the earlier one-dropdown shape is migrated into the array on
-load.
+Vehicle types are a **multi-select dropdown** — a hub can usually take several sizes, but
+laying 24 options out inline is too much visual weight, so the field stays one row tall and
+opens a panel on click. Closed, it shows up to three selected types as tokens plus
+*+N more*; open, it offers a search box, a scrollable checkbox list with each type's rated
+tonnage, and *Select all* / *Clear* with a live count. *Select all* respects an active
+search, so it picks what is visible rather than everything. Escape or a click outside
+closes it. Selection is stored in list order rather than click order.
+
+The original requirement asked for the hub's *max* vehicle size; rather than ask for that
+separately, it is **derived** from the selection by parsing the tonnage out of each type
+name (`vehicleTonnage` / `largestVehicle`), shown live under the field and recorded as
+*Max vehicle size* in the summary next to the full list. A saved selection from an earlier
+single-value shape is migrated into the array on load.
+
+The dropdown panel is patched in place rather than re-rendered — the same reason the OTP
+countdown is: a full `render()` would replace the search input and drop focus mid-typing.
 
 > **On the vehicle list:** the supplied list had 25 entries, two of which —
 > `0.8MT_4W_TataAce` and `0.8MT_4W _TataAce` — are the same vehicle, the second carrying a
@@ -231,7 +239,7 @@ build from.
 npm install && npm test
 ```
 
-**271 assertions across 11 groups:**
+**290 assertions across 11 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -252,11 +260,13 @@ npm install && npm test
 9. **Bulk pincode entry** — comma/semicolon/slash/whitespace separated input, partial
    success reporting, within-batch duplicates, the 5-pincode cap, stale-availability reset,
    and paste-to-add
-10. **Hub facility inputs** — vehicle list de-duplication, all 24 options rendered in
-   order, multi-select with toggle-off, select-all/clear, tonnage parsing and largest-type
-   derivation (including the 10MT-vs-9MT case a string compare gets wrong),
-   area/manpower/vehicles required, range and membership validation, values preserved on a
-   rejected submit and prefilled on reopen, captured for both roles
+10. **Hub facility inputs** — vehicle list de-duplication; dropdown open/close incl.
+   Escape, outside-click and click-inside; all 24 options in order; multi-select with
+   toggle-off; token summary and *+N more*; search filtering that preserves selection;
+   select-all honouring an active search; tonnage parsing and largest-type derivation
+   (including the 10MT-vs-9MT case a string compare gets wrong); area/manpower/vehicles
+   required; range and membership validation; values preserved on a rejected submit and
+   prefilled on reopen; captured for both roles
 
 Three notes on how the tests drive the app:
 

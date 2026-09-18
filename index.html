@@ -153,28 +153,59 @@ img{max-width:100%}
   content:"▾";position:absolute;right:14px;top:50%;transform:translateY(-50%);
   pointer-events:none;color:var(--muted);font-size:12px;
 }
-/* multi-select picker (vehicle types) */
-.fl .boxy{
-  background:#fff;border:1px solid var(--line-field);border-radius:8px;padding:14px;
+/* multi-select dropdown (vehicle types) */
+.ms{position:relative}
+.ms-control{
+  width:100%;display:flex;align-items:center;gap:6px;text-align:left;position:relative;
+  min-height:48px;padding:6px 34px 6px 14px;background:#fff;cursor:pointer;
+  border:1px solid var(--line-field);border-radius:8px;
+  font-size:14px;font-weight:500;color:var(--ink);
 }
-.fl .boxy.bad{border-color:var(--err)}
-.vpick-head{
-  display:flex;justify-content:space-between;align-items:baseline;gap:12px;
-  margin-bottom:10px;font-size:11px;font-weight:500;color:var(--muted);
+.ms-control:hover{border-color:var(--cyan-label)}
+.ms-control.bad{border-color:var(--err)}
+.ms-control::after{
+  content:"▾";position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  color:var(--muted);font-size:12px;
 }
-.vpick-head b{font-size:11px;font-weight:700;color:var(--cyan-ink);white-space:nowrap}
-.vpick{display:flex;flex-wrap:wrap;gap:8px}
-.vpick button{
-  border:1px solid var(--line-field);border-radius:8px;background:#fff;
-  padding:7px 11px;font-size:12px;font-weight:600;color:var(--muted);
-  transition:background .1s,border-color .1s,color .1s;
+.ms-control.open{border-color:var(--cyan-label);box-shadow:0 0 0 3px rgba(7,142,185,.12)}
+.ms-control.open::after{content:"▴"}
+.ms-val{flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ms-val .ph{color:var(--placeholder);font-weight:400}
+.ms-tok{
+  background:var(--cyan-bg);border:1px solid var(--cyan-br);color:var(--cyan-ink);
+  border-radius:6px;padding:3px 7px;font-size:11px;font-weight:700;white-space:nowrap;
 }
-.vpick button:hover{border-color:var(--cyan-label);color:var(--ink)}
-.vpick button.on{border-color:var(--navy);background:var(--navy);color:#fff}
-.vpick button.on::before{content:"✓ ";font-weight:700}
-.vpick-acts{display:flex;gap:14px;margin-top:12px}
-.vpick-acts button{font-size:11px;font-weight:700;color:var(--cyan-ink);padding:0}
-.vpick-acts button:disabled{color:var(--muted);cursor:not-allowed}
+.ms-more{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+
+.ms-panel{
+  position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;
+  background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;
+  box-shadow:0 14px 34px rgba(15,23,41,.16);
+}
+.ms-search{
+  width:100%;height:38px;padding:0 12px;margin-bottom:8px;
+  border:1px solid var(--line-field);border-radius:8px;outline:none;
+  font-size:13px;color:var(--ink);background:#fff;
+}
+.ms-search:focus{border-color:var(--cyan-label);box-shadow:0 0 0 3px rgba(7,142,185,.12)}
+.ms-list{max-height:236px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.ms-row{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;
+  cursor:pointer;font-size:13px;font-weight:500;color:var(--ink);
+}
+.ms-row:hover{background:var(--chip-bg)}
+.ms-row.on{background:var(--cyan-bg)}
+.ms-row input{width:16px;height:16px;flex:none;accent-color:var(--navy);cursor:pointer}
+.ms-row span{flex:1;min-width:0}
+.ms-row i{font-style:normal;font-size:11px;font-weight:600;color:var(--muted)}
+.ms-empty{padding:14px 10px;font-size:12px;color:var(--muted);text-align:center}
+.ms-foot{
+  display:flex;align-items:center;gap:14px;margin-top:8px;padding-top:8px;
+  border-top:1px solid var(--line-soft);
+}
+.ms-foot button{font-size:11px;font-weight:700;color:var(--cyan-ink);padding:0}
+.ms-foot button:disabled{color:var(--muted);cursor:not-allowed}
+.ms-foot .cnt{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
 .fl .box .prefix{font-size:15px;font-weight:500;color:var(--ink-alt);flex:none}
 .fl .hint{padding:6px 0 0 2px;font-size:11px;font-weight:500;color:var(--muted);line-height:16px}
 .fl .hint.err{color:var(--err)}
@@ -1813,6 +1844,130 @@ function phaseSD(r) {
 
 /* Facility spec captured at hub details. For FM these feed the Area Manager's
    survey and, through it, the hub categorisation. */
+/* Vehicle-type multi-select. Open/closed and the search text are view state, so
+   they live here rather than in the persisted role data. The panel is patched in
+   place on every interaction — a full render() would replace the search input and
+   drop focus mid-typing. */
+var vehUI = { open:false, filter:"" };
+
+function vehSummaryHtml(picked) {
+  if (!picked.length) return '<span class="ph">Select vehicle types</span>';
+  var shown = picked.slice(0, 3).map(function (v) {
+    return '<span class="ms-tok">' + esc(v) + '</span>';
+  }).join("");
+  var rest = picked.length - 3;
+  return shown + (rest > 0 ? '<span class="ms-more">+' + rest + ' more</span>' : "");
+}
+
+function vehCountText(picked) {
+  return picked.length
+    ? picked.length + " of " + VEHICLE_TYPES.length + " selected"
+    : "None selected";
+}
+
+function vehHintText(picked, err) {
+  if (err) return err;
+  return picked.length
+    ? "Largest selected: " + largestVehicle(picked) + " — taken as the hub's max vehicle size."
+    : "Pick every type that can reach, turn and dock at the hub. The largest is taken as the hub's max vehicle size.";
+}
+
+function vehRows(picked) {
+  var q = vehUI.filter.trim().toLowerCase();
+  var list = VEHICLE_TYPES.filter(function (v) {
+    return !q || v.toLowerCase().indexOf(q) >= 0;
+  });
+  if (!list.length) {
+    return '<div class="ms-empty">No vehicle type matches &ldquo;' + esc(vehUI.filter) + '&rdquo;.</div>';
+  }
+  return list.map(function (v) {
+    var on = picked.indexOf(v) >= 0;
+    return '<label class="ms-row' + (on ? ' on' : '') + '" data-vrow="' + esc(v) + '">' +
+             '<input type="checkbox" data-veh="' + esc(v) + '"' + (on ? ' checked' : '') + '>' +
+             '<span>' + esc(v) + '</span>' +
+             '<i>' + vehicleTonnage(v) + ' MT</i>' +
+           '</label>';
+  }).join("");
+}
+
+function vehicleField(picked, err) {
+  return '<div class="fl"><label>Vehicle types the location can accommodate</label>' +
+    '<div class="ms" id="veh-ms">' +
+      '<button type="button" id="veh-toggle" aria-expanded="' + (vehUI.open ? "true" : "false") + '" ' +
+        'class="ms-control' + (err ? ' bad' : '') + (vehUI.open ? ' open' : '') + '">' +
+        '<span class="ms-val">' + vehSummaryHtml(picked) + '</span>' +
+      '</button>' +
+      '<div class="ms-panel" id="veh-panel"' + (vehUI.open ? '' : ' hidden') + '>' +
+        '<input class="ms-search" id="veh-search" placeholder="Search vehicle types" ' +
+          'value="' + esc(vehUI.filter) + '">' +
+        '<div class="ms-list" id="veh-list">' + vehRows(picked) + '</div>' +
+        '<div class="ms-foot">' +
+          '<button type="button" id="veh-all">Select all</button>' +
+          '<button type="button" id="veh-none"' + (picked.length ? '' : ' disabled') + '>Clear</button>' +
+          '<span class="cnt" id="veh-count">' + esc(vehCountText(picked)) + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="hint' + (err ? ' err' : '') + '" id="veh-hint">' +
+      esc(vehHintText(picked, err)) + '</div></div>';
+}
+
+/* Patch the field in place. Returns false when it is not on screen, so callers
+   can fall back to a full render. */
+function paintVehicleField() {
+  var ms = document.getElementById("veh-ms");
+  if (!ms) return false;
+  var h = R().hub, picked = Array.isArray(h.vehicles) ? h.vehicles : [];
+
+  var valEl = ms.querySelector(".ms-val");
+  if (valEl) valEl.innerHTML = vehSummaryHtml(picked);
+
+  var cnt = document.getElementById("veh-count");
+  if (cnt) cnt.textContent = vehCountText(picked);
+
+  var none = document.getElementById("veh-none");
+  if (none) none.disabled = !picked.length;
+
+  Array.prototype.forEach.call(ms.querySelectorAll("[data-veh]"), function (cb) {
+    var on = picked.indexOf(cb.getAttribute("data-veh")) >= 0;
+    if (cb.checked !== on) cb.checked = on;
+    var row = cb.parentNode;
+    if (row && row.classList) row.classList.toggle("on", on);
+  });
+
+  // a selection clears the "pick at least one" error without a re-render
+  var ctrl = document.getElementById("veh-toggle");
+  var hint = document.getElementById("veh-hint");
+  var err = picked.length ? null : (h.errors && h.errors.vehicles);
+  if (ctrl) ctrl.classList.toggle("bad", !!err);
+  if (hint) {
+    hint.classList.toggle("err", !!err);
+    hint.textContent = vehHintText(picked, err);
+  }
+  return true;
+}
+
+function paintVehicleOpen() {
+  var ctrl = document.getElementById("veh-toggle");
+  var panel = document.getElementById("veh-panel");
+  if (!ctrl || !panel) return;
+  panel.hidden = !vehUI.open;
+  ctrl.classList.toggle("open", vehUI.open);
+  ctrl.setAttribute("aria-expanded", vehUI.open ? "true" : "false");
+  if (vehUI.open) {
+    var s = document.getElementById("veh-search");
+    if (s) s.focus();
+  }
+}
+
+function paintVehicleList() {
+  var list = document.getElementById("veh-list");
+  if (!list) return;
+  var h = R().hub;
+  list.innerHTML = vehRows(Array.isArray(h.vehicles) ? h.vehicles : []);
+  bindVehicleRows();
+}
+
 function hubSpecRows(h) {
   var area = h.areaSqft ? Number(h.areaSqft).toLocaleString("en-IN") + " sq ft" : "—";
   var picked = Array.isArray(h.vehicles) ? h.vehicles : [];
@@ -1906,29 +2061,7 @@ function phaseHUB(r) {
           '<div class="hint' + (e.manpower ? ' err' : '') + '">' +
             (e.manpower || "People you expect to employ at this hub.") + '</div></div>' +
       '</div>' +
-      '<div class="fl"><label>Vehicle types the location can accommodate</label>' +
-        '<div class="boxy' + (e.vehicles ? ' bad' : '') + '">' +
-          '<div class="vpick-head">' +
-            '<span>Select every vehicle type that can reach, turn and dock at the hub.</span>' +
-            '<b>' + (picked.length
-                      ? picked.length + " selected · largest " + esc(largestVehicle(picked))
-                      : "None selected") + '</b>' +
-          '</div>' +
-          '<div class="vpick">' +
-            VEHICLE_TYPES.map(function (v) {
-              return '<button type="button" data-veh="' + esc(v) + '"' +
-                     (picked.indexOf(v) >= 0 ? ' class="on"' : '') + '>' + esc(v) + '</button>';
-            }).join("") +
-          '</div>' +
-          '<div class="vpick-acts">' +
-            '<button type="button" id="hub-veh-all">Select all</button>' +
-            '<button type="button" id="hub-veh-none"' + (picked.length ? '' : ' disabled') +
-              '>Clear selection</button>' +
-          '</div>' +
-        '</div>' +
-        '<div class="hint' + (e.vehicles ? ' err' : '') + '">' +
-          (e.vehicles || "The largest type you select is taken as the hub's max vehicle size.") +
-        '</div></div>' +
+      vehicleField(picked, e.vehicles) +
       '<div class="cfoot"><span class="note">Sensitive details are masked and used only for ' +
         'onboarding verification.</span>' +
         '<button class="btn btn-primary" id="hub-submit">Review hub details →</button></div>';
@@ -2486,14 +2619,26 @@ var A = {
       : h.vehicles.concat([v]);
     h.vehicles = VEHICLE_TYPES.filter(function (t) { return next.indexOf(t) >= 0; });
     if (h.errors) delete h.errors.vehicles;
-    save(); render();
+    save();
+    if (!paintVehicleField()) render();
   },
   setVehicles: function (list) {
     var h = R().hub;
     list = Array.isArray(list) ? list : [];
     h.vehicles = VEHICLE_TYPES.filter(function (t) { return list.indexOf(t) >= 0; });
     if (h.errors) delete h.errors.vehicles;
-    save(); render();
+    save();
+    if (!paintVehicleField()) render();
+  },
+  openVehicles: function (open) {
+    vehUI.open = open === undefined ? !vehUI.open : !!open;
+    if (!vehUI.open) vehUI.filter = "";
+    paintVehicleOpen();
+    if (!vehUI.open) paintVehicleList();
+  },
+  filterVehicles: function (q) {
+    vehUI.filter = q == null ? "" : String(q);
+    paintVehicleList();
   },
   hubContinue: function () {
     var r = R();
@@ -2645,6 +2790,27 @@ function val(id) {
   return el ? el.value : "";
 }
 
+/* Checkbox rows are re-bound whenever the filtered list is repainted. */
+function bindVehicleRows() {
+  Array.prototype.forEach.call(document.querySelectorAll("#veh-list [data-veh]"), function (cb) {
+    cb.addEventListener("change", function () { A.toggleVehicle(cb.getAttribute("data-veh")); });
+  });
+}
+
+/* Document-level listeners close the dropdown on an outside click or Escape.
+   Attached once — render() rebuilds #app but leaves document listeners intact. */
+var vehGlobalBound = false;
+function bindVehicleGlobals() {
+  if (vehGlobalBound) return;
+  vehGlobalBound = true;
+  document.addEventListener("click", function () {
+    if (vehUI.open) A.openVehicles(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && vehUI.open) A.openVehicles(false);
+  });
+}
+
 function bind() {
   /* login */
   on("phone", "input", function (e) {
@@ -2794,11 +2960,23 @@ function bind() {
   on("hub-map", "input", function (e) { r.hub.mapLink = e.target.value; save(); });
   on("hub-area", "input", function (e) { r.hub.areaSqft = e.target.value; save(); });
   on("hub-manpower", "input", function (e) { r.hub.manpower = e.target.value; save(); });
-  Array.prototype.forEach.call(document.querySelectorAll("[data-veh]"), function (el) {
-    el.addEventListener("click", function () { A.toggleVehicle(el.getAttribute("data-veh")); });
+  bindVehicleRows();
+  on("veh-toggle", "click", function (e) { e.stopPropagation(); A.openVehicles(); });
+  on("veh-search", "input", function (e) { A.filterVehicles(e.target.value); });
+  on("veh-search", "keydown", function (e) {
+    if (e.key === "Escape") { e.stopPropagation(); A.openVehicles(false); }
   });
-  on("hub-veh-all", "click", function () { A.setVehicles(VEHICLE_TYPES.slice()); });
-  on("hub-veh-none", "click", function () { A.setVehicles([]); });
+  on("veh-all", "click", function () {
+    // "Select all" respects an active search — it picks what is visible
+    var vis = Array.prototype.map.call(
+      document.querySelectorAll("#veh-list [data-veh]"),
+      function (cb) { return cb.getAttribute("data-veh"); });
+    var cur = (R().hub.vehicles || []).slice();
+    A.setVehicles(cur.concat(vis));
+  });
+  on("veh-none", "click", function () { A.setVehicles([]); });
+  var panel = document.getElementById("veh-panel");
+  if (panel) panel.addEventListener("click", function (e) { e.stopPropagation(); });
   on("hub-submit", "click", function () {
     A.hubSubmit({
       address:  val("hub-address"),
@@ -2999,6 +3177,7 @@ function devDo(cmd) {
 
 function boot() {
   app = document.getElementById("app");
+  bindVehicleGlobals();
   load();
   if (S.screen === "flow" && !S.activeRole) S.screen = "roles";
   render();
@@ -3021,7 +3200,8 @@ if (typeof window !== "undefined") {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
       vehicleTonnage: vehicleTonnage, largestVehicle: largestVehicle,
-      phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase
+      phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,
+      vehUI: function () { return vehUI; }
     },
     render: render,
     reset: resetAll,
