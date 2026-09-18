@@ -154,6 +154,33 @@ function doKyc(doc, role) {
   click(doc, "kyc-continue");
 }
 
+/* The picker toggles, and every click re-renders the chip row — so converge on
+   the requested selection one chip at a time, re-querying after each click.
+   Idempotent, which matters when a form is reopened with a selection already on. */
+function pickVehicles(doc, list) {
+  const want = new Set(list);
+  for (let guard = 0; guard <= 60; guard++) {
+    const next = [...doc.querySelectorAll("[data-veh]")].find(
+      (b) => want.has(b.getAttribute("data-veh")) !== b.classList.contains("on")
+    );
+    if (!next) return;
+    next.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
+  }
+  throw new Error("pickVehicles: selection did not settle");
+}
+
+function doHubDetails(doc, { address = "No. 42, 4th Cross, Koramangala, Bengaluru",
+                              map = "https://maps.google.com/?q=12.9352,77.6245",
+                              area = "4000", manpower = "12",
+                              vehicles = ["3.5MT_14FT", "7MT_20FT"] } = {}) {
+  type(doc, "hub-address", address);
+  type(doc, "hub-map", map);
+  type(doc, "hub-area", area);
+  type(doc, "hub-manpower", manpower);
+  pickVehicles(doc, vehicles);
+  click(doc, "hub-submit");
+}
+
 function doAgreements(doc, api) {
   setCheck(doc, "ag-rate", true);
   api.actions.markAgreementRead();      // stands in for scroll-to-end (no layout in jsdom)
@@ -197,9 +224,7 @@ async function testLM() {
   click(doc, "sd-continue");
   eq(api.helpers.phaseId(), "hub", "deposit paid → hub details");
 
-  type(doc, "hub-address", "No. 42, 4th Cross, Koramangala, Bengaluru");
-  type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
-  click(doc, "hub-submit");
+  doHubDetails(doc);
   const lmHubCode = api.helpers.R().hub.hubCode;
   check(!!lmHubCode && /^[A-Z]{3}$/.test(lmHubCode),
         "LM hub code generated at hub submit (" + lmHubCode + ")");
@@ -319,9 +344,9 @@ async function testFMCombined() {
   click(doc, "ch-continue");
   eq(api.helpers.phaseId(), "hub", "FM CH approved → hub details (no security deposit)");
 
-  type(doc, "hub-address", "Plot 7, Bommasandra Industrial Area, Bengaluru");
-  type(doc, "hub-map", "https://maps.google.com/?q=12.8156,77.6982");
-  click(doc, "hub-submit");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra Industrial Area, Bengaluru",
+                      map: "https://maps.google.com/?q=12.8156,77.6982",
+                      area: "6500", manpower: "18", vehicles: ["10MT_32FT"] });
   check(!api.helpers.R().hub.hubCode,
         "FM hub details submit does NOT generate a hub code");
   check(exists(doc, '[data-testid="fm-no-hubcode"]'),
@@ -714,9 +739,7 @@ async function testAmTwoStrike() {
   click(doc, "ch-continue");
   click(doc, "sd-pay");
   click(doc, "sd-continue");
-  type(doc, "hub-address", "No. 42, 4th Cross, Koramangala, Bengaluru");
-  type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
-  click(doc, "hub-submit");
+  doHubDetails(doc);
   click(doc, "hub-continue");
   eq(api.helpers.phaseId(), "am", "reached Area Manager verification");
 
@@ -730,9 +753,7 @@ async function testAmTwoStrike() {
   eq(api.helpers.phaseId(), "hub", "AM rejection routes the captain back to hub details");
   check(!api.helpers.R().hub.submitted, "hub details reopened for editing");
 
-  type(doc, "hub-address", "No. 42, 4th Cross, Koramangala, Bengaluru (rear gate)");
-  type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
-  click(doc, "hub-submit");
+  doHubDetails(doc, { address: "No. 42, 4th Cross, Koramangala, Bengaluru (rear gate)" });
   click(doc, "hub-continue");
 
   api.actions.amReject("Still not compliant.");
@@ -837,9 +858,7 @@ async function testDevPanel() {
   check(!!sel(doc, "#sd-retry"), "failed payment offers a retry route");
   api.actions.sdSet("paid");
   click(doc, "sd-continue");
-  type(doc, "hub-address", "No. 42, Koramangala");
-  type(doc, "hub-map", "https://maps.google.com/?q=1,1");
-  click(doc, "hub-submit");
+  doHubDetails(doc, { address: "No. 42, Koramangala", map: "https://maps.google.com/?q=1,1" });
   click(doc, "hub-continue");
   const d5 = devText();
   check(d5.indexOf("Area Manager decision") >= 0, "Area Manager approve/reject offered (LM only)");
@@ -868,6 +887,259 @@ async function testDevPanel() {
   win.close();
 }
 
+/* =========================================================================
+   9. Bulk pincode entry
+   ====================================================================== */
+
+async function testBulkPincodes() {
+  section("9. Bulk pincode entry — comma-separated paste");
+  const { win, doc, api } = await boot();
+  const E = api.errors;
+  const pins = () => api.helpers.R().pd.pincodes;
+
+  login(doc);
+  pickRole(doc, "LM");
+
+  /* comma-separated, one action */
+  type(doc, "pd-pin", "560076, 560034, 110017");
+  click(doc, "pd-addpin");
+  eq(pins(), ["560076","560034","110017"], "a comma-separated list adds all three at once");
+  check(txt(doc).indexOf("3 of 5 added") >= 0, "counter reflects the bulk add");
+
+  /* mixed separators: spaces, semicolons, newlines, slashes */
+  api.actions.removePincode("560034");
+  api.actions.removePincode("110017");
+  eq(pins(), ["560076"], "reset to a single pincode");
+  api.actions.addPincodes("560034 110017;400059/560102");
+  eq(pins(), ["560076","560034","110017","400059","560102"],
+     "spaces, semicolons and slashes all work as separators");
+
+  /* the 5-pincode cap still holds across a bulk add */
+  api.actions.addPincodes("560001, 700001");
+  eq(pins().length, 5, "bulk add cannot exceed the 5-pincode cap");
+  check(txt(doc).indexOf("beyond the 5-pincode limit") >= 0,
+        "overflow is reported rather than silently dropped");
+
+  /* partial success: valid added, the rest explained by reason */
+  api.reset();
+  login(doc);
+  pickRole(doc, "LM");
+  api.actions.addPincodes("560076, notapin, 560076, 000000, 560034");
+  eq(pins(), ["560076","560034"], "valid entries are added, invalid and duplicate ones are not");
+  const msg = txt(doc);
+  check(msg.indexOf("Added 2") >= 0, "reports how many were added");
+  check(msg.indexOf("not a valid pincode") >= 0, "reports the invalid entries");
+  check(msg.indexOf("already added") >= 0, "reports the duplicate");
+
+  /* within-batch duplicates collapse to one */
+  api.reset();
+  login(doc);
+  pickRole(doc, "LM");
+  api.actions.addPincodes("560034, 560034, 560034");
+  eq(pins(), ["560034"], "a value repeated inside one paste is added once");
+
+  /* a bulk add invalidates a previous availability check */
+  api.reset();
+  login(doc);
+  pickRole(doc, "LM");
+  api.actions.addPincodes("560076");
+  api.helpers.R().pd.emailVerified = true;
+  api.actions.checkAvailability();
+  api.actions.selectPincode("560076");
+  check(api.helpers.R().pd.checked && api.helpers.R().pd.selected === "560076",
+        "availability checked and a pincode selected");
+  api.actions.addPincodes("560034, 110017");
+  check(!api.helpers.R().pd.checked && !api.helpers.R().pd.selected,
+        "adding more pincodes clears the stale availability result");
+
+  /* single-value behaviour is unchanged — precise copy, not a batch summary */
+  api.reset();
+  login(doc);
+  pickRole(doc, "LM");
+  api.actions.addPincode("12ab5");
+  check(txt(doc).indexOf(E.pincodeFormat) >= 0,
+        "a single bad value still gives the precise format error");
+  api.actions.addPincode("560076");
+  api.actions.addPincode("560076");
+  check(txt(doc).indexOf(E.pincodeDupe) >= 0,
+        "a single duplicate still gives the precise duplicate error");
+
+  /* a paste carrying a separator adds immediately */
+  api.reset();
+  login(doc);
+  pickRole(doc, "LM");
+  const pinInput = $(doc, "pd-pin");
+  const pasteEvt = new win.Event("paste", { bubbles: true, cancelable: true });
+  pasteEvt.clipboardData = { getData: () => "560076, 560034" };
+  pinInput.dispatchEvent(pasteEvt);
+  eq(pins(), ["560076","560034"], "pasting a separated list adds it without pressing Add");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
+   10. Hub facility inputs
+   ====================================================================== */
+
+async function testHubFacilityInputs() {
+  section("10. Hub details — area, manpower, max vehicle");
+  const { win, doc, api } = await boot();
+  const E = api.errors;
+
+  /* vehicle list is de-duplicated on normalised whitespace */
+  const raw = api.config.VEHICLE_TYPES_RAW, list = api.config.VEHICLE_TYPES;
+  eq(raw.length, 25, "source list has 25 entries as supplied");
+  eq(list.length, 24, "de-duplicated list has 24 distinct vehicle types");
+  check(raw.indexOf("0.8MT_4W _TataAce") >= 0,
+        "source list does contain the stray-space variant");
+  check(list.indexOf("0.8MT_4W _TataAce") === -1,
+        "the stray-space variant is not offered");
+  check(list.indexOf("0.8MT_4W_TataAce") >= 0, "the clean spelling is kept");
+  eq(new Set(list).size, list.length, "no duplicates remain in the offered list");
+  ["1.5MT_4W_Dost","42MT_18W","5MT_14FT","10MT_32FT","2MT_4W_Bolero"].forEach(v => {
+    check(list.indexOf(v) >= 0, "list includes " + v);
+  });
+
+  login(doc);
+  pickRole(doc, "LM");
+  doPersonalDetails(doc);
+  doKyc(doc, "LM");
+  api.actions.bgvSet("passed");
+  click(doc, "bgv-continue");
+  api.actions.chApprove();
+  click(doc, "ch-continue");
+  click(doc, "sd-pay");
+  click(doc, "sd-continue");
+  eq(api.helpers.phaseId(), "hub", "reached hub details");
+
+  /* the three inputs are rendered, with every vehicle type selectable */
+  check(exists(doc, "#hub-area"), "area input rendered");
+  check(exists(doc, "#hub-manpower"), "manpower input rendered");
+  check(exists(doc, "[data-veh]"), "vehicle type picker rendered");
+  const opts = [...doc.querySelectorAll("[data-veh]")].map(b => b.getAttribute("data-veh"));
+  eq(opts.length, 24, "picker offers all 24 vehicle types");
+  eq(opts, list, "picker options match the de-duplicated list, in order");
+  check([...doc.querySelectorAll("[data-veh].on")].length === 0,
+        "nothing is selected to begin with");
+
+  /* multi-select: several types at once, kept in list order, and toggleable off */
+  api.actions.toggleVehicle("10MT_32FT");
+  api.actions.toggleVehicle("2.2MT_4W_Bolero");
+  api.actions.toggleVehicle("7MT_20FT");
+  eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","7MT_20FT","10MT_32FT"],
+     "multiple vehicle types can be chosen, stored in list order not click order");
+  eq([...doc.querySelectorAll("[data-veh].on")].length, 3, "three chips show as selected");
+  api.actions.toggleVehicle("7MT_20FT");
+  eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","10MT_32FT"],
+     "clicking a selected type again removes it");
+  check(txt(doc).indexOf("2 selected") >= 0, "picker reports how many are selected");
+
+  /* the max vehicle size is derived from the selection, not asked for separately */
+  eq(api.helpers.largestVehicle(["2.2MT_4W_Bolero","10MT_32FT"]), "10MT_32FT",
+     "largest of a selection is derived by tonnage");
+  eq(api.helpers.largestVehicle(["0.8MT_4W_TataAce","1.5MT_4W_Dost"]), "1.5MT_4W_Dost",
+     "fractional tonnages compare numerically, not as strings");
+  eq(api.helpers.largestVehicle(["10MT_22FT","9MT_6W"]), "10MT_22FT",
+     "10MT beats 9MT (string compare would get this wrong)");
+  eq(api.helpers.largestVehicle([]), null, "empty selection has no largest");
+  eq(api.helpers.vehicleTonnage("42MT_18W"), 42, "tonnage parsed from the type name");
+  eq(api.helpers.vehicleTonnage("0.8MT_4W_TataAce"), 0.8, "fractional tonnage parsed");
+  check(txt(doc).indexOf("largest 10MT_32FT") >= 0,
+        "picker shows the derived largest type live");
+
+  /* select-all and clear */
+  click(doc, "hub-veh-all");
+  eq(api.helpers.R().hub.vehicles.length, 24, "Select all picks every type");
+  click(doc, "hub-veh-none");
+  eq(api.helpers.R().hub.vehicles, [], "Clear selection empties the picker");
+  check(disabled(doc, "hub-veh-none"), "Clear is disabled when nothing is selected");
+
+  /* an unknown type cannot be injected */
+  api.actions.toggleVehicle("Lorry");
+  eq(api.helpers.R().hub.vehicles, [], "a type outside the list is ignored");
+
+  /* all three are required */
+  type(doc, "hub-address", "No. 42, 4th Cross, Koramangala, Bengaluru");
+  type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
+  click(doc, "hub-submit");
+  check(!api.helpers.R().hub.submitted, "submit blocked with the facility fields empty");
+  let body = txt(doc);
+  check(body.indexOf(E.hubArea) >= 0, "missing area → '" + E.hubArea + "'");
+  check(body.indexOf(E.hubManpower) >= 0, "missing manpower → '" + E.hubManpower + "'");
+  check(body.indexOf(E.hubVehicle) >= 0, "missing vehicle → '" + E.hubVehicle + "'");
+
+  /* ranges and types */
+  check(!api.validate.hubArea("50"), "area below 100 sq ft rejected");
+  check(!api.validate.hubArea("0"), "zero area rejected");
+  check(!api.validate.hubArea("4000.5"), "non-integer area rejected");
+  check(!api.validate.hubArea("abc"), "non-numeric area rejected");
+  check(!api.validate.hubArea("2000000"), "area above 1,000,000 sq ft rejected");
+  check(api.validate.hubArea("4000"), "4000 sq ft accepted");
+  check(!api.validate.hubManpower("0"), "zero manpower rejected");
+  check(!api.validate.hubManpower("6000"), "manpower above 5,000 rejected");
+  check(api.validate.hubManpower("12"), "12 people accepted");
+  check(!api.validate.vehicle("Truck"), "a vehicle outside the list is rejected");
+  check(!api.validate.vehicle("0.8MT_4W _TataAce"), "the stray-space spelling is rejected");
+  check(api.validate.vehicle("7MT_20FT"), "a listed vehicle is accepted");
+
+  /* an out-of-range value keeps the captain's input on screen */
+  api.actions.hubSubmit({ areaSqft: "50" });
+  eq(api.helpers.R().hub.areaSqft, "50", "rejected input is preserved, not cleared");
+  check(!api.helpers.R().hub.submitted, "still not submitted");
+
+  /* valid submit records all three and shows them in the summary */
+  doHubDetails(doc, { area: "4000", manpower: "12", vehicles: ["7MT_20FT"] });
+  const h = api.helpers.R().hub;
+  check(h.submitted, "valid facility details submit successfully");
+  eq(h.areaSqft, "4000", "area recorded");
+  eq(h.manpower, "12", "manpower recorded");
+  eq(h.vehicles, ["7MT_20FT"], "vehicle selection recorded");
+  body = txt(doc);
+  check(body.indexOf("Area of the hub") >= 0 && body.indexOf("4,000 sq ft") >= 0,
+        "summary shows the area, formatted");
+  check(body.indexOf("Estimated manpower") >= 0, "summary shows manpower");
+  check(body.indexOf("Max vehicle size") >= 0 && body.indexOf("7MT_20FT") >= 0,
+        "summary shows the derived max vehicle size");
+  check(body.indexOf("Vehicle types accommodated") >= 0,
+        "summary lists the accommodated vehicle types");
+
+  /* values survive a reopen after an AM rejection */
+  click(doc, "hub-continue");
+  api.actions.amReject("Loading bay too narrow.");
+  click(doc, "am-fix-hub");
+  eq($(doc, "hub-area").value, "4000", "area is prefilled on reopen");
+  eq($(doc, "hub-manpower").value, "12", "manpower is prefilled on reopen");
+  eq([...doc.querySelectorAll("[data-veh].on")].map(b => b.getAttribute("data-veh")),
+     ["7MT_20FT"], "vehicle selection is preserved on reopen");
+
+  /* FM captures the same three fields */
+  api.actions.switchRole();
+  pickRole(doc, "FM");
+  doPersonalDetails(doc, { pin: "560076" });
+  doKyc(doc, "FM");
+  api.actions.bgvSet("passed");
+  click(doc, "bgv-continue");
+  api.actions.chSetCategory("standalone");
+  api.actions.chApprove("combined");
+  click(doc, "ch-continue");
+  eq(api.helpers.phaseId(), "hub", "FM reached hub details");
+  check(exists(doc, "#hub-area") && exists(doc, "#hub-manpower") && exists(doc, "[data-veh]"),
+        "FM hub details captures area, manpower and vehicle types too");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra", area: "6500",
+                      manpower: "18", vehicles: ["2.2MT_4W_Bolero", "10MT_32FT"] });
+  const fh = api.helpers.R().hub;
+  eq([fh.areaSqft, fh.manpower, fh.vehicles], ["6500","18",["2.2MT_4W_Bolero","10MT_32FT"]],
+     "FM records its own facility spec with multiple vehicle types");
+  eq(api.helpers.largestVehicle(fh.vehicles), "10MT_32FT",
+     "FM max vehicle size is derived from the selection");
+  check(!fh.hubCode, "FM still gets no hub code at submit");
+  check(txt(doc).indexOf("10MT_32FT") >= 0, "FM summary shows the max vehicle size");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -882,6 +1154,8 @@ async function testDevPanel() {
     await testAmTwoStrike();
     await testCeilings();
     await testDevPanel();
+    await testBulkPincodes();
+    await testHubFacilityInputs();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

@@ -128,6 +128,46 @@ and tells the captain the code is finalised later. (LM still mints its hub code 
 by a different system. (The *SAH — seller as hub* category name is unrelated; that's a hub
 classification, not a mapping feature.)
 
+### Shared behaviour worth calling out
+
+**Serviceable pincodes take a pasted list.** Rather than adding one at a time, a captain
+can type or paste several — separated by commas, semicolons, slashes or whitespace — and
+they are added in one action. Pasting a separated list adds it immediately without pressing
+*Add*. Partial success is the normal case and is reported by reason, for example
+*"Added 3. Skipped 1 not a valid pincode (notapin); 1 already added."* — shown in amber
+rather than red, because some entries did land. The 5-pincode cap still holds, and adding
+any new pincode clears a previous availability result so a stale one can't be carried
+forward.
+
+**Hub details captures the facility spec**, for both roles:
+
+| Field | Validation |
+|---|---|
+| Area of the hub (sq ft) | integer, 100–1,000,000 |
+| Estimated manpower | integer, 1–5,000 |
+| Vehicle types the location can accommodate | at least one of the 24 listed types; several can be chosen |
+
+All three are required to submit, and they appear in the submitted summary alongside the
+address. For FM these are the inputs that feed the Area Manager's survey and, through it,
+the hub categorisation that sets the benchmark ceiling.
+
+Vehicle types are a **multi-select** — a hub can usually take several sizes, so the picker
+is a chip grid with *Select all* and *Clear selection*, and the selection is stored in list
+order rather than click order. The original requirement asked for the hub's *max* vehicle
+size; rather than ask for that separately, it is **derived** from the selection by parsing
+the tonnage out of each type name (`vehicleTonnage` / `largestVehicle`), shown live in the
+picker header and recorded as *Max vehicle size* in the summary next to the full list. A
+saved single selection from the earlier one-dropdown shape is migrated into the array on
+load.
+
+> **On the vehicle list:** the supplied list had 25 entries, two of which —
+> `0.8MT_4W_TataAce` and `0.8MT_4W _TataAce` — are the same vehicle, the second carrying a
+> stray space before the underscore. `dedupeVehicles()` collapses them on normalised
+> whitespace and keeps the clean spelling, so the dropdown shows 24 distinct options rather
+> than two that look identical. The raw list is kept in `VEHICLE_TYPES_RAW` so the
+> collapsing stays visible and testable; if that second entry is genuinely a separate
+> vehicle, correct it there.
+
 ### LM behaviour worth calling out
 
 - **Area Manager two-strike rule** — one rejection sends the captain back to reconfirm hub
@@ -191,7 +231,7 @@ build from.
 npm install && npm test
 ```
 
-**187 assertions across 9 groups:**
+**271 assertions across 11 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -209,6 +249,14 @@ npm install && npm test
 6. **LM two-strike rule** — first rejection routes back to hub details, second escalates
 7. **Benchmark ceilings** — all five categories, ceiling and touchpoint rate
 8. **Dev panel** — every simulated actor reachable, every reject path has a route out
+9. **Bulk pincode entry** — comma/semicolon/slash/whitespace separated input, partial
+   success reporting, within-batch duplicates, the 5-pincode cap, stale-availability reset,
+   and paste-to-add
+10. **Hub facility inputs** — vehicle list de-duplication, all 24 options rendered in
+   order, multi-select with toggle-off, select-all/clear, tonnage parsing and largest-type
+   derivation (including the 10MT-vs-9MT case a string compare gets wrong),
+   area/manpower/vehicles required, range and membership validation, values preserved on a
+   rejected submit and prefilled on reopen, captured for both roles
 
 Three notes on how the tests drive the app:
 

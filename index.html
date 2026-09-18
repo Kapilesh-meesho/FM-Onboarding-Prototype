@@ -143,9 +143,43 @@ img{max-width:100%}
 }
 .fl.lg .box input{font-size:15px;font-weight:400}
 .fl .box input::placeholder{color:var(--placeholder);font-weight:400}
+.fl .box select{
+  flex:1;min-width:0;border:none;outline:none;background:none;
+  font-size:14px;font-weight:500;color:var(--ink);cursor:pointer;
+  appearance:none;-webkit-appearance:none;padding-right:18px;
+}
+.fl .box.sel{position:relative}
+.fl .box.sel::after{
+  content:"▾";position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  pointer-events:none;color:var(--muted);font-size:12px;
+}
+/* multi-select picker (vehicle types) */
+.fl .boxy{
+  background:#fff;border:1px solid var(--line-field);border-radius:8px;padding:14px;
+}
+.fl .boxy.bad{border-color:var(--err)}
+.vpick-head{
+  display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  margin-bottom:10px;font-size:11px;font-weight:500;color:var(--muted);
+}
+.vpick-head b{font-size:11px;font-weight:700;color:var(--cyan-ink);white-space:nowrap}
+.vpick{display:flex;flex-wrap:wrap;gap:8px}
+.vpick button{
+  border:1px solid var(--line-field);border-radius:8px;background:#fff;
+  padding:7px 11px;font-size:12px;font-weight:600;color:var(--muted);
+  transition:background .1s,border-color .1s,color .1s;
+}
+.vpick button:hover{border-color:var(--cyan-label);color:var(--ink)}
+.vpick button.on{border-color:var(--navy);background:var(--navy);color:#fff}
+.vpick button.on::before{content:"✓ ";font-weight:700}
+.vpick-acts{display:flex;gap:14px;margin-top:12px}
+.vpick-acts button{font-size:11px;font-weight:700;color:var(--cyan-ink);padding:0}
+.vpick-acts button:disabled{color:var(--muted);cursor:not-allowed}
 .fl .box .prefix{font-size:15px;font-weight:500;color:var(--ink-alt);flex:none}
 .fl .hint{padding:6px 0 0 2px;font-size:11px;font-weight:500;color:var(--muted);line-height:16px}
 .fl .hint.err{color:var(--err)}
+.fl .hint.warn{color:var(--warn-ink)}
+.fl .box.warn{border-color:var(--warn-ink)}
 
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
@@ -614,6 +648,46 @@ var FANOUT = {
 /* Pincode availability — deterministic so the demo and the tests agree. */
 var SERVICEABLE = ["560076","560034","560102","110017","400059","560001"];
 
+/* Vehicle types, exactly as supplied. Note the source list contains both
+   "0.8MT_4W_TataAce" and "0.8MT_4W _TataAce" — the same vehicle, the second
+   carrying a stray space. dedupeVehicles() collapses them on normalised
+   whitespace and keeps the clean spelling, so the dropdown never shows two
+   visually identical options. */
+var VEHICLE_TYPES_RAW = [
+  "0.8MT_4W_TataAce","0.8MT_4W _TataAce","1.5MT_4W_Dost","2.2MT_4W_Bolero",
+  "3.5MT_14FT","3.5MT_4W","4.5MT_17FT","4.7MT_4W_Tata407","5MT_4W","7MT_20FT",
+  "8MT","9MT_6W","10MT_22FT","10MT_24FT","10MT_32FT","12MT_6W","16MT_10W",
+  "25MT_12W","30MT_14W","42MT_18W","2MT_4W_Bolero","6MT_4W_TataAce","5MT_17FT",
+  "7MT_4W_Tata407","5MT_14FT"
+];
+function dedupeVehicles(list) {
+  var seen = {}, out = [];
+  list.forEach(function (v) {
+    var key = String(v).replace(/\s+/g, "");
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(key);
+  });
+  return out;
+}
+var VEHICLE_TYPES = dedupeVehicles(VEHICLE_TYPES_RAW);
+
+/* Every type is named "<tonnage>MT_…", so the rated tonnage is parseable and the
+   largest vehicle in a selection can be derived rather than asked for twice. */
+function vehicleTonnage(v) {
+  var m = /^([\d.]+)MT/.exec(String(v || ""));
+  return m ? parseFloat(m[1]) : 0;
+}
+function largestVehicle(list) {
+  if (!list || !list.length) return null;
+  return list.slice().sort(function (a, b) {
+    return vehicleTonnage(b) - vehicleTonnage(a);
+  })[0];
+}
+
+/* Separators accepted when a captain pastes a list of pincodes. */
+var PIN_SPLIT = /[,;|/\s]+/;
+
 var STORE_KEY = "valmo.captain.onboarding.v1";
 
 /* -------------------------------------------------------------- validation */
@@ -627,6 +701,13 @@ var V = {
   gstin:   function(s){ return (s || "").length === 15; },
   account: function(s){ return /^\d{9,18}$/.test(s || ""); },
   aadhaar: function(s){ return /^\d{12}$/.test(s || ""); },
+  hubArea:     function(s){ var t = String(s == null ? "" : s).trim();
+                            return /^\d{1,7}$/.test(t) && +t >= 100 && +t <= 1000000; },
+  hubManpower: function(s){ var t = String(s == null ? "" : s).trim();
+                            return /^\d{1,4}$/.test(t) && +t >= 1 && +t <= 5000; },
+  vehicle:     function(s){ return VEHICLE_TYPES.indexOf(String(s == null ? "" : s).trim()) >= 0; },
+  vehicles:    function(a){ return Array.isArray(a) && a.length > 0 &&
+                                   a.every(function (v) { return V.vehicle(v); }); },
   mapLink: function(s){
     s = (s || "").trim();
     if (!s) return false;
@@ -650,6 +731,9 @@ var ERR = {
   email:         "Enter a valid email address.",
   phone:         "Enter a valid 10-digit mobile number.",
   hubAddress:    "Hub address is required.",
+  hubArea:       "Enter the hub area in sq ft (100–1,000,000).",
+  hubManpower:   "Enter the estimated manpower (1–5,000).",
+  hubVehicle:    "Select at least one vehicle type the location can accommodate.",
   otpWrong:      "Incorrect OTP. Please try again.",
   otpLocked:     "Too many incorrect attempts. Try again later."
 };
@@ -680,7 +764,9 @@ function blankRole(role) {
     bgv: { status:"pending" },
     ch:  { status:"pending", category:null, rateMode:"combined", slab:null, rate:null, decidedBy:null, reason:"" },
     sd:  { status:"pending", amount:25000, attempts:0 },
-    hub: { address:"", mapLink:"", pincode:"", city:"", submitted:false, hubCode:null, errors:{} },
+    hub: { address:"", mapLink:"", pincode:"", city:"",
+           areaSqft:"", manpower:"", vehicles:[],
+           submitted:false, hubCode:null, errors:{} },
     am:  { status:"pending", rejections:0, reason:"", escalated:false },
     ag:  { rateAccepted:false, serviceRead:false, serviceAccepted:false },
     act: { status:"idle", done:{}, partnerId:null, vendorId:null, failed:false, activatedOn:null }
@@ -718,7 +804,14 @@ function load() {
     var next = blankState();
     for (var k in parsed) if (k !== "roles") next[k] = parsed[k];
     ["LM","FM"].forEach(function (r) {
-      next.roles[r] = Object.assign(blankRole(r), parsed.roles[r] || {});
+      var role = Object.assign(blankRole(r), parsed.roles[r] || {});
+      /* Migration: hub details used to hold a single `maxVehicle` string before
+         multiple types could be chosen. Carry it into the array. */
+      if (role.hub && !Array.isArray(role.hub.vehicles)) {
+        role.hub.vehicles = role.hub.maxVehicle ? [role.hub.maxVehicle] : [];
+      }
+      if (role.hub) delete role.hub.maxVehicle;
+      next.roles[r] = role;
     });
     S = next;
     return true;
@@ -1231,16 +1324,21 @@ function phasePD(r) {
 
     otpBlock +
 
+    /* A bulk add that landed some pincodes and skipped others is a partial
+       success, not a failure — amber, not red. */
     '<div class="fl" style="margin-bottom:10px"><label>Serviceable pincodes</label>' +
-      '<div class="box' + (e.pincode ? ' bad' : '') + '" style="justify-content:space-between;padding-right:8px">' +
-        '<input id="pd-pin" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit pincode">' +
+      '<div class="box' + (e.pincode ? (pd.lastAdded ? ' warn' : ' bad') : '') +
+        '" style="justify-content:space-between;padding-right:8px">' +
+        '<input id="pd-pin" placeholder="Enter or paste pincodes — e.g. 560076, 560034, 110017">' +
         '<button class="addbtn" id="pd-addpin"' +
           (pd.pincodes.length >= 5 ? ' disabled' : '') + '>＋ Add</button></div>' +
-      (e.pincode ? '<div class="hint err">' + esc(e.pincode) + '</div>' : '') +
+      (e.pincode
+        ? '<div class="hint ' + (pd.lastAdded ? 'warn' : 'err') + '">' + esc(e.pincode) + '</div>'
+        : '') +
     '</div>' +
     '<div class="chips">' + (chips || '<span style="font-size:12px;color:var(--muted)">No pincodes added yet.</span>') + '</div>' +
     '<div class="meta-row"><span class="l">Add up to 5 pincodes where you&rsquo;d like to run a hub — ' +
-      'we&rsquo;ll check which are available.</span>' +
+      'we&rsquo;ll check which are available. Paste a comma-separated list to add several at once.</span>' +
       '<span class="r">' + pd.pincodes.length + ' of 5 added</span></div>' +
 
     '<div style="margin-top:16px">' +
@@ -1713,8 +1811,27 @@ function phaseSD(r) {
 
 /* ------------------------------------------------------------ 6. hub details */
 
+/* Facility spec captured at hub details. For FM these feed the Area Manager's
+   survey and, through it, the hub categorisation. */
+function hubSpecRows(h) {
+  var area = h.areaSqft ? Number(h.areaSqft).toLocaleString("en-IN") + " sq ft" : "—";
+  var picked = Array.isArray(h.vehicles) ? h.vehicles : [];
+  var biggest = largestVehicle(picked);
+  return '<div class="row"><span class="k">Area of the hub</span>' +
+           '<span class="v">' + esc(area) + '</span></div>' +
+         '<div class="row"><span class="k">Estimated manpower</span>' +
+           '<span class="v">' + esc(h.manpower || "—") + '</span></div>' +
+         '<div class="row"><span class="k">Max vehicle size</span>' +
+           '<span class="v">' + esc(biggest || "—") + '</span></div>' +
+         '<div class="row"><span class="k">Vehicle types accommodated' +
+           (picked.length ? " (" + picked.length + ")" : "") + '</span>' +
+           '<span class="v" style="max-width:60%;white-space:normal">' +
+           esc(picked.length ? picked.join(", ") : "—") + '</span></div>';
+}
+
 function phaseHUB(r) {
   var h = r.hub, e = h.errors || {}, fm = r.role === "FM", inner;
+  var picked = Array.isArray(h.vehicles) ? h.vehicles : [];
 
   if (h.submitted) {
     if (fm) {
@@ -1726,6 +1843,7 @@ function phaseHUB(r) {
           '<div class="row"><span class="k">Hub address</span><span class="v">' + esc(h.address) + '</span></div>' +
           '<div class="row"><span class="k">Hub pincode</span><span class="v">' + esc(h.pincode) + '</span></div>' +
           '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
+          hubSpecRows(h) +
           '<div class="row"><span class="k">Hub code</span>' +
             '<span class="v mute">Finalised later</span></div>' +
         '</div>' +
@@ -1742,6 +1860,7 @@ function phaseHUB(r) {
           '<div class="row"><span class="k">Hub address</span><span class="v">' + esc(h.address) + '</span></div>' +
           '<div class="row"><span class="k">Hub pincode</span><span class="v">' + esc(h.pincode) + '</span></div>' +
           '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
+          hubSpecRows(h) +
         '</div>' +
         '<div style="display:flex;justify-content:flex-end">' +
           '<button class="btn btn-primary" id="hub-continue">Continue to Area Manager verification →</button></div>';
@@ -1773,6 +1892,43 @@ function phaseHUB(r) {
           '<div class="box"><input id="hub-city" value="' + esc(h.city || cityFor(r.pd.selected)) + '" disabled></div>' +
           '<div class="hint">Resolved from pincode.</div></div>' +
       '</div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Area of the hub (sq ft)</label>' +
+          '<div class="box' + (e.areaSqft ? ' bad' : '') + '">' +
+          '<input id="hub-area" inputmode="numeric" placeholder="e.g. 4000" ' +
+            'value="' + esc(h.areaSqft) + '"></div>' +
+          '<div class="hint' + (e.areaSqft ? ' err' : '') + '">' +
+            (e.areaSqft || "Usable floor area of the proposed hub.") + '</div></div>' +
+        '<div class="fl"><label>Estimated manpower</label>' +
+          '<div class="box' + (e.manpower ? ' bad' : '') + '">' +
+          '<input id="hub-manpower" inputmode="numeric" placeholder="e.g. 12" ' +
+            'value="' + esc(h.manpower) + '"></div>' +
+          '<div class="hint' + (e.manpower ? ' err' : '') + '">' +
+            (e.manpower || "People you expect to employ at this hub.") + '</div></div>' +
+      '</div>' +
+      '<div class="fl"><label>Vehicle types the location can accommodate</label>' +
+        '<div class="boxy' + (e.vehicles ? ' bad' : '') + '">' +
+          '<div class="vpick-head">' +
+            '<span>Select every vehicle type that can reach, turn and dock at the hub.</span>' +
+            '<b>' + (picked.length
+                      ? picked.length + " selected · largest " + esc(largestVehicle(picked))
+                      : "None selected") + '</b>' +
+          '</div>' +
+          '<div class="vpick">' +
+            VEHICLE_TYPES.map(function (v) {
+              return '<button type="button" data-veh="' + esc(v) + '"' +
+                     (picked.indexOf(v) >= 0 ? ' class="on"' : '') + '>' + esc(v) + '</button>';
+            }).join("") +
+          '</div>' +
+          '<div class="vpick-acts">' +
+            '<button type="button" id="hub-veh-all">Select all</button>' +
+            '<button type="button" id="hub-veh-none"' + (picked.length ? '' : ' disabled') +
+              '>Clear selection</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="hint' + (e.vehicles ? ' err' : '') + '">' +
+          (e.vehicles || "The largest type you select is taken as the hub's max vehicle size.") +
+        '</div></div>' +
       '<div class="cfoot"><span class="note">Sensitive details are masked and used only for ' +
         'onboarding verification.</span>' +
         '<button class="btn btn-primary" id="hub-submit">Review hub details →</button></div>';
@@ -2036,17 +2192,60 @@ var A = {
   switchRole: function () { S.screen = "roles"; save(); render(); },
 
   /* ---- personal details ---- */
-  addPincode: function (val) {
+  /* Accepts one pincode or many — comma, semicolon, pipe, slash or whitespace
+     separated — so a captain can paste a list instead of adding them one at a
+     time. Partial success is the normal case: valid entries are added and the
+     rest are reported by reason. */
+  addPincodes: function (raw) {
     var r = R(), pd = r.pd;
     pd.errors = {};
-    val = (val || "").trim();
-    if (!V.pincode(val))            { pd.errors.pincode = ERR.pincodeFormat; save(); render(); return; }
-    if (pd.pincodes.indexOf(val)>=0){ pd.errors.pincode = ERR.pincodeDupe;   save(); render(); return; }
-    if (pd.pincodes.length >= 5)    { pd.errors.pincode = ERR.pincodeMax;    save(); render(); return; }
-    pd.pincodes.push(val);
-    pd.checked = false; pd.selected = null;
+    pd.lastAdded = 0;
+
+    var tokens = String(raw == null ? "" : raw).split(PIN_SPLIT)
+      .map(function (s) { return s.trim(); })
+      .filter(function (s) { return s.length > 0; });
+
+    if (!tokens.length) { pd.errors.pincode = ERR.pincodeFormat; save(); render(); return; }
+
+    var added = [], invalid = [], dupes = [], overflow = [], seen = {};
+    tokens.forEach(function (t) {
+      if (!V.pincode(t))                                   { invalid.push(t);  return; }
+      if (seen[t] || pd.pincodes.indexOf(t) >= 0)          { dupes.push(t);    return; }
+      if (pd.pincodes.length + added.length >= 5)          { overflow.push(t); return; }
+      seen[t] = true;
+      added.push(t);
+    });
+
+    if (added.length) {
+      pd.pincodes = pd.pincodes.concat(added);
+      // any new pincode invalidates a previous availability check
+      pd.checked = false;
+      pd.selected = null;
+      pd.lastAdded = added.length;
+    }
+
+    if (invalid.length || dupes.length || overflow.length) {
+      if (tokens.length === 1) {
+        // one entry in, one precise message out
+        pd.errors.pincode = invalid.length ? ERR.pincodeFormat
+                          : dupes.length   ? ERR.pincodeDupe
+                          :                  ERR.pincodeMax;
+      } else {
+        var why = [];
+        if (invalid.length) {
+          why.push(invalid.length + " not a valid pincode (" +
+                   invalid.slice(0, 3).join(", ") + (invalid.length > 3 ? ", …" : "") + ")");
+        }
+        if (dupes.length)    why.push(dupes.length + " already added");
+        if (overflow.length) why.push(overflow.length + " beyond the 5-pincode limit");
+        pd.errors.pincode =
+          (added.length ? "Added " + added.length + ". Skipped " : "Skipped ") + why.join("; ") + ".";
+      }
+    }
     save(); render();
   },
+  /* Kept so single-value callers read naturally. */
+  addPincode: function (val) { A.addPincodes(val); },
   removePincode: function (p) {
     var pd = R().pd;
     pd.pincodes = pd.pincodes.filter(function (x) { return x !== p; });
@@ -2241,12 +2440,32 @@ var A = {
   sdRequote: function () { R().sd.status = "pending"; save(); render(); },
 
   /* ---- hub details ---- */
-  hubSubmit: function (address, mapLink) {
+  /* Takes a field bag; anything omitted falls back to what is already in state,
+     so callers can submit a partial update. */
+  hubSubmit: function (f) {
     var r = R(), h = r.hub;
+    f = f || {};
+    var pick = function (k) { return f[k] !== undefined ? f[k] : h[k]; };
+    var address  = pick("address"),  mapLink  = pick("mapLink"),
+        areaSqft = pick("areaSqft"), manpower = pick("manpower"),
+        vehicles = pick("vehicles");
+    if (!Array.isArray(vehicles)) vehicles = vehicles ? [vehicles] : [];
+
     h.errors = {};
-    if (!(address || "").trim()) h.errors.address = ERR.hubAddress;
-    if (!V.mapLink(mapLink))     h.errors.mapLink = ERR.mapLink;
-    h.address = address || ""; h.mapLink = mapLink || "";
+    if (!String(address == null ? "" : address).trim()) h.errors.address = ERR.hubAddress;
+    if (!V.mapLink(mapLink))      h.errors.mapLink  = ERR.mapLink;
+    if (!V.hubArea(areaSqft))     h.errors.areaSqft = ERR.hubArea;
+    if (!V.hubManpower(manpower)) h.errors.manpower = ERR.hubManpower;
+    if (!V.vehicles(vehicles))    h.errors.vehicles = ERR.hubVehicle;
+
+    // keep what was entered so the form redraws with the captain's own input
+    h.address = address == null ? "" : address;
+    h.mapLink = mapLink == null ? "" : mapLink;
+    h.areaSqft = areaSqft == null ? "" : String(areaSqft).trim();
+    h.manpower = manpower == null ? "" : String(manpower).trim();
+    // keep the picker order stable regardless of the order they were clicked
+    h.vehicles = VEHICLE_TYPES.filter(function (v) { return vehicles.indexOf(v) >= 0; });
+
     if (Object.keys(h.errors).length) { save(); render(); return; }
     h.pincode = r.pd.selected || h.pincode;
     h.city = cityFor(h.pincode);
@@ -2254,6 +2473,26 @@ var A = {
     // LM gets its hub code at submit. FM does not — it is issued during
     // design & hub-code mapping at activation.
     if (r.role === "LM") h.hubCode = h.hubCode || makeHubCode();
+    save(); render();
+  },
+  /* Vehicle picker. Selection is kept in VEHICLE_TYPES order so the summary and
+     the derived largest type never depend on click order. */
+  toggleVehicle: function (v) {
+    var h = R().hub;
+    if (!V.vehicle(v)) return;
+    if (!Array.isArray(h.vehicles)) h.vehicles = [];
+    var next = h.vehicles.indexOf(v) >= 0
+      ? h.vehicles.filter(function (x) { return x !== v; })
+      : h.vehicles.concat([v]);
+    h.vehicles = VEHICLE_TYPES.filter(function (t) { return next.indexOf(t) >= 0; });
+    if (h.errors) delete h.errors.vehicles;
+    save(); render();
+  },
+  setVehicles: function (list) {
+    var h = R().hub;
+    list = Array.isArray(list) ? list : [];
+    h.vehicles = VEHICLE_TYPES.filter(function (t) { return list.indexOf(t) >= 0; });
+    if (h.errors) delete h.errors.vehicles;
     save(); render();
   },
   hubContinue: function () {
@@ -2498,9 +2737,20 @@ function bind() {
   });
   on("pd-verify-email", "click", A.sendEmailOtp);
   on("pd-email-otp-go", "click", function () { A.confirmEmailOtp(val("pd-email-otp")); });
-  on("pd-addpin", "click", function () { A.addPincode(val("pd-pin")); });
+  on("pd-addpin", "click", function () { A.addPincodes(val("pd-pin")); });
   on("pd-pin", "keydown", function (e) {
-    if (e.key === "Enter") { e.preventDefault(); A.addPincode(val("pd-pin")); }
+    if (e.key === "Enter") { e.preventDefault(); A.addPincodes(val("pd-pin")); }
+  });
+  /* A paste carrying a separator is clearly a bulk paste — add it straight away
+     rather than making the captain also press Add. A single value just fills
+     the field as normal. */
+  on("pd-pin", "paste", function (e) {
+    var cb = e.clipboardData || window.clipboardData;
+    if (!cb) return;
+    var t = cb.getData("text") || "";
+    if (!PIN_SPLIT.test(t.trim())) return;
+    e.preventDefault();
+    A.addPincodes(t);
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-rmpin]"), function (el) {
     el.addEventListener("click", function () { A.removePincode(el.getAttribute("data-rmpin")); });
@@ -2542,7 +2792,22 @@ function bind() {
   /* hub */
   on("hub-address", "input", function (e) { r.hub.address = e.target.value; save(); });
   on("hub-map", "input", function (e) { r.hub.mapLink = e.target.value; save(); });
-  on("hub-submit", "click", function () { A.hubSubmit(val("hub-address"), val("hub-map")); });
+  on("hub-area", "input", function (e) { r.hub.areaSqft = e.target.value; save(); });
+  on("hub-manpower", "input", function (e) { r.hub.manpower = e.target.value; save(); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-veh]"), function (el) {
+    el.addEventListener("click", function () { A.toggleVehicle(el.getAttribute("data-veh")); });
+  });
+  on("hub-veh-all", "click", function () { A.setVehicles(VEHICLE_TYPES.slice()); });
+  on("hub-veh-none", "click", function () { A.setVehicles([]); });
+  on("hub-submit", "click", function () {
+    A.hubSubmit({
+      address:  val("hub-address"),
+      mapLink:  val("hub-map"),
+      areaSqft: val("hub-area"),
+      manpower: val("hub-manpower"),
+      vehicles: (R().hub.vehicles || []).slice()
+    });
+  });
   on("hub-continue", "click", A.hubContinue);
 
   /* area manager */
@@ -2749,10 +3014,13 @@ if (typeof window !== "undefined") {
     actions: A,
     validate: V,
     errors: ERR,
-    config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT, SERVICEABLE: SERVICEABLE },
+    config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT,
+              SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
+              VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
     helpers: {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
+      vehicleTonnage: vehicleTonnage, largestVehicle: largestVehicle,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase
     },
     render: render,
