@@ -693,8 +693,12 @@ img{max-width:100%}
 .choice .ct b{display:block;font-size:14px;font-weight:700;color:var(--ink)}
 .choice .ct span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:3px;line-height:17px}
 .choice .ct .sub{margin-top:10px}
-.choice[disabled]{opacity:.5;cursor:not-allowed}
-.choice[disabled]:hover{border-color:var(--line)}
+.choice{cursor:pointer}
+.choice:focus-visible{outline:2px solid var(--cyan-label);outline-offset:2px}
+.choice.off{opacity:.5;cursor:not-allowed}
+.choice.off:hover{border-color:var(--line)}
+/* controls inside a row must not re-trigger the row */
+.choice input,.choice select{cursor:auto}
 
 /* ------------------------------------------------------------- dev panel -- */
 #dev{
@@ -1626,13 +1630,19 @@ function panelAddHub() {
   // FM hubs must be GST registered, so Non-GST is not offered for them.
   var nonGstDisabled = fm;
 
+  /* A row is a radio, not a <button> — it contains a text field and a select, and
+     form controls cannot live inside a button: the click would bubble to the
+     button, re-render, and destroy the field before anything could be typed. */
   var opt = function (id, title, sub, extra, dis) {
-    return '<button class="choice' + (a.choice === id ? " on" : "") + '" data-choice="' + id + '"' +
-           (dis ? " disabled" : "") + '>' +
+    return '<div class="choice' + (a.choice === id ? " on" : "") + (dis ? " off" : "") + '" ' +
+             'data-choice="' + id + '" role="radio" ' +
+             'aria-checked="' + (a.choice === id ? "true" : "false") + '" ' +
+             'aria-disabled="' + (dis ? "true" : "false") + '" ' +
+             (dis ? '' : 'tabindex="0"') + '>' +
              '<span class="radio"></span>' +
              '<span class="ct"><b>' + title + '</b><span>' + sub + '</span>' +
                (extra ? '<span class="sub">' + extra + '</span>' : '') + '</span>' +
-           '</button>';
+           '</div>';
   };
 
   var gstinSelect = known.length
@@ -3476,6 +3486,7 @@ var A = {
     var a = S.panel.addHub;
     if (choice === "none" && a.role === "FM") return;     // not offered for FM
     if (choice === "existing" && !knownGstins().length) return;
+    if (a.choice === choice) return;                      // no needless re-render
     a.choice = choice; a.error = "";
     save(); render();
   },
@@ -3870,11 +3881,24 @@ function bindPanel() {
     el.addEventListener("click", function () { A.addHubRole(el.getAttribute("data-addrole")); });
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-choice]"), function (el) {
-    el.addEventListener("click", function () {
-      if (el.disabled) return;
+    var pick = function () {
+      if (el.getAttribute("aria-disabled") === "true") return;
       A.addHubChoice(el.getAttribute("data-choice"));
+    };
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); }
     });
   });
+  /* Keep clicks on the nested field and dropdown from selecting the row again —
+     that re-render is what used to wipe the GSTIN field mid-typing. */
+  Array.prototype.forEach.call(
+    document.querySelectorAll("[data-choice] input, [data-choice] select"),
+    function (ctl) {
+      ["click","mousedown","keydown"].forEach(function (ev) {
+        ctl.addEventListener(ev, function (e) { e.stopPropagation(); });
+      });
+    });
   on("addhub-existing", "change", function (e) { A.addHubExisting(e.target.value); });
   on("addhub-gstin", "input", function (e) { S.panel.addHub.gstin = e.target.value; save(); });
   on("addhub-go", "click", A.addHubContinue);

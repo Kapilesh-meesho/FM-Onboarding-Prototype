@@ -1348,7 +1348,7 @@ async function testCaptainHub() {
 
   /* FM cannot be Non-GST — the rule from onboarding holds here too */
   api.actions.addHubRole("FM");
-  check(sel(doc, '[data-choice="none"]').disabled,
+  check(sel(doc, '[data-choice="none"]').getAttribute("aria-disabled") === "true",
         "Non-GST is not offered for an FM hub");
   check(txt(doc).indexOf("mandatory for First Mile") >= 0, "and says why");
   api.actions.addHubChoice("none");
@@ -1359,7 +1359,57 @@ async function testCaptainHub() {
   check(txt(doc).indexOf(E.gstin) >= 0, "a new GSTIN must be valid before continuing");
   eq(api.state.screen, "panel", "and the captain stays on the add-hub screen");
 
+  /* Regression: the GST choices used to be <button> elements with the GSTIN field
+     and the existing-GSTIN <select> nested inside them. Clicking either control
+     bubbled to the button, re-rendered the row and destroyed the field, so a new
+     GSTIN could not be typed at all. Drive them the way a person does. */
+  api.actions.addHubRole("LM");
+  api.actions.addHubChoice("new");
+  const rows = [...doc.querySelectorAll("[data-choice]")];
+  check(rows.every(r => r.tagName !== "BUTTON"),
+        "GST choice rows are not <button> elements");
+  check(rows.every(r => r.getAttribute("role") === "radio"),
+        "GST choice rows expose themselves as radios");
+
+  const gIn = $(doc, "addhub-gstin");
+  check(!gIn.closest("button"), "the new-GSTIN field is not nested inside a button");
+  gIn.focus();
+  check(doc.activeElement === gIn, "the new-GSTIN field takes focus");
+  // a click on the field must not re-select the row and rebuild it
+  gIn.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  check($(doc, "addhub-gstin") === gIn, "clicking the field does not replace it");
+  check(doc.activeElement === gIn, "clicking the field keeps focus");
+  // type it the way a keyboard does
+  gIn.value = "29ZZZZZ9999Z1Z9";
+  gIn.dispatchEvent(new win.Event("input", { bubbles: true }));
+  eq(api.state.panel.addHub.gstin, "29ZZZZZ9999Z1Z9", "the typed GSTIN reaches state");
+  check($(doc, "addhub-gstin") === gIn, "typing does not replace the field");
+
+  const sIn = (api.actions.addHubChoice("existing"), $(doc, "addhub-existing"));
+  check(sIn && !sIn.closest("button"), "the existing-GSTIN select is not inside a button");
+  sIn.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  check($(doc, "addhub-existing") === sIn, "clicking the select does not rebuild the row");
+
+  /* a disabled row is inert without relying on a button's disabled attribute */
+  api.actions.addHubRole("FM");
+  const noneRow = sel(doc, '[data-choice="none"]');
+  eq(noneRow.getAttribute("aria-disabled"), "true", "the Non-GST row is marked disabled for FM");
+  noneRow.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  check(api.state.panel.addHub.choice !== "none", "and clicking it does nothing");
+  api.actions.addHubRole("LM");
+
+  /* the typed GSTIN actually carries through to the new hub */
+  api.actions.addHubChoice("new");
+  const gIn2 = $(doc, "addhub-gstin");
+  gIn2.value = "29ZZZZZ9999Z1Z9";
+  gIn2.dispatchEvent(new win.Event("input", { bubbles: true }));
+  click(doc, "addhub-go");
+  eq(api.state.screen, "flow", "a typed new GSTIN lets the captain continue");
+  eq(api.helpers.R().kyc.gst.gstin, "29ZZZZZ9999Z1Z9", "and is applied to the new hub");
+  api.actions.openPanel("hubs", "hubs");
+
   /* --- the bridge back into the ORIGINAL onboarding flow --- */
+  click(doc, "hub-add");                       // reopen HB-07 after the checks above
   api.actions.addHubRole("LM");
   api.actions.addHubChoice("existing");
   const hubsBefore = api.state.hubs.length;

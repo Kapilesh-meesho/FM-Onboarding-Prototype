@@ -298,7 +298,7 @@ build from.
 npm install && npm test
 ```
 
-**378 assertions across 12 groups:**
+**392 assertions across 12 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -330,7 +330,9 @@ npm install && npm test
    grouping, per-hub codes and GST state; `PR-01` masking; the full bank-change journey
    including lockout, validation and a failed penny-drop; per-hub GSTIN add/update/remove;
    `HB-07` choices with FM's Non-GST block; the handoff into onboarding with carried-over
-   KYC; and a finished hub appearing in My Hubs for both a new and an existing captain
+   KYC; and a finished hub appearing in My Hubs for both a new and an existing captain.
+   Includes a regression group driving the `HB-07` GST choices by clicking and typing
+   rather than calling actions — see below.
 
 Three notes on how the tests drive the app:
 
@@ -342,7 +344,7 @@ Three notes on how the tests drive the app:
   fires that after the constructor returns, so without the wait the app's boot lands
   mid-test and re-renders the DOM out from under whatever is being driven.
 
-### Two bugs this suite was extended to cover
+### Bugs this suite was extended to cover
 
 Both were found by driving the deployed build in a real browser, not by the original suite:
 
@@ -354,6 +356,13 @@ Both were found by driving the deployed build in a real browser, not by the orig
    `slice(-1)` of the cell's value, so a full code arriving in one cell kept one digit.
    Multi-digit input now spreads across the remaining cells, and there is an explicit
    `paste` handler.
+3. **A new GSTIN could not be typed on `HB-07`.** The three GST choices were `<button>`
+   elements with the GSTIN field and the existing-GSTIN `<select>` nested *inside* them —
+   invalid HTML, and in a real browser the click bubbled to the button, re-rendered the row
+   and destroyed the field before a character could land. The rows are now
+   `<div role="radio">`, nested controls stop propagation, and selecting the already-selected
+   choice no longer re-renders. The tests missed it because they called `addHubChoice()`
+   directly instead of clicking the field; the regression test now clicks and types.
 
 ---
 
