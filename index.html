@@ -785,7 +785,7 @@ var PHASES = {
   ],
   FM: [
     { id:"pd",  title:"Personal details",        sub:"Name, email, alternate phone, pincode", lc:"personal details" },
-    { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST, MSME", lc:"KYC verification" },
+    { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST status", lc:"KYC verification" },
     { id:"hub", title:"Hub details",             sub:"Address and facility", lc:"hub details" },
     { id:"bgv", title:"Background verification", sub:"Secure background check", lc:"background verification" },
     { id:"ch",  title:"Cluster Head review",     sub:"Hub category and rate card", lc:"Cluster Head review" },
@@ -900,7 +900,6 @@ var ERR = {
   account:       "Enter a valid account number (9–18 digits).",
   gstin:         "GSTIN must be 15 characters.",
   gstRequired:   "GST registration is mandatory for FM captains.",
-  msmeRequired:  "MSME registration certificate is required for FM captains.",
   mapLink:       "Paste a valid Google Maps link.",
   aadhaar:       "Enter a valid 12-digit Aadhaar number.",
   email:         "Enter a valid email address.",
@@ -1172,9 +1171,9 @@ function kycComplete(r) {
   var base = k.aadhaar.done && k.pan.done && k.bank.done;
   if (!base) return false;
   if (r.role === "FM") {
-    // FM: GST is mandatory and MSME must be uploaded. No cancelled cheque —
-    // the penny-drop already proves the bank account.
-    return k.gst.done && k.gst.registered === true && k.msme.done;
+    // FM: GST is mandatory. MSME is collected but optional, and the cancelled
+    // cheque is not collected at all — the penny-drop proves the bank account.
+    return k.gst.done && k.gst.registered === true;
   }
   // LM: GST is an optional toggle — "Non-GST" is a valid completed answer.
   return k.gst.done;
@@ -2155,10 +2154,10 @@ function phaseKYC(r) {
   var msme = "";
   if (fm) {
     msme = '<div class="kyc-item' + (k.msme.done ? ' done' : '') + '">' +
-      '<div class="h"><div class="lt"><b>MSME registration certificate <span class="req">*</span></b>' +
+      '<div class="h"><div class="lt"><b>MSME registration certificate</b>' +
       '<span>' + (k.msme.done ? esc(k.msme.fileName) :
-        "Upload your Udyam / MSME registration certificate.") + '</span></div>' +
-      (k.msme.done ? '<span class="tag ok">Uploaded</span>' : '<span class="tag warn">Required</span>') +
+        "Optional. Upload your Udyam / MSME certificate if you have one.") + '</span></div>' +
+      (k.msme.done ? '<span class="tag ok">Uploaded</span>' : '<span class="tag info">Optional</span>') +
       '</div>' +
       (k.msme.done ? '' :
         '<div class="body"><div class="upload"><div class="ut"><b>MSME certificate</b>' +
@@ -2189,7 +2188,7 @@ function phaseKYC(r) {
 
   var summary = done
     ? statusBlock("ok", "KYC verification complete",
-        fm ? "Your Aadhaar, PAN, bank account, GST and MSME records are complete."
+        fm ? "Your Aadhaar, PAN, bank account and GST records are complete."
            : "Your Aadhaar, PAN, bank account and GST status are complete.") +
       '<div class="kv">' +
         '<div class="row"><span class="k">Aadhaar</span><span class="v ok">Verified</span></div>' +
@@ -2198,15 +2197,24 @@ function phaseKYC(r) {
         '<div class="row"><span class="k">GST' + (fm ? '' : ' status') + '</span><span class="v' +
           (k.gst.registered ? ' ok' : ' mute') + '">' +
           (k.gst.registered ? "Verified" : "Non-GST") + '</span></div>' +
-        (fm ? '<div class="row"><span class="k">MSME certificate</span><span class="v ok">Uploaded</span></div>' : '') +
+        (fm ? '<div class="row"><span class="k">MSME certificate</span><span class="v' +
+              (k.msme.done ? ' ok">Uploaded' : ' mute">Not provided') + '</span></div>' : '') +
       '</div>' +
+      /* MSME is optional, so the required items can complete without it — keep
+         the upload reachable here rather than stranding it behind the summary. */
+      (fm && !k.msme.done
+        ? '<div class="upload" style="margin-top:16px" data-testid="msme-optional-upload">' +
+          '<div class="ut"><b>MSME registration certificate</b>' +
+          '<span>Optional — attach it now, or add it later.</span></div>' +
+          '<button class="btn btn-ghost" id="kyc-msme-go">Upload file</button></div>'
+        : '') +
       '<div style="display:flex;justify-content:center;margin-top:20px">' +
         '<button class="btn btn-primary" id="kyc-continue">' + esc(nextLabel(r)) + '</button>' +
       '</div>'
     : aad + pan + bank + gst + msme + cheque +
       '<div class="cfoot"><span class="note">' +
         (fm
-          ? "FM captains must complete Aadhaar, PAN, bank, GST and MSME before continuing."
+          ? "FM captains must complete Aadhaar, PAN, bank and GST before continuing. MSME is optional."
           : "Complete Aadhaar, PAN, bank and your GST status before continuing.") +
       '</span>' +
       '<button class="btn btn-primary" id="kyc-continue" disabled>Continue →</button></div>';
@@ -3128,7 +3136,7 @@ var A = {
       r.kyc.errors = r.kyc.errors || {};
       if (r.role === "FM") {
         if (!r.kyc.gst.done)  r.kyc.errors.gstin = ERR.gstRequired;
-        if (!r.kyc.msme.done) r.kyc.errors.msme  = ERR.msmeRequired;
+
       }
       save(); render(); return;
     }
@@ -3572,7 +3580,7 @@ var A = {
     r.kyc.pan     = { done:true, value:pr.pan, father:"Suresh Verma" };
     r.kyc.bank    = { done:true, acc:pr.bank.acc, ifsc:pr.bank.ifsc, pennyDone:true };
     r.kyc.gst     = { registered:gst.registered, gstin:gst.gstin, done:true };
-    r.kyc.msme    = { done:role === "FM", fileName:role === "FM" ? "udyam-registration.pdf" : "" };
+    r.kyc.msme    = { done:false, fileName:"" };          // optional, not carried
     r.bgv.status  = "passed";
     r.newHubGst   = gst;
     // these are captain-level and already done — never walk them again

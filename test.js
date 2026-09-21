@@ -308,15 +308,30 @@ async function testFMCombined() {
   click(doc, "kyc-bank-go");
 
   check(disabled(doc, "kyc-continue"),
-        "FM Continue still disabled with Aadhaar+PAN+bank done but GST/MSME missing");
+        "FM Continue still disabled with Aadhaar+PAN+bank done but GST missing");
 
   type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
   click(doc, "kyc-gst-go");
-  check(disabled(doc, "kyc-continue"), "FM Continue still disabled without MSME");
-
-  click(doc, "kyc-msme-go");
+  /* MSME is optional: GST is the last gate, and Continue opens without an upload. */
   check(!disabled(doc, "kyc-continue"),
-        "FM Continue enables only once Aadhaar, PAN, bank, GST and MSME are all done");
+        "FM Continue enables on Aadhaar, PAN, bank and GST — MSME is not required");
+  check(!api.helpers.R().kyc.msme.done, "and no MSME certificate has been uploaded");
+  check(txt(doc).indexOf("Optional") >= 0, "the MSME block is labelled Optional");
+
+  /* Completing the required items flips the card to its summary — the optional
+     upload has to stay reachable there, or it could never be attached at all. */
+  check(exists(doc, '[data-testid="msme-optional-upload"]'),
+        "the optional MSME upload is still offered on the completed KYC card");
+  check(txt(doc).indexOf("Not provided") >= 0,
+        "the summary records MSME as not provided rather than claiming an upload");
+
+  /* it can still be uploaded, and then it is recorded */
+  click(doc, "kyc-msme-go");
+  check(!exists(doc, '[data-testid="msme-optional-upload"]'),
+        "the upload prompt goes away once a certificate is attached");
+  check(txt(doc).indexOf("Uploaded") >= 0, "and the summary flips to Uploaded");
+  check(api.helpers.R().kyc.msme.done, "an MSME certificate can still be uploaded");
+  check(!disabled(doc, "kyc-continue"), "Continue stays enabled after uploading it");
   click(doc, "kyc-continue");
   eq(api.helpers.phaseId(), "hub", "FM KYC → hub details (now before background verification)");
 

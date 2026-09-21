@@ -103,9 +103,16 @@ flow, so it isn't a step the captain waits on as its own screen.
 | | LM | FM |
 |---|---|---|
 | GST | Optional toggle — *Non-GST* is a valid, complete answer | **Mandatory.** GSTIN required |
-| MSME registration certificate | — | **Required upload** |
+| MSME registration certificate | — | **Optional upload** |
 | Cancelled cheque | Optional upload | **Not collected** — the ₹1 penny-drop already proves the account |
-| Continue enabled when | Aadhaar + PAN + bank + GST status | Aadhaar + PAN + bank + GST + MSME, all five |
+| Continue enabled when | Aadhaar + PAN + bank + GST status | Aadhaar + PAN + bank + GST |
+
+MSME is collected for FM but does not gate anything: the block is labelled *Optional*, GST
+is the only starred requirement, and the summary records the certificate as *Not provided*
+rather than claiming an upload that never happened. Because the required items can complete
+without it, the card flips to its summary while MSME is still outstanding — so the upload
+stays available there too, otherwise it could never be attached at all. It is likewise not
+carried over when adding a second hub, since there may be nothing to carry.
 
 **4. Hub category is an Area Manager input, never a captain field.** Cluster Head review
 blocks on a *waiting on hub classification* state until the AM sets it. Once set, it is
@@ -313,7 +320,7 @@ build from.
 npm install && npm test
 ```
 
-**411 assertions across 13 groups:**
+**418 assertions across 13 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
