@@ -178,25 +178,28 @@ forward.
 |---|---|
 | Area of the hub (sq ft) | integer, 100–1,000,000 |
 | Estimated manpower | integer, 1–5,000 |
-| Vehicle types the location can accommodate | at least one of the 24 listed types; several can be chosen |
+| Max vehicle size the location can accommodate | one of the 24 listed types |
 
 All three are required to submit, and they appear in the submitted summary alongside the
 address. For FM these are the inputs that feed the Area Manager's survey and, through it,
 the hub categorisation that sets the benchmark ceiling.
 
-Vehicle types are a **multi-select dropdown** — a hub can usually take several sizes, but
-laying 24 options out inline is too much visual weight, so the field stays one row tall and
-opens a panel on click. Closed, it shows up to three selected types as tokens plus
-*+N more*; open, it offers a search box, a scrollable checkbox list with each type's rated
-tonnage, and *Select all* / *Clear* with a live count. *Select all* respects an active
-search, so it picks what is visible rather than everything. Escape or a click outside
-closes it. Selection is stored in list order rather than click order.
+Vehicle size is **one input**: the captain picks only the largest vehicle the hub can take,
+and everything smaller is assumed to fit. The field stays one row tall and opens a panel on
+click — a search box over a list ordered smallest capacity first, each row showing its rated
+tonnage. Picking a row sets the max and closes the panel; there is nothing else to tick.
 
-The original requirement asked for the hub's *max* vehicle size; rather than ask for that
-separately, it is **derived** from the selection by parsing the tonnage out of each type
-name (`vehicleTonnage` / `largestVehicle`), shown live under the field and recorded as
-*Max vehicle size* in the summary next to the full list. A saved selection from an earlier
-single-value shape is migrated into the array on load.
+The "and all smaller" rule is made visible rather than left implied. The chosen row is
+marked **max**, every row below it is tinted and marked **fits**, and rows above show only
+their tonnage — so the cut-off is legible at a glance. The footer and hint state the count
+(*"13 smaller types also fit"*), and the submitted summary records both the max and how
+many smaller types it covers.
+
+**Capacity order comes from the supplied list, not from parsing tonnage.** The order settles
+cases tonnage alone cannot — `3.5MT_4W` ranks below `3.5MT_14FT`, and `6MT_4W_TataAce` above
+`5MT_17FT` — so a type's index in `VEHICLE_TYPES` *is* its capacity rank (`vehicleRank`),
+and `impliedVehicles` / `smallerThan` slice from it. An earlier saved multi-select collapses
+to its largest entry on load.
 
 The dropdown panel is patched in place rather than re-rendered — the same reason the OTP
 countdown is: a full `render()` would replace the search input and drop focus mid-typing.
@@ -320,7 +323,7 @@ build from.
 npm install && npm test
 ```
 
-**418 assertions across 13 groups:**
+**428 assertions across 13 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -342,12 +345,12 @@ npm install && npm test
    success reporting, within-batch duplicates, the 5-pincode cap, stale-availability reset,
    and paste-to-add
 10. **Hub facility inputs** — vehicle list de-duplication; dropdown open/close incl.
-   Escape, outside-click and click-inside; all 24 options in order; multi-select with
-   toggle-off; token summary and *+N more*; search filtering that preserves selection;
-   select-all honouring an active search; tonnage parsing and largest-type derivation
-   (including the 10MT-vs-9MT case a string compare gets wrong); area/manpower/vehicles
-   required; range and membership validation; values preserved on a rejected submit and
-   prefilled on reopen; captured for both roles
+   Escape, outside-click and click-inside; all 24 options in ascending capacity order;
+   single-select that closes on pick; the implied-smaller rule (row marking, counts, and
+   that larger types are excluded); rank ordering where tonnage is ambiguous; search that
+   does not disturb the choice; clear; area/manpower/max-vehicle required; range and
+   membership validation; values preserved on a rejected submit and prefilled on reopen;
+   captured for both roles
 10b. **Phase order** — both role orders pinned, hub details asserted ahead of background
    verification and Cluster Head review, every continue-button label checked against the
    screen it actually leads to, and proper nouns checked for capitalisation
