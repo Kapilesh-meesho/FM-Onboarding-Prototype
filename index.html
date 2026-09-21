@@ -830,7 +830,7 @@ var PHASES = {
     { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST status", lc:"KYC verification" },
     { id:"hub", title:"Hub details",             sub:"Address and facility", lc:"hub details" },
     { id:"bgv", title:"Background verification", sub:"Secure background check", lc:"background verification" },
-    { id:"ch",  title:"Cluster Head review",     sub:"Hub category and rate card", lc:"Cluster Head review" },
+    { id:"ch",  title:"Cluster Head review",     sub:"Interview and rate card", lc:"Cluster Head review" },
     { id:"ag",  title:"Agreements",              sub:"Rate card and service agreement", lc:"agreements" },
     { id:"act", title:"Activation",              sub:"Hub goes live", lc:"activation" }
   ]
@@ -1935,11 +1935,8 @@ function sideDefault(r, extraTop) {
     ["Request ID", r.requestId || "—"],
     ["Status", list[idx].title]
   ];
-  /* Hub category is shown at Cluster Head review, where it explains the rate
-     ceiling — but not on agreements, where it is noise the captain cannot act on. */
-  if (r.role === "FM" && r.ch.category && list[idx].id !== "ag") {
-    rows.splice(3, 0, ["Hub category", HUB_CATEGORIES[r.ch.category].label]);
-  }
+  /* Hub category and the ceiling it drives are internal — the FM captain is
+     never shown either. */
   if (r.hub.hubCode) rows.splice(rows.length - 1, 0, ["Hub code", r.hub.hubCode]);
   if (r.act.partnerId) rows.splice(rows.length - 1, 0, ["Partner ID", r.act.partnerId]);
   if (r.act.vendorId) rows.splice(rows.length - 1, 0, ["Oracle vendor ID", r.act.vendorId]);
@@ -2410,20 +2407,15 @@ function rateCardPanel(r) {
   var cat = r.ch.category;
   if (!cat) return "";
   var meta = HUB_CATEGORIES[cat];
-  var above = isAboveCeiling(r);
 
   var rows =
-    '<div class="row"><span class="k">Hub category</span>' +
-      '<span class="v">' + esc(meta.label) + '</span></div>' +
-    '<div class="row"><span class="k">Benchmark ceiling</span>' +
-      '<span class="v">' + money(meta.ceiling) + ' / shipment</span></div>' +
     '<div class="row"><span class="k">Touchpoint rate</span>' +
       '<span class="v">' + money(meta.tp) + '</span></div>';
 
   if (r.ch.rate != null) {
+    // no ceiling annotation either way — the captain is not shown the ceiling
     rows += '<div class="row"><span class="k">Proposed rate</span>' +
-      '<span class="v' + (above ? '' : ' ok') + '">' + money(r.ch.rate) +
-      (above ? ' · above ceiling' : '') + '</span></div>';
+      '<span class="v">' + money(r.ch.rate) + '</span></div>';
   }
 
   var modeBlock = "";
@@ -2496,10 +2488,9 @@ function phaseCH(r) {
     side = sideDefault(r, chContactCard(ch.decidedBy === "zh" ? "zh" : "ch"));
 
   } else if (ch.status === "escalated") {
-    inner = statusBlock("run", "Escalated to Zonal Head",
-        "Your proposed rate of " + money(ch.rate) + " is above the " +
-        money(ceilingFor(r)) + " benchmark ceiling for a " +
-        HUB_CATEGORIES[ch.category].label + ". It needs Zonal Head approval.") +
+    inner = statusBlock("run", "Sent for Zonal Head approval",
+        "Your proposed rate of " + money(ch.rate) + " needs Zonal Head sign-off. " +
+        "We\u2019ll notify you at " + maskPhone(S.phone) + " when there\u2019s an update.") +
       rateCardPanel(r) +
       '<div class="tl">' +
         tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Reviewed and forwarded for approval.") +
@@ -2513,8 +2504,8 @@ function phaseCH(r) {
         ch.reason || "The proposed rate is above what this hub category supports.") +
       rateCardPanel(r) +
       '<div class="notice bad"><b>What happens now</b>' +
-        'Your Cluster Head will rework the rate card within the ' + money(ceilingFor(r)) +
-        ' benchmark ceiling, or resubmit a revised case to the Zonal Head.</div>' +
+        'Your Cluster Head will revise the rate card, or resubmit a revised case to the ' +
+        'Zonal Head.</div>' +
       '<div class="tl">' +
         tlRow("bad", "Zonal Head: " + ZH_CONTACT.name, esc(ch.reason || "Rate rejected.")) +
         tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Reworking the rate card.") +
@@ -2546,7 +2537,7 @@ function phaseCH(r) {
   return {
     left: phaseHeader(r, "Cluster Head review", "Cluster Head is reviewing your request.") +
           cardWrap("Cluster Head review",
-                   fm ? "Hub category, rate card and benchmark ceiling."
+                   fm ? "Rate card review."
                       : "Cluster Head is reviewing your request.", inner),
     side: side
   };
@@ -2939,7 +2930,7 @@ function phaseAG(r) {
       '<p>You agree that shipment handling, scanning and handover follow the standard operating ' +
         'procedure issued to you at activation, and that deviations may affect payouts.</p>' +
       '<p>Rate card revisions follow the approval path defined for your hub category. Revisions ' +
-        'above the benchmark ceiling require Zonal Head approval.</p>' +
+        'beyond the agreed rate require Zonal Head approval.</p>' +
       '<p>Either party may terminate with 30 days written notice. ' +
         (fm ? "" : "Security deposits are refunded on exit after reconciliation. ") +
         'Outstanding dues are settled against the final invoice.</p>' +

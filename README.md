@@ -114,13 +114,17 @@ without it, the card flips to its summary while MSME is still outstanding — so
 stays available there too, otherwise it could never be attached at all. It is likewise not
 carried over when adding a second hub, since there may be nothing to carry.
 
-**4. Hub category is an Area Manager input, never a captain field** — and the captain is
-not told any of that. Until the AM sets it, Cluster Head review simply reads *review in
-progress*; who classifies the hub, when, and what it drives are internal mechanics the
-captain cannot act on. The gate is real (`chCanDecide` refuses a decision without a
-category, and the dev panel is where it gets set), it is just not narrated. Once set, the
-category is shown read-only beside the benchmark ceiling at Cluster Head review — but
-nowhere else, including agreements.
+**4. Hub category and its rate ceiling are never shown to an FM captain.** Not at Cluster
+Head review, not in the application summary, not in the rail's phase label, not on
+agreements — and not even the word *ceiling* on an escalated rate. The captain sees the
+touchpoint rate and the proposed rate; the classification that produced them, and the
+threshold it sets, stay internal.
+
+The mechanics are unchanged underneath: the category is still an Area Manager input, it
+still determines the benchmark ceiling, `chCanDecide` still refuses a Cluster Head decision
+until it is set, and a rate above the ceiling still escalates to the Zonal Head. Only the
+narration is gone. An escalated request tells the captain the rate *needs Zonal Head
+sign-off*, not why.
 
 **5. Cluster Head review includes rate card approval against a benchmark ceiling**
 determined by that hub category:
@@ -133,10 +137,13 @@ determined by that hub category:
 | Mall hub | 2 | ₹2 |
 | SAH (seller as hub) | 1.5 | ₹1.5 |
 
-A rate **within** the ceiling clears at Cluster Head and is shown plainly, with no
-"within ceiling" annotation. A rate **above** it escalates to the **Zonal Head**, who gets
-their own contact card and approve/reject states — that one *is* annotated, since the
-overage is the reason it escalated.
+A rate **within** the ceiling clears at Cluster Head. A rate **above** it escalates to the
+**Zonal Head**, who gets their own contact card and approve/reject states. Neither case is
+annotated on screen — the rate is shown as a plain figure, because the ceiling it is being
+measured against is not something the captain is shown.
+
+The ceiling table above describes internal behaviour and the dev panel, not anything the
+captain reads.
 
 Two rate card modes:
 
@@ -343,7 +350,7 @@ build from.
 npm install && npm test
 ```
 
-**498 assertions across 14 groups:**
+**511 assertions across 14 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

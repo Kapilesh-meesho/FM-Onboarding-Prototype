@@ -66,6 +66,10 @@ const mainTxt = (doc) => {
   const col = doc.querySelector(".col-left");
   return col ? col.textContent.replace(/\s+/g, " ") : "";
 };
+const railTxt = (doc) => {
+  const rail = doc.querySelector(".rail");
+  return rail ? rail.textContent.replace(/\s+/g, " ") : "";
+};
 const sideTxt = (doc) => {
   const col = doc.querySelector(".col-side");
   return col ? col.textContent.replace(/\s+/g, " ") : "";
@@ -381,8 +385,16 @@ async function testFMCombined() {
   eq(api.helpers.ceilingFor(api.helpers.R()), 5, "Standalone ceiling reads 5");
   check(api.helpers.chCanDecide(api.helpers.R()),
         "Cluster Head can decide once the category arrives");
-  check(txt(doc).indexOf("Standalone") >= 0,
-        "hub category is shown read-only alongside its benchmark ceiling");
+  /* The category and the ceiling it drives are internal — the captain sees
+     neither, on any FM screen. */
+  ["Hub category", "Standalone", "Benchmark ceiling", "benchmark ceiling"].forEach(phrase => {
+    check(mainTxt(doc).indexOf(phrase) === -1,
+          "Cluster Head review does not show: \"" + phrase + "\"");
+    check(sideTxt(doc).indexOf(phrase) === -1,
+          "the application summary does not show: \"" + phrase + "\"");
+  });
+  check(railTxt(doc).indexOf("Hub category") === -1,
+        "and the rail does not label the phase with it either");
 
   api.actions.chApprove("combined");
   const ch = api.helpers.R().ch;
@@ -464,9 +476,15 @@ async function testFMEscalation() {
   eq(r.ch.status, "escalated", "above-ceiling rate escalates to Zonal Head");
   eq(r.ch.rateMode, "split", "split rate card mode recorded");
   check(api.helpers.isAboveCeiling(r), "4.5 is above the 2.0 mall-hub ceiling");
-  check(txt(doc).indexOf("above ceiling") >= 0,
-        "an above-ceiling rate still says so — that is why it escalates");
+  check(mainTxt(doc).indexOf("ceiling") === -1,
+        "not even the word 'ceiling' reaches the captain on an escalated rate");
   check(txt(doc).indexOf("Zonal Head") >= 0, "Zonal Head contact card is shown");
+  ["Hub category", "benchmark ceiling", "Benchmark ceiling", "Mall hub"].forEach(phrase => {
+    check(mainTxt(doc).indexOf(phrase) === -1,
+          "the escalation state does not reveal: \"" + phrase + "\"");
+  });
+  check(mainTxt(doc).indexOf("needs Zonal Head sign-off") >= 0,
+        "it just says the rate needs Zonal Head sign-off");
   check(exists(doc, '[data-testid="split-caveat"]'),
         "split mode shows the 'indicative, formula being confirmed' caveat");
   check(txt(doc).indexOf("indicative") >= 0 || txt(doc).indexOf("Indicative") >= 0,
