@@ -154,37 +154,26 @@ function doKyc(doc, role) {
   click(doc, "kyc-continue");
 }
 
-/* Drive the vehicle dropdown the way a person does: open it, tick the rows that
-   need changing, close it. Idempotent — checkboxes toggle, so a form reopened
-   with a selection already on must not have it flipped back off. */
-function pickVehicles(doc, list) {
+/* Drive the vehicle dropdown the way a person does: open it, click the row for
+   the largest vehicle the hub takes. Picking closes the panel. */
+function pickMaxVehicle(doc, type) {
   const api = doc.defaultView.__APP__;
-  const want = new Set(list);
-  if (!doc.getElementById("veh-toggle")) throw new Error("pickVehicles: dropdown not on screen");
+  if (!doc.getElementById("veh-toggle")) throw new Error("pickMaxVehicle: dropdown not on screen");
   if (!api.helpers.vehUI().open) click(doc, "veh-toggle");
-  for (let guard = 0; guard <= 60; guard++) {
-    const next = [...doc.querySelectorAll("#veh-list [data-veh]")].find(
-      (cb) => want.has(cb.getAttribute("data-veh")) !== cb.checked
-    );
-    if (!next) {
-      click(doc, "veh-toggle");                       // close
-      return;
-    }
-    next.checked = !next.checked;
-    next.dispatchEvent(new (doc.defaultView.Event)("change", { bubbles: true }));
-  }
-  throw new Error("pickVehicles: selection did not settle");
+  const row = sel(doc, '#veh-list [data-veh="' + type + '"]');
+  if (!row) throw new Error("pickMaxVehicle: no row for " + type);
+  row.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
 }
 
 function doHubDetails(doc, { address = "No. 42, 4th Cross, Koramangala, Bengaluru",
                               map = "https://maps.google.com/?q=12.9352,77.6245",
                               area = "4000", manpower = "12",
-                              vehicles = ["3.5MT_14FT", "7MT_20FT"] } = {}) {
+                              maxVehicle = "7MT_20FT" } = {}) {
   type(doc, "hub-address", address);
   type(doc, "hub-map", map);
   type(doc, "hub-area", area);
   type(doc, "hub-manpower", manpower);
-  pickVehicles(doc, vehicles);
+  pickMaxVehicle(doc, maxVehicle);
   click(doc, "hub-submit");
 }
 
@@ -337,7 +326,7 @@ async function testFMCombined() {
 
   doHubDetails(doc, { address: "Plot 7, Bommasandra Industrial Area, Bengaluru",
                       map: "https://maps.google.com/?q=12.8156,77.6982",
-                      area: "6500", manpower: "18", vehicles: ["10MT_32FT"] });
+                      area: "6500", manpower: "18", maxVehicle: "10MT_32FT" });
   check(!api.helpers.R().hub.hubCode,
         "FM hub details submit does NOT generate a hub code");
   check(exists(doc, '[data-testid="fm-no-hubcode"]'),
@@ -1052,53 +1041,79 @@ async function testHubFacilityInputs() {
   /* closed by default, and the panel is hidden rather than laid out */
   check(!api.helpers.vehUI().open, "dropdown starts closed");
   check($(doc, "veh-panel").hidden, "panel is hidden while closed");
-  check(txt(doc).indexOf("Select vehicle types") >= 0, "closed control shows a placeholder");
+  check(txt(doc).indexOf("Select the largest vehicle") >= 0,
+        "closed control prompts for the largest vehicle");
 
-  /* opening reveals every type exactly once, in list order */
+  /* opening reveals every type exactly once, smallest capacity first */
   click(doc, "veh-toggle");
   check(api.helpers.vehUI().open, "clicking the control opens the dropdown");
   check(!$(doc, "veh-panel").hidden, "panel is visible once open");
   const opts = [...doc.querySelectorAll("#veh-list [data-veh]")].map(c => c.getAttribute("data-veh"));
   eq(opts.length, 24, "dropdown offers all 24 vehicle types");
-  eq(opts, list, "dropdown options match the de-duplicated list, in order");
-  check([...doc.querySelectorAll("#veh-list [data-veh]")].every(c => !c.checked),
+  eq(opts, list, "dropdown options are in ascending capacity order");
+  eq(opts[0], "0.8MT_4W_TataAce", "smallest type first");
+  eq(opts[opts.length - 1], "42MT_18W", "largest type last");
+  check([...doc.querySelectorAll("#veh-list [data-veh]")].every(
+          r => r.getAttribute("aria-selected") === "false"),
         "nothing is selected to begin with");
 
-  /* multi-select: several types at once, kept in list order, and toggleable off */
-  api.actions.toggleVehicle("10MT_32FT");
-  api.actions.toggleVehicle("2.2MT_4W_Bolero");
-  api.actions.toggleVehicle("7MT_20FT");
-  eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","7MT_20FT","10MT_32FT"],
-     "multiple vehicle types can be chosen, stored in list order not click order");
-  eq([...doc.querySelectorAll("#veh-list [data-veh]")].filter(c => c.checked).length, 3,
-     "three rows show as checked");
-  check(txt(doc).indexOf("3 of 24 selected") >= 0, "footer reports the count");
-  api.actions.toggleVehicle("7MT_20FT");
-  eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","10MT_32FT"],
-     "ticking a selected type again removes it");
+  /* the supplied order is authoritative where tonnage alone is ambiguous */
+  check(api.helpers.vehicleRank("3.5MT_4W") < api.helpers.vehicleRank("3.5MT_14FT"),
+        "equal tonnages keep the supplied order (3.5MT_4W below 3.5MT_14FT)");
+  check(api.helpers.vehicleRank("5MT_17FT") < api.helpers.vehicleRank("6MT_4W_TataAce"),
+        "ranking follows the supplied list, not string order");
+  check(api.helpers.vehicleRank("9MT_6W") < api.helpers.vehicleRank("10MT_22FT"),
+        "10MT outranks 9MT (string compare would get this wrong)");
+  eq(api.helpers.vehicleRank("Lorry"), -1, "an unknown type has no rank");
 
-  /* the closed control summarises the selection instead of listing 24 chips */
+  /* one input: picking a type sets the hub max and closes the panel */
+  api.actions.setMaxVehicle("7MT_20FT");
+  eq(api.helpers.R().hub.maxVehicle, "7MT_20FT", "picking a type sets the hub's max size");
+  check(!api.helpers.vehUI().open, "picking closes the dropdown — there is nothing else to tick");
+  check(typeof api.actions.toggleVehicle === "undefined",
+        "there is no multi-select toggle any more");
+
+  /* everything smaller is implied, and shown as such */
+  const implied = api.helpers.impliedVehicles("7MT_20FT");
+  eq(implied[implied.length - 1], "7MT_20FT", "the chosen type is included");
+  eq(implied.length, api.helpers.vehicleRank("7MT_20FT") + 1,
+     "everything at or below the chosen rank is implied to fit");
+  check(implied.indexOf("0.8MT_4W_TataAce") >= 0, "the smallest type fits under a 7MT max");
+  check(implied.indexOf("8MT") === -1, "a larger type does not fit");
+  eq(api.helpers.smallerThan("0.8MT_4W_TataAce"), [],
+     "nothing is smaller than the smallest type");
+  eq(api.helpers.smallerThan("7MT_20FT").length, 13, "13 smaller types fit under 7MT_20FT");
+
+  click(doc, "veh-toggle");
+  const rows = [...doc.querySelectorAll("#veh-list [data-veh]")];
+  const maxRow = rows.find(r => r.getAttribute("data-veh") === "7MT_20FT");
+  eq(maxRow.getAttribute("aria-selected"), "true", "the chosen row is marked selected");
+  check(maxRow.classList.contains("on"), "and styled as the max");
+  check(rows.filter(r => r.classList.contains("inc")).length === 13,
+        "the 13 smaller rows are shown as included");
+  check(rows.filter(r => r.classList.contains("on")).length === 1,
+        "exactly one row is the max");
+  check(!rows.find(r => r.getAttribute("data-veh") === "8MT").classList.contains("inc"),
+        "larger rows are not marked as included");
+  check(txt(doc).indexOf("13 smaller types also fit") >= 0,
+        "the footer states how many smaller types are covered");
+  check(txt(doc).indexOf("assumed to fit") >= 0,
+        "the hint spells out that smaller types are assumed to fit");
+
+  /* the closed control shows the single choice */
   const toks = [...doc.querySelectorAll("#veh-toggle .ms-tok")].map(t => t.textContent);
-  eq(toks, ["2.2MT_4W_Bolero","10MT_32FT"], "control shows the selected types as tokens");
-  api.actions.setVehicles(list.slice(0, 6));
-  eq([...doc.querySelectorAll("#veh-toggle .ms-tok")].length, 3,
-     "control shows at most three tokens");
-  check(sel(doc, "#veh-toggle .ms-more").textContent === "+3 more",
-       "control summarises the remainder as '+N more'");
-  api.actions.setVehicles(["2.2MT_4W_Bolero","10MT_32FT"]);
+  eq(toks, ["7MT_20FT"], "control shows exactly one selected type");
 
-  /* search filters the list without closing or losing the selection */
+  /* search filters without disturbing the choice */
+  api.actions.openVehicles(true);
   api.actions.filterVehicles("32FT");
   const filtered = [...doc.querySelectorAll("#veh-list [data-veh]")].map(c => c.getAttribute("data-veh"));
   eq(filtered, ["10MT_32FT"], "search narrows the list");
-  check($(doc, "veh-list").querySelector('[data-veh="10MT_32FT"]').checked,
-        "a filtered row keeps its checked state");
   api.actions.filterVehicles("nothingmatches");
   check(txt(doc).indexOf("No vehicle type matches") >= 0, "an empty search result says so");
   api.actions.filterVehicles("");
   eq([...doc.querySelectorAll("#veh-list [data-veh]")].length, 24, "clearing the search restores all");
-  eq(api.helpers.R().hub.vehicles, ["2.2MT_4W_Bolero","10MT_32FT"],
-     "searching never changes the selection");
+  eq(api.helpers.R().hub.maxVehicle, "7MT_20FT", "searching never changes the choice");
 
   /* Escape and outside clicks close it */
   api.actions.openVehicles(true);
@@ -1111,40 +1126,21 @@ async function testHubFacilityInputs() {
   $(doc, "veh-panel").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
   check(api.helpers.vehUI().open, "a click inside the panel does not close it");
 
-  /* the max vehicle size is derived from the selection, not asked for separately */
-  eq(api.helpers.largestVehicle(["2.2MT_4W_Bolero","10MT_32FT"]), "10MT_32FT",
-     "largest of a selection is derived by tonnage");
-  eq(api.helpers.largestVehicle(["0.8MT_4W_TataAce","1.5MT_4W_Dost"]), "1.5MT_4W_Dost",
-     "fractional tonnages compare numerically, not as strings");
-  eq(api.helpers.largestVehicle(["10MT_22FT","9MT_6W"]), "10MT_22FT",
-     "10MT beats 9MT (string compare would get this wrong)");
-  eq(api.helpers.largestVehicle([]), null, "empty selection has no largest");
   eq(api.helpers.vehicleTonnage("42MT_18W"), 42, "tonnage parsed from the type name");
   eq(api.helpers.vehicleTonnage("0.8MT_4W_TataAce"), 0.8, "fractional tonnage parsed");
-  check(txt(doc).indexOf("Largest selected: 10MT_32FT") >= 0,
-        "field shows the derived largest type live");
 
-  /* select-all and clear */
+  /* clear resets the single choice */
   api.actions.openVehicles(true);
   api.actions.filterVehicles("");
-  click(doc, "veh-all");
-  eq(api.helpers.R().hub.vehicles.length, 24, "Select all picks every type");
+  check(!exists(doc, "#veh-all"), "there is no Select all — only one type can be chosen");
   click(doc, "veh-none");
-  eq(api.helpers.R().hub.vehicles, [], "Clear empties the selection");
-  check(disabled(doc, "veh-none"), "Clear is disabled when nothing is selected");
-
-  /* Select all respects an active search rather than ignoring it */
-  api.actions.filterVehicles("MT_4W");
-  const visible = [...doc.querySelectorAll("#veh-list [data-veh]")].map(c => c.getAttribute("data-veh"));
-  click(doc, "veh-all");
-  eq(api.helpers.R().hub.vehicles, list.filter(v => visible.indexOf(v) >= 0),
-     "Select all with a search active picks only the visible types");
-  api.actions.filterVehicles("");
-  click(doc, "veh-none");
+  eq(api.helpers.R().hub.maxVehicle, "", "Clear resets the choice");
+  check(disabled(doc, "veh-none"), "Clear is disabled when nothing is chosen");
+  api.actions.setMaxVehicle("7MT_20FT");
 
   /* an unknown type cannot be injected */
-  api.actions.toggleVehicle("Lorry");
-  eq(api.helpers.R().hub.vehicles, [], "a type outside the list is ignored");
+  api.actions.setMaxVehicle("Lorry");
+  eq(api.helpers.R().hub.maxVehicle, "7MT_20FT", "a type outside the list is ignored");
 
   /* all three are required */
   type(doc, "hub-address", "No. 42, 4th Cross, Koramangala, Bengaluru");
@@ -1176,20 +1172,22 @@ async function testHubFacilityInputs() {
   check(!api.helpers.R().hub.submitted, "still not submitted");
 
   /* valid submit records all three and shows them in the summary */
-  doHubDetails(doc, { area: "4000", manpower: "12", vehicles: ["7MT_20FT"] });
+  doHubDetails(doc, { area: "4000", manpower: "12", maxVehicle: "7MT_20FT" });
   const h = api.helpers.R().hub;
   check(h.submitted, "valid facility details submit successfully");
   eq(h.areaSqft, "4000", "area recorded");
   eq(h.manpower, "12", "manpower recorded");
-  eq(h.vehicles, ["7MT_20FT"], "vehicle selection recorded");
+  eq(h.maxVehicle, "7MT_20FT", "max vehicle size recorded");
   body = txt(doc);
   check(body.indexOf("Area of the hub") >= 0 && body.indexOf("4,000 sq ft") >= 0,
         "summary shows the area, formatted");
   check(body.indexOf("Estimated manpower") >= 0, "summary shows manpower");
   check(body.indexOf("Max vehicle size") >= 0 && body.indexOf("7MT_20FT") >= 0,
         "summary shows the derived max vehicle size");
-  check(body.indexOf("Vehicle types accommodated") >= 0,
-        "summary lists the accommodated vehicle types");
+  check(body.indexOf("Smaller types also accommodated") >= 0,
+        "summary states that smaller types are covered");
+  check(body.indexOf("13 of 23") >= 0,
+        "and how many of them there are");
 
   /* values survive a reopen after an AM rejection */
   click(doc, "hub-continue");
@@ -1204,7 +1202,7 @@ async function testHubFacilityInputs() {
   click(doc, "am-fix-hub");
   eq($(doc, "hub-area").value, "4000", "area is prefilled on reopen");
   eq($(doc, "hub-manpower").value, "12", "manpower is prefilled on reopen");
-  eq(api.helpers.R().hub.vehicles, ["7MT_20FT"], "vehicle selection is preserved on reopen");
+  eq(api.helpers.R().hub.maxVehicle, "7MT_20FT", "max vehicle size is preserved on reopen");
   check(txt(doc).indexOf("7MT_20FT") >= 0, "the reopened control still shows the selection");
 
   /* FM captures the same three fields */
@@ -1216,12 +1214,12 @@ async function testHubFacilityInputs() {
   check(exists(doc, "#hub-area") && exists(doc, "#hub-manpower") && exists(doc, "#veh-toggle"),
         "FM hub details captures area, manpower and vehicle types too");
   doHubDetails(doc, { address: "Plot 7, Bommasandra", area: "6500",
-                      manpower: "18", vehicles: ["2.2MT_4W_Bolero", "10MT_32FT"] });
+                      manpower: "18", maxVehicle: "10MT_32FT" });
   const fh = api.helpers.R().hub;
-  eq([fh.areaSqft, fh.manpower, fh.vehicles], ["6500","18",["2.2MT_4W_Bolero","10MT_32FT"]],
-     "FM records its own facility spec with multiple vehicle types");
-  eq(api.helpers.largestVehicle(fh.vehicles), "10MT_32FT",
-     "FM max vehicle size is derived from the selection");
+  eq([fh.areaSqft, fh.manpower, fh.maxVehicle], ["6500","18","10MT_32FT"],
+     "FM records its own facility spec with a single max vehicle size");
+  eq(api.helpers.smallerThan(fh.maxVehicle).length, 18,
+     "and 18 smaller types are implied to fit");
   check(!fh.hubCode, "FM still gets no hub code at submit");
   check(txt(doc).indexOf("10MT_32FT") >= 0, "FM summary shows the max vehicle size");
 

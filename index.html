@@ -198,6 +198,21 @@ img{max-width:100%}
 .ms-row input{width:16px;height:16px;flex:none;accent-color:var(--navy);cursor:pointer}
 .ms-row span{flex:1;min-width:0}
 .ms-row i{font-style:normal;font-size:11px;font-weight:600;color:var(--muted)}
+/* single-pick option rows, smallest capacity first */
+.ms-row.pick{width:100%;text-align:left;background:none;border:none;font-family:inherit}
+.ms-row.pick:hover{background:var(--chip-bg)}
+.ms-row.pick span.mark{
+  flex:none;width:16px;text-align:center;font-size:11px;color:transparent;font-weight:700;
+}
+/* everything below the chosen row is implied to fit */
+.ms-row.pick.inc{background:var(--cyan-bg)}
+.ms-row.pick.inc span.mark{color:var(--cyan-ink)}
+.ms-row.pick.inc i{color:var(--cyan-ink)}
+/* the chosen row is the hub's max */
+.ms-row.pick.on{background:var(--navy);color:#fff}
+.ms-row.pick.on span.mark{color:var(--cyan)}
+.ms-row.pick.on i{color:#b6c9e4;font-weight:700}
+.ms-row.pick.on:hover{background:var(--navy)}
 .ms-empty{padding:14px 10px;font-size:12px;color:var(--muted);text-align:center}
 .ms-foot{
   display:flex;align-items:center;gap:14px;margin-top:8px;padding-top:8px;
@@ -828,12 +843,19 @@ var SERVICEABLE = ["560076","560034","560102","110017","400059","560001"];
    carrying a stray space. dedupeVehicles() collapses them on normalised
    whitespace and keeps the clean spelling, so the dropdown never shows two
    visually identical options. */
+/* Vehicle types in ascending order of capacity, exactly as supplied. The order
+   is authoritative — it settles cases tonnage alone cannot, such as 3.5MT_4W
+   ranking below 3.5MT_14FT, so an index into this list is the capacity rank.
+
+   The source list still contains both "0.8MT_4W_TataAce" and "0.8MT_4W _TataAce"
+   — the same vehicle, the second with a stray space. dedupeVehicles() collapses
+   them on normalised whitespace so the picker never shows two identical options. */
 var VEHICLE_TYPES_RAW = [
-  "0.8MT_4W_TataAce","0.8MT_4W _TataAce","1.5MT_4W_Dost","2.2MT_4W_Bolero",
-  "3.5MT_14FT","3.5MT_4W","4.5MT_17FT","4.7MT_4W_Tata407","5MT_4W","7MT_20FT",
+  "0.8MT_4W_TataAce","0.8MT_4W _TataAce","1.5MT_4W_Dost","2MT_4W_Bolero",
+  "2.2MT_4W_Bolero","3.5MT_4W","3.5MT_14FT","4.5MT_17FT","4.7MT_4W_Tata407",
+  "5MT_4W","5MT_14FT","5MT_17FT","6MT_4W_TataAce","7MT_4W_Tata407","7MT_20FT",
   "8MT","9MT_6W","10MT_22FT","10MT_24FT","10MT_32FT","12MT_6W","16MT_10W",
-  "25MT_12W","30MT_14W","42MT_18W","2MT_4W_Bolero","6MT_4W_TataAce","5MT_17FT",
-  "7MT_4W_Tata407","5MT_14FT"
+  "25MT_12W","30MT_14W","42MT_18W"
 ];
 function dedupeVehicles(list) {
   var seen = {}, out = [];
@@ -847,20 +869,26 @@ function dedupeVehicles(list) {
 }
 var VEHICLE_TYPES = dedupeVehicles(VEHICLE_TYPES_RAW);
 
-/* Every type is named "<tonnage>MT_…", so the rated tonnage is parseable and the
-   largest vehicle in a selection can be derived rather than asked for twice. */
+/* Capacity rank = position in the ascending list. -1 for anything unknown. */
+function vehicleRank(v) { return VEHICLE_TYPES.indexOf(String(v == null ? "" : v).trim()); }
+
+/* The captain picks only the largest vehicle the hub can take; everything
+   below it in the list is implied to fit. */
+function impliedVehicles(max) {
+  var i = vehicleRank(max);
+  return i < 0 ? [] : VEHICLE_TYPES.slice(0, i + 1);
+}
+function smallerThan(max) {
+  var i = vehicleRank(max);
+  return i <= 0 ? [] : VEHICLE_TYPES.slice(0, i);
+}
+
+/* Rated tonnage, shown alongside each option. */
 function vehicleTonnage(v) {
   var m = /^([\d.]+)MT/.exec(String(v || ""));
   return m ? parseFloat(m[1]) : 0;
 }
-function largestVehicle(list) {
-  if (!list || !list.length) return null;
-  return list.slice().sort(function (a, b) {
-    return vehicleTonnage(b) - vehicleTonnage(a);
-  })[0];
-}
 
-/* Separators accepted when a captain pastes a list of pincodes. */
 var PIN_SPLIT = /[,;|/\s]+/;
 
 var STORE_KEY = "valmo.captain.onboarding.v1";
@@ -881,8 +909,7 @@ var V = {
   hubManpower: function(s){ var t = String(s == null ? "" : s).trim();
                             return /^\d{1,4}$/.test(t) && +t >= 1 && +t <= 5000; },
   vehicle:     function(s){ return VEHICLE_TYPES.indexOf(String(s == null ? "" : s).trim()) >= 0; },
-  vehicles:    function(a){ return Array.isArray(a) && a.length > 0 &&
-                                   a.every(function (v) { return V.vehicle(v); }); },
+
   mapLink: function(s){
     s = (s || "").trim();
     if (!s) return false;
@@ -939,7 +966,7 @@ function blankRole(role) {
     ch:  { status:"pending", category:null, rateMode:"combined", slab:null, rate:null, decidedBy:null, reason:"" },
     sd:  { status:"pending", amount:25000, attempts:0 },
     hub: { address:"", mapLink:"", pincode:"", city:"",
-           areaSqft:"", manpower:"", vehicles:[],
+           areaSqft:"", manpower:"", maxVehicle:"",
            submitted:false, hubCode:null, returnTo:null, errors:{} },
     carried: null,
     am:  { status:"pending", rejections:0, reason:"", escalated:false },
@@ -998,7 +1025,7 @@ function makeHub(o) {
     address:"", pincode:"", city:"",
     status:"active",                       // active | inactive | in_progress
     gst:{ registered:false, gstin:"" },
-    areaSqft:"", manpower:"", vehicles:[],
+    areaSqft:"", manpower:"", maxVehicle:"",
     category:null, activatedOn:"", deactivatedOn:""
   }, o || {});
 }
@@ -1015,17 +1042,17 @@ function seedExistingCaptain() {
     makeHub({ id:"hub-aqt", code:"AQT", name:"Koramangala Hub", role:"LM",
               address:"Koramangala, Bengaluru", pincode:"560034", city:"Bengaluru, Karnataka",
               status:"active", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
-              areaSqft:"4200", manpower:"14", vehicles:["3.5MT_14FT","7MT_20FT"],
+              areaSqft:"4200", manpower:"14", maxVehicle:"7MT_20FT",
               activatedOn:"12 Jan 2026" }),
     makeHub({ id:"hub-beu", code:"BEU", name:"Indiranagar Hub", role:"LM",
               address:"Indiranagar, Bengaluru", pincode:"560038", city:"Bengaluru, Karnataka",
               status:"active", gst:{ registered:false, gstin:"" },
-              areaSqft:"3000", manpower:"9", vehicles:["2.2MT_4W_Bolero"],
+              areaSqft:"3000", manpower:"9", maxVehicle:"2.2MT_4W_Bolero",
               activatedOn:"03 Mar 2026" }),
     makeHub({ id:"hub-jyp", code:"JYP", name:"HSR Layout Hub", role:"LM",
               address:"HSR Layout, Bengaluru", pincode:"560102", city:"Bengaluru, Karnataka",
               status:"inactive", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
-              areaSqft:"2600", manpower:"7", vehicles:["1.5MT_4W_Dost"],
+              areaSqft:"2600", manpower:"7", maxVehicle:"1.5MT_4W_Dost",
               activatedOn:"20 Nov 2025", deactivatedOn:"12 Apr 2026" })
   ];
   S.activeHubId = "hub-aqt";
@@ -1070,10 +1097,16 @@ function load() {
       var role = Object.assign(blankRole(r), parsed.roles[r] || {});
       /* Migration: hub details used to hold a single `maxVehicle` string before
          multiple types could be chosen. Carry it into the array. */
-      if (role.hub && !Array.isArray(role.hub.vehicles)) {
-        role.hub.vehicles = role.hub.maxVehicle ? [role.hub.maxVehicle] : [];
+      /* Migration: hub details used to hold a list of accommodated vehicle
+         types. Only the largest was ever meaningful — collapse to it. */
+      if (role.hub && Array.isArray(role.hub.vehicles)) {
+        if (!role.hub.maxVehicle) {
+          role.hub.maxVehicle = role.hub.vehicles.reduce(function (best, v) {
+            return vehicleRank(v) > vehicleRank(best) ? v : best;
+          }, "");
+        }
+        delete role.hub.vehicles;
       }
-      if (role.hub) delete role.hub.maxVehicle;
       next.roles[r] = role;
     });
     next.profile = Object.assign(blankProfile(), parsed.profile || {});
@@ -2496,30 +2529,36 @@ function phaseSD(r) {
    drop focus mid-typing. */
 var vehUI = { open:false, filter:"" };
 
-function vehSummaryHtml(picked) {
-  if (!picked.length) return '<span class="ph">Select vehicle types</span>';
-  var shown = picked.slice(0, 3).map(function (v) {
-    return '<span class="ms-tok">' + esc(v) + '</span>';
-  }).join("");
-  var rest = picked.length - 3;
-  return shown + (rest > 0 ? '<span class="ms-more">+' + rest + ' more</span>' : "");
+function vehSummaryHtml(max) {
+  if (!max) return '<span class="ph">Select the largest vehicle</span>';
+  return '<span class="ms-tok">' + esc(max) + '</span>' +
+         '<span class="ms-more">' + vehicleTonnage(max) + ' MT</span>';
 }
 
-function vehCountText(picked) {
-  return picked.length
-    ? picked.length + " of " + VEHICLE_TYPES.length + " selected"
-    : "None selected";
+function vehCountText(max) {
+  var n = smallerThan(max).length;
+  if (!max) return VEHICLE_TYPES.length + " types, smallest first";
+  return n ? n + " smaller " + (n === 1 ? "type" : "types") + " also fit" : "Smallest type";
 }
 
-function vehHintText(picked, err) {
+function vehHintText(max, err) {
   if (err) return err;
-  return picked.length
-    ? "Largest selected: " + largestVehicle(picked) + " — taken as the hub's max vehicle size."
-    : "Pick every type that can reach, turn and dock at the hub. The largest is taken as the hub's max vehicle size.";
+  if (!max) {
+    return "Pick only the largest vehicle that can reach, turn and dock here. " +
+           "Everything smaller is assumed to fit.";
+  }
+  var n = smallerThan(max).length;
+  return n
+    ? "Max " + max + ". The " + n + " smaller " + (n === 1 ? "type" : "types") +
+      " in the list are assumed to fit too."
+    : "Max " + max + " — the smallest type on the list.";
 }
 
-function vehRows(picked) {
+/* Rows are ordered smallest to largest. Everything at or below the chosen row
+   is shown as included, so the "and all smaller" rule is visible, not implied. */
+function vehRows(max) {
   var q = vehUI.filter.trim().toLowerCase();
+  var chosen = vehicleRank(max);
   var list = VEHICLE_TYPES.filter(function (v) {
     return !q || v.toLowerCase().indexOf(q) >= 0;
   });
@@ -2527,70 +2566,39 @@ function vehRows(picked) {
     return '<div class="ms-empty">No vehicle type matches &ldquo;' + esc(vehUI.filter) + '&rdquo;.</div>';
   }
   return list.map(function (v) {
-    var on = picked.indexOf(v) >= 0;
-    return '<label class="ms-row' + (on ? ' on' : '') + '" data-vrow="' + esc(v) + '">' +
-             '<input type="checkbox" data-veh="' + esc(v) + '"' + (on ? ' checked' : '') + '>' +
+    var rank = vehicleRank(v);
+    var isMax = chosen >= 0 && rank === chosen;
+    var included = chosen >= 0 && rank < chosen;
+    return '<button type="button" class="ms-row pick' +
+             (isMax ? " on" : "") + (included ? " inc" : "") + '" ' +
+             'data-veh="' + esc(v) + '" role="option" ' +
+             'aria-selected="' + (isMax ? "true" : "false") + '">' +
+             '<span class="mark">' + (isMax ? "●" : (included ? "✓" : "")) + '</span>' +
              '<span>' + esc(v) + '</span>' +
-             '<i>' + vehicleTonnage(v) + ' MT</i>' +
-           '</label>';
+             '<i>' + (isMax ? "max" : (included ? "fits" : vehicleTonnage(v) + " MT")) + '</i>' +
+           '</button>';
   }).join("");
 }
 
-function vehicleField(picked, err) {
-  return '<div class="fl"><label>Vehicle types the location can accommodate</label>' +
+function vehicleField(max, err) {
+  return '<div class="fl"><label>Max vehicle size the location can accommodate</label>' +
     '<div class="ms" id="veh-ms">' +
       '<button type="button" id="veh-toggle" aria-expanded="' + (vehUI.open ? "true" : "false") + '" ' +
         'class="ms-control' + (err ? ' bad' : '') + (vehUI.open ? ' open' : '') + '">' +
-        '<span class="ms-val">' + vehSummaryHtml(picked) + '</span>' +
+        '<span class="ms-val">' + vehSummaryHtml(max) + '</span>' +
       '</button>' +
       '<div class="ms-panel" id="veh-panel"' + (vehUI.open ? '' : ' hidden') + '>' +
         '<input class="ms-search" id="veh-search" placeholder="Search vehicle types" ' +
           'value="' + esc(vehUI.filter) + '">' +
-        '<div class="ms-list" id="veh-list">' + vehRows(picked) + '</div>' +
+        '<div class="ms-list" id="veh-list" role="listbox">' + vehRows(max) + '</div>' +
         '<div class="ms-foot">' +
-          '<button type="button" id="veh-all">Select all</button>' +
-          '<button type="button" id="veh-none"' + (picked.length ? '' : ' disabled') + '>Clear</button>' +
-          '<span class="cnt" id="veh-count">' + esc(vehCountText(picked)) + '</span>' +
+          '<button type="button" id="veh-none"' + (max ? '' : ' disabled') + '>Clear</button>' +
+          '<span class="cnt" id="veh-count">' + esc(vehCountText(max)) + '</span>' +
         '</div>' +
       '</div>' +
     '</div>' +
     '<div class="hint' + (err ? ' err' : '') + '" id="veh-hint">' +
-      esc(vehHintText(picked, err)) + '</div></div>';
-}
-
-/* Patch the field in place. Returns false when it is not on screen, so callers
-   can fall back to a full render. */
-function paintVehicleField() {
-  var ms = document.getElementById("veh-ms");
-  if (!ms) return false;
-  var h = R().hub, picked = Array.isArray(h.vehicles) ? h.vehicles : [];
-
-  var valEl = ms.querySelector(".ms-val");
-  if (valEl) valEl.innerHTML = vehSummaryHtml(picked);
-
-  var cnt = document.getElementById("veh-count");
-  if (cnt) cnt.textContent = vehCountText(picked);
-
-  var none = document.getElementById("veh-none");
-  if (none) none.disabled = !picked.length;
-
-  Array.prototype.forEach.call(ms.querySelectorAll("[data-veh]"), function (cb) {
-    var on = picked.indexOf(cb.getAttribute("data-veh")) >= 0;
-    if (cb.checked !== on) cb.checked = on;
-    var row = cb.parentNode;
-    if (row && row.classList) row.classList.toggle("on", on);
-  });
-
-  // a selection clears the "pick at least one" error without a re-render
-  var ctrl = document.getElementById("veh-toggle");
-  var hint = document.getElementById("veh-hint");
-  var err = picked.length ? null : (h.errors && h.errors.vehicles);
-  if (ctrl) ctrl.classList.toggle("bad", !!err);
-  if (hint) {
-    hint.classList.toggle("err", !!err);
-    hint.textContent = vehHintText(picked, err);
-  }
-  return true;
+      esc(vehHintText(max, err)) + '</div></div>';
 }
 
 function paintVehicleOpen() {
@@ -2601,38 +2609,36 @@ function paintVehicleOpen() {
   ctrl.classList.toggle("open", vehUI.open);
   ctrl.setAttribute("aria-expanded", vehUI.open ? "true" : "false");
   if (vehUI.open) {
-    var s = document.getElementById("veh-search");
-    if (s) s.focus();
+    var sx = document.getElementById("veh-search");
+    if (sx) sx.focus();
   }
 }
 
 function paintVehicleList() {
   var list = document.getElementById("veh-list");
   if (!list) return;
-  var h = R().hub;
-  list.innerHTML = vehRows(Array.isArray(h.vehicles) ? h.vehicles : []);
+  list.innerHTML = vehRows(R().hub.maxVehicle || "");
   bindVehicleRows();
 }
 
 function hubSpecRows(h) {
   var area = h.areaSqft ? Number(h.areaSqft).toLocaleString("en-IN") + " sq ft" : "—";
-  var picked = Array.isArray(h.vehicles) ? h.vehicles : [];
-  var biggest = largestVehicle(picked);
+  var maxV = h.maxVehicle || "";
+  var alsoFits = smallerThan(maxV).length;
   return '<div class="row"><span class="k">Area of the hub</span>' +
            '<span class="v">' + esc(area) + '</span></div>' +
          '<div class="row"><span class="k">Estimated manpower</span>' +
            '<span class="v">' + esc(h.manpower || "—") + '</span></div>' +
          '<div class="row"><span class="k">Max vehicle size</span>' +
-           '<span class="v">' + esc(biggest || "—") + '</span></div>' +
-         '<div class="row"><span class="k">Vehicle types accommodated' +
-           (picked.length ? " (" + picked.length + ")" : "") + '</span>' +
-           '<span class="v" style="max-width:60%;white-space:normal">' +
-           esc(picked.length ? picked.join(", ") : "—") + '</span></div>';
+           '<span class="v">' + esc(maxV || "—") + '</span></div>' +
+         '<div class="row"><span class="k">Smaller types also accommodated</span>' +
+           '<span class="v' + (maxV ? '' : ' mute') + '">' +
+           (maxV ? alsoFits + " of " + (VEHICLE_TYPES.length - 1) : "—") + '</span></div>';
 }
 
 function phaseHUB(r) {
   var h = r.hub, e = h.errors || {}, fm = r.role === "FM", inner;
-  var picked = Array.isArray(h.vehicles) ? h.vehicles : [];
+  var maxVehicle = h.maxVehicle || "";
 
   if (h.submitted) {
     if (fm) {
@@ -2707,7 +2713,7 @@ function phaseHUB(r) {
           '<div class="hint' + (e.manpower ? ' err' : '') + '">' +
             (e.manpower || "People you expect to employ at this hub.") + '</div></div>' +
       '</div>' +
-      vehicleField(picked, e.vehicles) +
+      vehicleField(maxVehicle, e.maxVehicle) +
       '<div class="cfoot"><span class="note">Sensitive details are masked and used only for ' +
         'onboarding verification.</span>' +
         '<button class="btn btn-primary" id="hub-submit">Review hub details →</button></div>';
@@ -3231,23 +3237,25 @@ var A = {
     var pick = function (k) { return f[k] !== undefined ? f[k] : h[k]; };
     var address  = pick("address"),  mapLink  = pick("mapLink"),
         areaSqft = pick("areaSqft"), manpower = pick("manpower"),
-        vehicles = pick("vehicles");
-    if (!Array.isArray(vehicles)) vehicles = vehicles ? [vehicles] : [];
+        maxVehicle = pick("maxVehicle");
+    if (Array.isArray(maxVehicle)) {           // tolerate the older list shape
+      maxVehicle = maxVehicle.reduce(function (b, v) {
+        return vehicleRank(v) > vehicleRank(b) ? v : b; }, "");
+    }
 
     h.errors = {};
     if (!String(address == null ? "" : address).trim()) h.errors.address = ERR.hubAddress;
     if (!V.mapLink(mapLink))      h.errors.mapLink  = ERR.mapLink;
     if (!V.hubArea(areaSqft))     h.errors.areaSqft = ERR.hubArea;
     if (!V.hubManpower(manpower)) h.errors.manpower = ERR.hubManpower;
-    if (!V.vehicles(vehicles))    h.errors.vehicles = ERR.hubVehicle;
+    if (!V.vehicle(maxVehicle))   h.errors.maxVehicle = ERR.hubVehicle;
 
     // keep what was entered so the form redraws with the captain's own input
     h.address = address == null ? "" : address;
     h.mapLink = mapLink == null ? "" : mapLink;
     h.areaSqft = areaSqft == null ? "" : String(areaSqft).trim();
     h.manpower = manpower == null ? "" : String(manpower).trim();
-    // keep the picker order stable regardless of the order they were clicked
-    h.vehicles = VEHICLE_TYPES.filter(function (v) { return vehicles.indexOf(v) >= 0; });
+    h.maxVehicle = String(maxVehicle == null ? "" : maxVehicle).trim();
 
     if (Object.keys(h.errors).length) { save(); render(); return; }
     h.pincode = r.pd.selected || h.pincode;
@@ -3260,25 +3268,16 @@ var A = {
   },
   /* Vehicle picker. Selection is kept in VEHICLE_TYPES order so the summary and
      the derived largest type never depend on click order. */
-  toggleVehicle: function (v) {
+  /* One input: the largest vehicle the hub can take. Everything below it in
+     the ascending list is implied, so there is nothing else to tick. */
+  setMaxVehicle: function (v) {
     var h = R().hub;
-    if (!V.vehicle(v)) return;
-    if (!Array.isArray(h.vehicles)) h.vehicles = [];
-    var next = h.vehicles.indexOf(v) >= 0
-      ? h.vehicles.filter(function (x) { return x !== v; })
-      : h.vehicles.concat([v]);
-    h.vehicles = VEHICLE_TYPES.filter(function (t) { return next.indexOf(t) >= 0; });
-    if (h.errors) delete h.errors.vehicles;
-    save();
-    if (!paintVehicleField()) render();
-  },
-  setVehicles: function (list) {
-    var h = R().hub;
-    list = Array.isArray(list) ? list : [];
-    h.vehicles = VEHICLE_TYPES.filter(function (t) { return list.indexOf(t) >= 0; });
-    if (h.errors) delete h.errors.vehicles;
-    save();
-    if (!paintVehicleField()) render();
+    if (v && !V.vehicle(v)) return;
+    h.maxVehicle = v || "";
+    if (h.errors) delete h.errors.maxVehicle;
+    vehUI.open = false;
+    vehUI.filter = "";
+    save(); render();
   },
   openVehicles: function (open) {
     vehUI.open = open === undefined ? !vehUI.open : !!open;
@@ -3405,7 +3404,7 @@ var A = {
       address: r.hub.address, pincode: r.hub.pincode, city: r.hub.city,
       status: "active", gst: gst,
       areaSqft: r.hub.areaSqft, manpower: r.hub.manpower,
-      vehicles: (r.hub.vehicles || []).slice(),
+      maxVehicle: r.hub.maxVehicle || "",
       category: r.ch.category, activatedOn: r.act.activatedOn
     });
     // replace the in-progress placeholder for this role, if one was listed
@@ -3666,10 +3665,14 @@ function val(id) {
   return el ? el.value : "";
 }
 
-/* Checkbox rows are re-bound whenever the filtered list is repainted. */
+/* Option rows are re-bound whenever the filtered list is repainted. Picking one
+   sets the hub's max size and closes the panel — there is nothing else to tick. */
 function bindVehicleRows() {
-  Array.prototype.forEach.call(document.querySelectorAll("#veh-list [data-veh]"), function (cb) {
-    cb.addEventListener("change", function () { A.toggleVehicle(cb.getAttribute("data-veh")); });
+  Array.prototype.forEach.call(document.querySelectorAll("#veh-list [data-veh]"), function (row) {
+    row.addEventListener("click", function (e) {
+      e.stopPropagation();
+      A.setMaxVehicle(row.getAttribute("data-veh"));
+    });
   });
 }
 
@@ -3846,15 +3849,7 @@ function bind() {
   on("veh-search", "keydown", function (e) {
     if (e.key === "Escape") { e.stopPropagation(); A.openVehicles(false); }
   });
-  on("veh-all", "click", function () {
-    // "Select all" respects an active search — it picks what is visible
-    var vis = Array.prototype.map.call(
-      document.querySelectorAll("#veh-list [data-veh]"),
-      function (cb) { return cb.getAttribute("data-veh"); });
-    var cur = (R().hub.vehicles || []).slice();
-    A.setVehicles(cur.concat(vis));
-  });
-  on("veh-none", "click", function () { A.setVehicles([]); });
+  on("veh-none", "click", function () { A.setMaxVehicle(""); });
   var panel = document.getElementById("veh-panel");
   if (panel) panel.addEventListener("click", function (e) { e.stopPropagation(); });
   on("hub-submit", "click", function () {
@@ -3863,7 +3858,7 @@ function bind() {
       mapLink:  val("hub-map"),
       areaSqft: val("hub-area"),
       manpower: val("hub-manpower"),
-      vehicles: (R().hub.vehicles || []).slice()
+      maxVehicle: R().hub.maxVehicle || ""
     });
   });
   on("hub-continue", "click", A.hubContinue);
@@ -4199,7 +4194,8 @@ if (typeof window !== "undefined") {
     helpers: {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
-      vehicleTonnage: vehicleTonnage, largestVehicle: largestVehicle,
+      vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
+      impliedVehicles: impliedVehicles, smallerThan: smallerThan,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,
       vehUI: function () { return vehUI; },
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
