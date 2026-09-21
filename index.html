@@ -984,12 +984,13 @@ function blankRole(role) {
       pincodes:[], checked:false, selected:null, errors:{}
     },
     kyc: {
-      aadhaar:{ done:false, value:"", otpOpen:false },
+      aadhaar:{ done:false, value:"", otpOpen:false, data:null },
       pan:{ done:false, value:"", father:"" },
-      bank:{ done:false, acc:"", ifsc:"", pennyDone:false },
+      bank:{ done:false, acc:"", ifsc:"", holder:"", pennyDone:false },
       gst:{ registered:null, gstin:"", done:false },
       msme:{ done:false, fileName:"" },
-      showBlocks:false,
+      ack:{ aadhaar:false, pan:false, bank:false },
+      editing:null,
       cheque:{ done:false, fileName:"" },
       errors:{}
     },
@@ -2131,181 +2132,227 @@ function phasePD(r) {
 
 /* -------------------------------------------------------- 2. KYC (LM/FM) */
 
-/* Verified items can be reopened and redone — clearing `done` keeps the values,
-   so the input form comes back prefilled. */
+/* The designs verify one record at a time — Aadhaar, then PAN, then bank, then
+   GST — each on its own card, with a confirmation screen between them
+   (KYC-01…KYC-14). Not one long scrollable form. */
+var KYC_ORDER = ["aadhaar", "pan", "bank", "gst"];
+
+function kycStep(r) {
+  var k = r.kyc;
+  if (k.editing) return k.editing;                  // an item reopened for correction
+  for (var i = 0; i < KYC_ORDER.length; i++) {
+    var id = KYC_ORDER[i];
+    if (!k[id].done) return id;                     // still to be entered
+    if (id !== "gst" && !k.ack[id]) return id + "-done";   // its confirmation screen
+  }
+  return "complete";
+}
+
 function kycEditBtn(id) {
   return '<button class="btn-link" data-kycedit="' + id + '" ' +
          'style="margin-left:10px;font-size:12px">Edit</button>';
 }
 
+/* Footer shared by every entry card. */
+function kycFoot(r, btnId, label, enabled) {
+  return '<div class="cfoot">' + backBtn(r) +
+    '<span class="note">Sensitive details are masked and used only for onboarding ' +
+      'verification.</span>' +
+    '<button class="btn btn-primary" id="' + btnId + '"' + (enabled ? '' : ' disabled') +
+      '>' + esc(label) + '</button></div>';
+}
+
 function phaseKYC(r) {
   var k = r.kyc, e = k.errors || {}, fm = r.role === "FM";
+  var step = kycStep(r);
+  var lede, title, sub, body;
 
-  /* --- Aadhaar --- */
-  var aad = k.aadhaar.done
-    ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>Aadhaar (DigiLocker)</b>' +
-      '<span>Verified via DigiLocker · ' + esc(k.aadhaar.value.replace(/\d(?=\d{4})/g, "•")) +
-      '</span></div><span class="tag ok">Verified</span>' + kycEditBtn("aadhaar") + '</div></div>'
-    : '<div class="kyc-item"><div class="h"><div class="lt"><b>Aadhaar (DigiLocker)</b>' +
-      '<span>We fetch your Aadhaar record from DigiLocker with an OTP.</span></div></div>' +
-      '<div class="body">' +
-        '<div class="fl" style="margin-bottom:12px"><label>Aadhaar number</label>' +
-          '<div class="box' + (e.aadhaar ? ' bad' : '') + '">' +
-          '<input id="kyc-aadhaar" inputmode="numeric" maxlength="12" ' +
-            'placeholder="12-digit Aadhaar" value="' + esc(k.aadhaar.value) + '"></div>' +
-          (e.aadhaar ? '<div class="hint err">' + esc(e.aadhaar) + '</div>' : '') + '</div>' +
-        (k.aadhaar.otpOpen
-          ? '<div class="notice info"><b>DigiLocker OTP sent</b>Demo code: <b style="display:inline">000000</b>' +
-            '<div style="display:flex;gap:10px;margin-top:12px">' +
-            '<input id="kyc-aadhaar-otp" class="otp-cell" style="width:auto;flex:1;height:44px;' +
-              'font-size:15px;letter-spacing:6px;padding:0 12px" maxlength="6" placeholder="000000">' +
-            '<button class="btn btn-primary" id="kyc-aadhaar-confirm" style="padding:10px 18px">' +
-              'Confirm</button></div></div>'
-          : '<button class="btn btn-primary" id="kyc-aadhaar-go">Verify with DigiLocker</button>') +
-      '</div></div>';
+  /* ---------------------------------------------------- Aadhaar (KYC-01…04) */
+  if (step === "aadhaar") {
+    lede  = "Verify identity to continue.";
+    title = "Aadhaar verification";
+    sub   = "Enter your Aadhaar number to verify identity.";
+    body =
+      '<div class="fl"><label>Aadhaar number</label>' +
+        '<div class="box' + (e.aadhaar ? ' bad' : '') + '">' +
+        '<input id="kyc-aadhaar" inputmode="numeric" maxlength="12" ' +
+          'placeholder="12-digit Aadhaar" value="' + esc(k.aadhaar.value) + '"></div>' +
+        '<div class="hint' + (e.aadhaar ? ' err' : '') + '">' +
+          (e.aadhaar || "Only masked Aadhaar is shown after verification.") + '</div></div>' +
+      (k.aadhaar.otpOpen
+        ? '<div class="notice info"><b>DigiLocker OTP sent</b>Demo code: ' +
+          '<b style="display:inline">000000</b>' +
+          '<div style="display:flex;gap:10px;margin-top:12px">' +
+          '<input id="kyc-aadhaar-otp" class="otp-cell" style="width:auto;flex:1;height:44px;' +
+            'font-size:15px;letter-spacing:6px;padding:0 12px" maxlength="6" placeholder="000000">' +
+          '<button class="btn btn-primary" id="kyc-aadhaar-confirm" style="padding:10px 18px">' +
+            'Confirm</button></div></div>'
+        : "") +
+      kycFoot(r, "kyc-aadhaar-go", "Verify Aadhaar →", !k.aadhaar.otpOpen);
 
-  /* --- PAN --- */
-  var pan = k.pan.done
-    ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>PAN</b>' +
-      '<span>' + esc(k.pan.value) + ' · ' + esc(k.pan.father) + '</span></div>' +
-      '<span class="tag ok">Verified</span>' + kycEditBtn("pan") + '</div></div>'
-    : '<div class="kyc-item"><div class="h"><div class="lt"><b>PAN</b>' +
-      '<span>PAN is matched against your Aadhaar name.</span></div></div>' +
-      '<div class="body"><div class="grid2">' +
+  } else if (step === "aadhaar-done") {
+    var ad = k.aadhaar.data || {};
+    lede  = "Aadhaar verification is complete.";
+    title = "KYC verification";
+    sub   = "Aadhaar verification is complete.";
+    body =
+      statusBlock("ok", "Aadhaar verified", "Your Aadhaar has been verified successfully.") +
+      '<p style="text-align:center;font-size:13px;font-weight:500;color:var(--muted);' +
+        'margin:0 0 16px">You can now continue to PAN verification.</p>' +
+      '<div class="kv" data-testid="aadhaar-fetched">' +
+        '<div class="row"><span class="k">Fetched from Aadhaar</span><span class="v mute"></span></div>' +
+        '<div class="row"><span class="k">Name</span><span class="v">' + esc(ad.name || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Date of birth</span><span class="v">' + esc(ad.dob || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Aadhaar address</span>' +
+          '<span class="v" style="max-width:62%;white-space:normal">' + esc(ad.address || "—") + '</span></div>' +
+      '</div>' +
+      '<div class="cfoot">' + backBtn(r) +
+        kycEditBtn("aadhaar") +
+        '<button class="btn btn-primary" id="kyc-ack-aadhaar">Continue to PAN verification →</button>' +
+      '</div>';
+
+  /* -------------------------------------------------------- PAN (KYC-05…07) */
+  } else if (step === "pan") {
+    lede  = "Verify PAN details to continue.";
+    title = "PAN verification";
+    sub   = "Enter your PAN and father’s name to continue.";
+    body =
+      '<div class="grid2">' +
         '<div class="fl"><label>PAN number</label>' +
           '<div class="box' + (e.pan ? ' bad' : '') + '">' +
           '<input id="kyc-pan" maxlength="10" style="text-transform:uppercase" ' +
             'placeholder="ABCDE1234F" value="' + esc(k.pan.value) + '"></div>' +
-          '<div class="hint' + (e.pan ? ' err' : '') + '">' + (e.pan || "As printed on your PAN card.") + '</div></div>' +
-        '<div class="fl"><label>Father&rsquo;s name</label>' +
+          '<div class="hint' + (e.pan ? ' err' : '') + '">' +
+            (e.pan || "10-character PAN format.") + '</div></div>' +
+        '<div class="fl"><label>Father’s name</label>' +
           '<div class="box' + (e.panFather ? ' bad' : '') + '">' +
-          '<input id="kyc-pan-father" placeholder="As on PAN records" value="' + esc(k.pan.father) + '"></div>' +
+          '<input id="kyc-pan-father" placeholder="Enter father’s name (as on PAN card)" ' +
+            'value="' + esc(k.pan.father) + '"></div>' +
           '<div class="hint' + (e.panFather ? ' err' : '') + '">' +
-            (e.panFather || "Required by the PAN verification API.") + '</div></div>' +
-      '</div><button class="btn btn-primary" id="kyc-pan-go">Verify PAN</button></div></div>';
+            (e.panFather || "Required — as printed on your PAN card.") + '</div></div>' +
+      '</div>' +
+      kycFoot(r, "kyc-pan-go", "Verify PAN →", true);
 
-  /* --- Bank (penny drop) --- */
-  var bank = k.bank.done
-    ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>Bank account</b>' +
-      '<span>' + esc(k.bank.acc.replace(/\d(?=\d{4})/g, "•")) + ' · ' + esc(k.bank.ifsc) +
-      ' · ₹1 penny-drop confirmed</span></div><span class="tag ok">Verified</span>' +
-      kycEditBtn("bank") + '</div></div>'
-    : '<div class="kyc-item"><div class="h"><div class="lt"><b>Bank account</b>' +
-      '<span>We deposit ₹1 to confirm the account belongs to you.</span></div></div>' +
-      '<div class="body"><div class="grid2">' +
+  } else if (step === "pan-done") {
+    lede  = "PAN verification is complete.";
+    title = "KYC verification";
+    sub   = "PAN verification is complete.";
+    body =
+      statusBlock("ok", "PAN verified", "Your PAN has been verified against your Aadhaar name.") +
+      '<p style="text-align:center;font-size:13px;font-weight:500;color:var(--muted);' +
+        'margin:0 0 16px">You can now continue to bank verification.</p>' +
+      '<div class="kv">' +
+        '<div class="row"><span class="k">PAN</span><span class="v">' + esc(k.pan.value) + '</span></div>' +
+        '<div class="row"><span class="k">Father’s name</span><span class="v">' +
+          esc(k.pan.father) + '</span></div>' +
+      '</div>' +
+      '<div class="cfoot">' + backBtn(r) + kycEditBtn("pan") +
+        '<button class="btn btn-primary" id="kyc-ack-pan">Continue to bank verification →</button>' +
+      '</div>';
+
+  /* ------------------------------------------------------- bank (KYC-08…10) */
+  } else if (step === "bank") {
+    lede  = "Verify payout bank details to continue.";
+    title = "Bank account verification";
+    sub   = "Add the account where payouts should be credited.";
+    body =
+      '<div class="grid2">' +
         '<div class="fl"><label>Account number</label>' +
           '<div class="box' + (e.account ? ' bad' : '') + '">' +
           '<input id="kyc-acc" inputmode="numeric" maxlength="18" placeholder="Account number" ' +
             'value="' + esc(k.bank.acc) + '"></div>' +
           '<div class="hint' + (e.account ? ' err' : '') + '">' +
-            (e.account || "9 to 18 digits, no spaces.") + '</div></div>' +
-        '<div class="fl"><label>IFSC</label>' +
+            (e.account || "Enter your active payout account number.") + '</div></div>' +
+        '<div class="fl"><label>IFSC code</label>' +
           '<div class="box' + (e.ifsc ? ' bad' : '') + '">' +
           '<input id="kyc-ifsc" maxlength="11" style="text-transform:uppercase" ' +
             'placeholder="HDFC0001234" value="' + esc(k.bank.ifsc) + '"></div>' +
           '<div class="hint' + (e.ifsc ? ' err' : '') + '">' +
-            (e.ifsc || "11 characters, 5th character is always 0.") + '</div></div>' +
-      '</div><button class="btn btn-primary" id="kyc-bank-go">Send ₹1 penny-drop</button>' +
-      (fm ? '<div class="hint" style="padding-top:10px">Cancelled cheque is not required for FM — ' +
-            'the penny-drop is the bank proof.</div>' : '') +
-      '</div></div>';
+            (e.ifsc || "Enter branch IFSC code.") + '</div></div>' +
+      '</div>' +
+      '<div class="fl"><label>Account holder name</label>' +
+        '<div class="box"><input id="kyc-holder" value="' + esc(k.bank.holder || "") + '" disabled></div>' +
+        '<div class="hint">Shown after bank verification.</div></div>' +
+      (fm ? '<div class="hint" style="padding-bottom:4px">Cancelled cheque is not required for FM — ' +
+            'the ₹1 penny-drop is the bank proof.</div>' : '') +
+      kycFoot(r, "kyc-bank-go", "Verify bank account →", true);
 
-  /* --- GST: optional toggle for LM, mandatory for FM --- */
-  var gst;
-  if (k.gst.done) {
-    gst = '<div class="kyc-item done"><div class="h"><div class="lt"><b>GST' +
-      (fm ? ' <span class="req">*</span>' : ' status') + '</b><span>' +
-      (k.gst.registered ? esc(k.gst.gstin) : "Non-GST registered") +
-      '</span></div><span class="tag ok">' +
-      (k.gst.registered ? "Verified" : "Recorded") + '</span>' + kycEditBtn("gst") + '</div></div>';
-  } else if (fm) {
-    gst = '<div class="kyc-item"><div class="h"><div class="lt"><b>GST <span class="req">*</span></b>' +
-      '<span>GST registration is mandatory for First Mile hub partners.</span></div>' +
-      '<span class="tag warn">Required</span></div>' +
-      '<div class="body">' +
-        '<div class="fl"><label>GSTIN</label>' +
+  } else if (step === "bank-done") {
+    lede  = "Bank verification is complete.";
+    title = "KYC verification";
+    sub   = "Bank verification is complete.";
+    body =
+      statusBlock("ok", "Bank account verified", "A ₹1 penny-drop confirmed this account.") +
+      '<p style="text-align:center;font-size:13px;font-weight:500;color:var(--muted);' +
+        'margin:0 0 16px">You can now continue to GST status.</p>' +
+      '<div class="kv">' +
+        '<div class="row"><span class="k">Account number</span><span class="v">' +
+          esc(k.bank.acc.replace(/\d(?=\d{4})/g, "•")) + '</span></div>' +
+        '<div class="row"><span class="k">IFSC code</span><span class="v">' + esc(k.bank.ifsc) + '</span></div>' +
+        '<div class="row"><span class="k">Account holder name</span><span class="v">' +
+          esc(k.bank.holder || "—") + '</span></div>' +
+      '</div>' +
+      '<div class="cfoot">' + backBtn(r) + kycEditBtn("bank") +
+        '<button class="btn btn-primary" id="kyc-ack-bank">Continue to GST status →</button>' +
+      '</div>';
+
+  /* -------------------------------------------------------- GST (KYC-11…13) */
+  } else if (step === "gst") {
+    lede  = "Choose GST status to complete KYC.";
+    title = "GST status";
+    sub   = fm
+      ? "GST registration is mandatory for First Mile hub partners."
+      : "Non-GST is selected by default. Choose GST registered only if you have an active GSTIN.";
+
+    var reg = k.gst.registered === true;
+    var choice = function (on, id, t, d, dis) {
+      return '<div class="choice' + (on ? " on" : "") + (dis ? " off" : "") + '" ' +
+        'data-gstchoice="' + id + '" role="radio" aria-checked="' + (on ? "true" : "false") + '" ' +
+        'aria-disabled="' + (dis ? "true" : "false") + '"' + (dis ? '' : ' tabindex="0"') + '>' +
+        '<span class="radio"></span><span class="ct"><b>' + t + '</b><span>' + d + '</span></span></div>';
+    };
+
+    body =
+      choice(k.gst.registered === false, "none", "Non-GST",
+        fm ? "Not available for FM hubs — GST registration is mandatory for First Mile."
+           : "Continue without GSTIN. You can update GST status later from profile settings.",
+        fm) +
+      choice(reg, "registered", "GST registered",
+        "Select this to enter GSTIN and verify GST status.", false) +
+      (reg
+        ? '<div class="fl" style="margin-top:14px"><label>GSTIN</label>' +
           '<div class="box' + (e.gstin ? ' bad' : '') + '">' +
           '<input id="kyc-gstin" maxlength="15" style="text-transform:uppercase" ' +
             'placeholder="15-character GSTIN" value="' + esc(k.gst.gstin) + '"></div>' +
           '<div class="hint' + (e.gstin ? ' err' : '') + '">' +
-            (e.gstin || "15 characters, as printed on your GST certificate.") + '</div></div>' +
-        '<button class="btn btn-primary" id="kyc-gst-go">Verify GSTIN</button>' +
-      '</div></div>';
+            (e.gstin || "15 characters, as printed on your GST certificate.") + '</div></div>'
+        : '') +
+      kycFoot(r, "kyc-gst-go", reg ? "Verify GSTIN →" : "Continue →",
+              k.gst.registered !== null);
+
+  /* ------------------------------------------------------ complete (KYC-14) */
   } else {
-    gst = '<div class="kyc-item"><div class="h"><div class="lt"><b>GST status</b>' +
-      '<span>Optional. Tell us whether you are GST registered.</span></div>' +
-      '<span class="tag info">Optional</span></div>' +
-      '<div class="body">' +
-        '<div class="toggle-row">' +
-          '<button id="kyc-gst-yes"' + (k.gst.registered === true ? ' class="on"' : '') + '>GST registered</button>' +
-          '<button id="kyc-gst-no"' + (k.gst.registered === false ? ' class="on"' : '') + '>Non-GST</button>' +
-        '</div>' +
-        (k.gst.registered === true
-          ? '<div class="fl"><label>GSTIN</label>' +
-            '<div class="box' + (e.gstin ? ' bad' : '') + '">' +
-            '<input id="kyc-gstin" maxlength="15" style="text-transform:uppercase" ' +
-              'placeholder="15-character GSTIN" value="' + esc(k.gst.gstin) + '"></div>' +
-            '<div class="hint' + (e.gstin ? ' err' : '') + '">' +
-              (e.gstin || "15 characters.") + '</div></div>' +
-            '<button class="btn btn-primary" id="kyc-gst-go">Verify GSTIN</button>'
-          : (k.gst.registered === false
-              ? '<button class="btn btn-primary" id="kyc-gst-go">Confirm Non-GST</button>'
-              : '')) +
-      '</div></div>';
-  }
-
-  /* --- MSME: FM only --- */
-  var msme = "";
-  if (fm) {
-    msme = '<div class="kyc-item' + (k.msme.done ? ' done' : '') + '">' +
-      '<div class="h"><div class="lt"><b>MSME registration certificate</b>' +
-      '<span>' + (k.msme.done ? esc(k.msme.fileName) :
-        "Optional. Upload your Udyam / MSME certificate if you have one.") + '</span></div>' +
-      (k.msme.done ? '<span class="tag ok">Uploaded</span>' : '<span class="tag info">Optional</span>') +
-      '</div>' +
-      (k.msme.done ? '' :
-        '<div class="body"><div class="upload"><div class="ut"><b>MSME certificate</b>' +
-        '<span>PDF or image, up to 5 MB.</span></div>' +
-        '<button class="btn btn-ghost" id="kyc-msme-go">Upload file</button></div>' +
-        (e.msme ? '<div class="hint err" style="padding-top:8px">' + esc(e.msme) + '</div>' : '') +
-        '</div>') +
-      '</div>';
-  }
-
-  /* --- cancelled cheque: LM only --- */
-  var cheque = "";
-  if (!fm) {
-    cheque = '<div class="kyc-item' + (k.cheque.done ? ' done' : '') + '">' +
-      '<div class="h"><div class="lt"><b>Cancelled cheque</b>' +
-      '<span>' + (k.cheque.done ? esc(k.cheque.fileName) :
-        "Upload a cancelled cheque for your bank record.") + '</span></div>' +
-      (k.cheque.done ? '<span class="tag ok">Uploaded</span>' : '<span class="tag info">Optional</span>') +
-      '</div>' +
-      (k.cheque.done ? '' :
-        '<div class="body"><div class="upload"><div class="ut"><b>Cancelled cheque</b>' +
-        '<span>PDF or image, up to 5 MB.</span></div>' +
-        '<button class="btn btn-ghost" id="kyc-cheque-go">Upload file</button></div></div>') +
-      '</div>';
-  }
-
-  var done = kycComplete(r) && !k.showBlocks;
-
-  var summary = done
-    ? statusBlock("ok", "KYC verification complete",
-        fm ? "Your Aadhaar, PAN, bank account and GST records are complete."
-           : "Your Aadhaar, PAN, bank account and GST status are complete.") +
+    lede  = "Identity and payout details are verified.";
+    title = "KYC verification";
+    sub   = "Identity and payout details are verified.";
+    body =
+      statusBlock("ok", "KYC verification complete",
+        "Your Aadhaar, PAN, bank account and GST records are complete.") +
+      /* each record can be reopened from here, rather than only restarting
+         the sequence at Aadhaar */
       '<div class="kv">' +
-        '<div class="row"><span class="k">Aadhaar</span><span class="v ok">Verified</span></div>' +
-        '<div class="row"><span class="k">PAN</span><span class="v ok">Verified</span></div>' +
-        '<div class="row"><span class="k">Bank account</span><span class="v ok">Verified</span></div>' +
+        '<div class="row"><span class="k">Aadhaar</span><span class="v ok">Verified' +
+          kycEditBtn("aadhaar") + '</span></div>' +
+        '<div class="row"><span class="k">PAN</span><span class="v ok">Verified' +
+          kycEditBtn("pan") + '</span></div>' +
+        '<div class="row"><span class="k">Bank account</span><span class="v ok">Verified' +
+          kycEditBtn("bank") + '</span></div>' +
         '<div class="row"><span class="k">GST' + (fm ? '' : ' status') + '</span><span class="v' +
           (k.gst.registered ? ' ok' : ' mute') + '">' +
-          (k.gst.registered ? "Verified" : "Non-GST") + '</span></div>' +
+          (k.gst.registered ? "Verified" : "Non-GST") + kycEditBtn("gst") + '</span></div>' +
         (fm ? '<div class="row"><span class="k">MSME certificate</span><span class="v' +
               (k.msme.done ? ' ok">Uploaded' : ' mute">Not provided') + '</span></div>' : '') +
       '</div>' +
-      /* MSME is optional, so the required items can complete without it — keep
-         the upload reachable here rather than stranding it behind the summary. */
       (fm && !k.msme.done
         ? '<div class="upload" style="margin-top:16px" data-testid="msme-optional-upload">' +
           '<div class="ut"><b>MSME registration certificate</b>' +
@@ -2313,27 +2360,17 @@ function phaseKYC(r) {
           '<button class="btn btn-ghost" id="kyc-msme-go">Upload file</button></div>'
         : '') +
       '<div class="cfoot">' + backBtn(r) +
-        '<button class="btn btn-ghost" id="kyc-edit">Edit KYC details</button>' +
+        '<span class="note">Each record can be reopened and redone above.</span>' +
         '<button class="btn btn-primary" id="kyc-continue">' + esc(nextLabel(r)) + '</button>' +
-      '</div>'
-    : aad + pan + bank + gst + msme + cheque +
-      '<div class="cfoot">' + backBtn(r) + '<span class="note">' +
-        (fm
-          ? "FM captains must complete Aadhaar, PAN, bank and GST before continuing. MSME is optional."
-          : "Complete Aadhaar, PAN, bank and your GST status before continuing.") +
-      '</span>' +
-      /* The blocks view is no longer only shown while incomplete — it is also
-         how a verified item gets reopened — so Continue follows the real gate. */
-      '<button class="btn btn-primary" id="kyc-continue"' +
-        (kycComplete(r) ? '' : ' disabled') + '>' +
-        (kycComplete(r) ? esc(nextLabel(r)) : "Continue →") + '</button></div>';
+      '</div>';
+  }
 
   return {
-    left: phaseHeader(r, "KYC verification", "Identity and payout details are verified.") +
-          cardWrap("KYC verification", "Identity and payout details are verified.", summary),
+    left: phaseHeader(r, "KYC verification", lede) + cardWrap(title, sub, body),
     side: sideDefault(r)
   };
 }
+
 
 /* ------------------------------------------------ 3. background verification */
 
@@ -3192,6 +3229,13 @@ var A = {
     var k = R().kyc; k.errors = {};
     if (code !== "000000") { k.errors.aadhaar = ERR.otpWrong; save(); render(); return; }
     k.aadhaar.done = true; k.aadhaar.otpOpen = false;
+    k.aadhaar.data = {
+      name: R().pd.name || "Karan Verma",
+      dob: "14 Aug 1990",
+      address: "No. 42, 4th Cross, Koramangala, Bengaluru, Karnataka 560034"
+    };
+    k.ack.aadhaar = false;
+    k.editing = null;
     save(); render();
   },
   panVerify: function (pan, father) {
@@ -3201,6 +3245,7 @@ var A = {
     if (!(father || "").trim()) k.errors.panFather = ERR.panFather;
     if (Object.keys(k.errors).length) { k.pan.value = pan; k.pan.father = father || ""; save(); render(); return; }
     k.pan.value = pan; k.pan.father = father.trim(); k.pan.done = true;
+    k.ack.pan = false; k.editing = null;
     save(); render();
   },
   bankVerify: function (acc, ifsc) {
@@ -3210,6 +3255,8 @@ var A = {
     if (!V.ifsc(ifsc))   k.errors.ifsc = ERR.ifsc;
     if (Object.keys(k.errors).length) { k.bank.acc = acc || ""; k.bank.ifsc = ifsc; save(); render(); return; }
     k.bank.acc = acc; k.bank.ifsc = ifsc; k.bank.pennyDone = true; k.bank.done = true;
+    k.bank.holder = R().pd.name || "Karan Verma";      // returned by the penny-drop
+    k.ack.bank = false; k.editing = null;
     save(); render();
   },
   gstSet: function (registered) {
@@ -3221,11 +3268,12 @@ var A = {
   gstVerify: function (gstin) {
     var r = R(), k = r.kyc; k.errors = {};
     if (k.gst.registered === false && r.role === "LM") {
-      k.gst.done = true; save(); render(); return;
+      k.gst.done = true; k.editing = null; save(); render(); return;
     }
     gstin = (gstin || "").toUpperCase().trim();
     if (!V.gstin(gstin)) { k.errors.gstin = ERR.gstin; k.gst.gstin = gstin; save(); render(); return; }
     k.gst.gstin = gstin; k.gst.registered = true; k.gst.done = true;
+    k.editing = null;
     save(); render();
   },
   uploadMsme: function () {
@@ -3240,7 +3288,7 @@ var A = {
   },
   kycContinue: function () {
     var r = R();
-    r.kyc.showBlocks = false;
+    r.kyc.editing = null;
     if (!kycComplete(r)) {
       r.kyc.errors = r.kyc.errors || {};
       if (r.role === "FM") {
@@ -3255,16 +3303,35 @@ var A = {
 
   /* ---- stepping back through the opening phases ---- */
   goBack: function () { prevPhase(); },
-  /* Reopen the completed KYC card so individual items can be redone. */
-  kycShowBlocks: function () { R().kyc.showBlocks = true; save(); render(); },
-  /* Clear one item's verified flag, keeping its values so the form prefills. */
+  /* Move past a confirmation screen onto the next record. */
+  kycAck: function (id) {
+    var k = R().kyc;
+    if (!k.ack || !(id in k.ack)) return;
+    k.ack[id] = true;
+    k.editing = null;
+    save(); render();
+  },
+  /* Jump back to the first record from the completed card. */
+  kycShowBlocks: function () { A.kycReopen("aadhaar"); },
+  /* Reopen one record for correction, keeping its values so the form prefills. */
   kycReopen: function (id) {
     var k = R().kyc;
     if (!k[id]) return;
     k[id].done = false;
-    k.showBlocks = true;
+    k.editing = id;
     k.errors = {};
+    if (k.ack && id in k.ack) k.ack[id] = false;
     if (id === "aadhaar") k.aadhaar.otpOpen = false;
+    save(); render();
+  },
+  /* GST is a two-way radio on KYC-11; the GSTIN field only appears once
+     "GST registered" is chosen. */
+  gstChoose: function (which) {
+    var r = R(), k = r.kyc;
+    if (which === "none" && r.role === "FM") return;   // mandatory for FM
+    k.gst.registered = (which === "registered");
+    k.gst.done = false;
+    k.errors = {};
     save(); render();
   },
   /* Optional location photo. Stored as a downscaled data URL — a full-size
@@ -3974,9 +4041,24 @@ function bind() {
   on("kyc-aadhaar-confirm", "click", function () { A.aadhaarConfirm(val("kyc-aadhaar-otp")); });
   on("kyc-pan-go", "click", function () { A.panVerify(val("kyc-pan"), val("kyc-pan-father")); });
   on("kyc-bank-go", "click", function () { A.bankVerify(val("kyc-acc"), val("kyc-ifsc")); });
-  on("kyc-gst-yes", "click", function () { A.gstSet(true); });
-  on("kyc-gst-no", "click", function () { A.gstSet(false); });
-  on("kyc-gst-go", "click", function () { A.gstVerify(val("kyc-gstin")); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-gstchoice]"), function (el) {
+    var pick = function () {
+      if (el.getAttribute("aria-disabled") === "true") return;
+      A.gstChoose(el.getAttribute("data-gstchoice"));
+    };
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); }
+    });
+  });
+  ["aadhaar", "pan", "bank"].forEach(function (id) {
+    on("kyc-ack-" + id, "click", function () { A.kycAck(id); });
+  });
+  on("kyc-gst-go", "click", function () {
+    var k = R().kyc;
+    if (k.gst.registered === false) { A.gstVerify(""); return; }   // records Non-GST
+    A.gstVerify(val("kyc-gstin"));
+  });
   on("kyc-msme-go", "click", A.uploadMsme);
   on("kyc-cheque-go", "click", A.uploadCheque);
   on("kyc-continue", "click", A.kycContinue);
@@ -4407,7 +4489,7 @@ if (typeof window !== "undefined") {
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,
-      canGoBack: canGoBack, backLabel: backLabel,
+      canGoBack: canGoBack, backLabel: backLabel, kycStep: kycStep,
       vehUI: function () { return vehUI; },
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
       seedExistingCaptain: seedExistingCaptain

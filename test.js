@@ -153,33 +153,43 @@ function doPersonalDetails(doc, { name = "Karan Verma", pin = "560076" } = {}) {
   click(doc, "pd-continue");
 }
 
+/* KYC is a sequence of one-record-at-a-time cards (KYC-01…KYC-14), each with a
+   confirmation screen between — so the driver walks it rather than filling a
+   single page. */
 function doKyc(doc, role) {
+  const api = doc.defaultView.__APP__;
+
+  // Aadhaar → DigiLocker OTP → confirmation
   type(doc, "kyc-aadhaar", "123412341234");
   click(doc, "kyc-aadhaar-go");
   type(doc, "kyc-aadhaar-otp", "000000");
   click(doc, "kyc-aadhaar-confirm");
+  click(doc, "kyc-ack-aadhaar");
 
+  // PAN → confirmation
   type(doc, "kyc-pan", "ABCDE1234F");
   type(doc, "kyc-pan-father", "Suresh Verma");
   click(doc, "kyc-pan-go");
+  click(doc, "kyc-ack-pan");
 
+  // bank → confirmation
   type(doc, "kyc-acc", "123456789012");
   type(doc, "kyc-ifsc", "HDFC0001234");
   click(doc, "kyc-bank-go");
+  click(doc, "kyc-ack-bank");
 
+  // GST
   if (role === "FM") {
+    clickSel(doc, '[data-gstchoice="registered"]');
     type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
     click(doc, "kyc-gst-go");
-    click(doc, "kyc-msme-go");
   } else {
-    click(doc, "kyc-gst-no");
+    clickSel(doc, '[data-gstchoice="none"]');
     click(doc, "kyc-gst-go");
   }
   click(doc, "kyc-continue");
 }
 
-/* Drive the vehicle dropdown the way a person does: open it, click the row for
-   the largest vehicle the hub takes. Picking closes the panel. */
 function pickMaxVehicle(doc, type) {
   const api = doc.defaultView.__APP__;
   if (!doc.getElementById("veh-toggle")) throw new Error("pickMaxVehicle: dropdown not on screen");
@@ -302,48 +312,72 @@ async function testFMCombined() {
   doPersonalDetails(doc);
   eq(api.helpers.phaseId(), "kyc", "FM personal details → KYC");
 
-  /* --- FM KYC differences --- */
-  check(!exists(doc, "#kyc-gst-no"),
-        "FM KYC has no Non-GST toggle — GST is mandatory");
-  check(!exists(doc, "#kyc-cheque-go"),
-        "FM KYC has no cancelled-cheque upload (penny-drop covers the bank)");
-  check(exists(doc, "#kyc-msme-go"), "FM KYC has the MSME certificate upload");
+  /* --- KYC is walked one record at a time (KYC-01…KYC-14) --- */
+  eq(api.helpers.kycStep(api.helpers.R()), "aadhaar", "KYC opens on Aadhaar, not a combined form");
+  check(exists(doc, "#kyc-aadhaar"), "the Aadhaar field is on screen");
+  check(!exists(doc, "#kyc-pan"), "PAN is not on the same page");
+  check(!exists(doc, "#kyc-acc"), "nor the bank account");
+  check(!exists(doc, "[data-gstchoice]"), "nor GST");
 
   type(doc, "kyc-aadhaar", "123412341234");
   click(doc, "kyc-aadhaar-go");
   type(doc, "kyc-aadhaar-otp", "000000");
   click(doc, "kyc-aadhaar-confirm");
+
+  /* a confirmation screen sits between records, showing the fetched record */
+  eq(api.helpers.kycStep(api.helpers.R()), "aadhaar-done", "Aadhaar lands on its confirmation");
+  check(exists(doc, '[data-testid="aadhaar-fetched"]'), "which shows what was fetched from Aadhaar");
+  check(txt(doc).indexOf("Aadhaar verified") >= 0, "and says Aadhaar is verified");
+  check(txt(doc).indexOf("14 Aug 1990") >= 0, "including the date of birth");
+  check(exists(doc, "#kyc-ack-aadhaar"), "with a continue button onto PAN");
+  check(!exists(doc, "#kyc-pan"), "PAN still is not shown yet");
+  click(doc, "kyc-ack-aadhaar");
+
+  eq(api.helpers.kycStep(api.helpers.R()), "pan", "then PAN, on its own card");
+  check(exists(doc, "#kyc-pan") && exists(doc, "#kyc-pan-father"), "PAN and father's name together");
+  check(!exists(doc, "#kyc-aadhaar"), "Aadhaar is no longer on screen");
   type(doc, "kyc-pan", "ABCDE1234F");
   type(doc, "kyc-pan-father", "Suresh Verma");
   click(doc, "kyc-pan-go");
+  eq(api.helpers.kycStep(api.helpers.R()), "pan-done", "PAN lands on its confirmation");
+  click(doc, "kyc-ack-pan");
+
+  eq(api.helpers.kycStep(api.helpers.R()), "bank", "then the bank account");
+  check(exists(doc, "#kyc-holder"), "with a holder-name field filled in after verification");
+  check(disabled(doc, "kyc-holder"), "which is read-only");
+  check(!exists(doc, "#kyc-cheque-go"),
+        "FM has no cancelled-cheque upload (penny-drop covers the bank)");
   type(doc, "kyc-acc", "123456789012");
   type(doc, "kyc-ifsc", "HDFC0001234");
   click(doc, "kyc-bank-go");
+  eq(api.helpers.kycStep(api.helpers.R()), "bank-done", "bank lands on its confirmation");
+  eq(api.helpers.R().kyc.bank.holder, "Karan Verma", "the penny-drop returns the holder name");
+  click(doc, "kyc-ack-bank");
 
-  check(disabled(doc, "kyc-continue"),
-        "FM Continue still disabled with Aadhaar+PAN+bank done but GST missing");
-
+  /* GST: radio choices, GSTIN only after choosing "GST registered" */
+  eq(api.helpers.kycStep(api.helpers.R()), "gst", "then GST status");
+  check(exists(doc, '[data-gstchoice="registered"]'), "GST registered is offered");
+  eq(sel(doc, '[data-gstchoice="none"]').getAttribute("aria-disabled"), "true",
+     "FM cannot choose Non-GST — GST is mandatory");
+  check(!exists(doc, "#kyc-gstin"), "the GSTIN field is hidden until GST registered is chosen");
+  clickSel(doc, '[data-gstchoice="registered"]');
+  check(exists(doc, "#kyc-gstin"), "choosing GST registered reveals the GSTIN field");
   type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
   click(doc, "kyc-gst-go");
-  /* MSME is optional: GST is the last gate, and Continue opens without an upload. */
+
+  /* complete (KYC-14) */
+  eq(api.helpers.kycStep(api.helpers.R()), "complete", "all four records done → the summary");
   check(!disabled(doc, "kyc-continue"),
         "FM Continue enables on Aadhaar, PAN, bank and GST — MSME is not required");
   check(!api.helpers.R().kyc.msme.done, "and no MSME certificate has been uploaded");
-  check(txt(doc).indexOf("Optional") >= 0, "the MSME block is labelled Optional");
-
-  /* Completing the required items flips the card to its summary — the optional
-     upload has to stay reachable there, or it could never be attached at all. */
   check(exists(doc, '[data-testid="msme-optional-upload"]'),
-        "the optional MSME upload is still offered on the completed KYC card");
+        "the optional MSME upload is offered on the completed card");
   check(txt(doc).indexOf("Not provided") >= 0,
         "the summary records MSME as not provided rather than claiming an upload");
-
-  /* it can still be uploaded, and then it is recorded */
   click(doc, "kyc-msme-go");
   check(!exists(doc, '[data-testid="msme-optional-upload"]'),
         "the upload prompt goes away once a certificate is attached");
   check(txt(doc).indexOf("Uploaded") >= 0, "and the summary flips to Uploaded");
-  check(api.helpers.R().kyc.msme.done, "an MSME certificate can still be uploaded");
   check(!disabled(doc, "kyc-continue"), "Continue stays enabled after uploading it");
   click(doc, "kyc-continue");
   eq(api.helpers.phaseId(), "hub", "FM KYC → hub details (now before background verification)");
@@ -656,20 +690,41 @@ async function testValidation() {
   check(api.validate.mapLink("https://maps.app.goo.gl/abc123"),
         "map link accepts a Maps short link");
 
-  /* --- KYC error copy surfaces in the UI --- */
+  /* --- KYC error copy surfaces in the UI, on each record's own card --- */
   api.helpers.goPhase("kyc");
+
+  /* a bad Aadhaar is caught before the flow moves on */
+  type(doc, "kyc-aadhaar", "12345");
+  click(doc, "kyc-aadhaar-go");
+  check(txt(doc).indexOf(E.aadhaar) >= 0, "bad Aadhaar → '" + E.aadhaar + "'");
+  check(!api.helpers.R().kyc.aadhaar.done, "Aadhaar not marked verified on a bad input");
+  check(!exists(doc, "#kyc-pan"), "and the flow does not advance to PAN");
+
+  type(doc, "kyc-aadhaar", "123412341234");
+  click(doc, "kyc-aadhaar-go");
+  type(doc, "kyc-aadhaar-otp", "000000");
+  click(doc, "kyc-aadhaar-confirm");
+  click(doc, "kyc-ack-aadhaar");
+
   type(doc, "kyc-pan", "BADPAN");
   type(doc, "kyc-pan-father", "");
   click(doc, "kyc-pan-go");
   check(txt(doc).indexOf(E.pan) >= 0, "bad PAN → '" + E.pan + "'");
   check(txt(doc).indexOf(E.panFather) >= 0, "missing father's name → '" + E.panFather + "'");
   check(!api.helpers.R().kyc.pan.done, "PAN not marked verified on a bad input");
+  check(!exists(doc, "#kyc-acc"), "and the flow does not advance to the bank step");
+
+  type(doc, "kyc-pan", "ABCDE1234F");
+  type(doc, "kyc-pan-father", "Suresh Verma");
+  click(doc, "kyc-pan-go");
+  click(doc, "kyc-ack-pan");
 
   type(doc, "kyc-acc", "12");
   type(doc, "kyc-ifsc", "BADIFSC");
   click(doc, "kyc-bank-go");
   check(txt(doc).indexOf(E.account) >= 0, "bad account number → '" + E.account + "'");
   check(txt(doc).indexOf(E.ifsc) >= 0, "bad IFSC → '" + E.ifsc + "'");
+  check(!api.helpers.R().kyc.bank.done, "bank not marked verified on a bad input");
 
   /* --- map link error copy --- */
   api.helpers.goPhase("hub");
@@ -1384,10 +1439,12 @@ async function testBackAndPhoto() {
   click(doc, "phase-back");
   eq(api.helpers.phaseId(), "kyc", "Back returns to KYC");
   check(!exists(doc, "#kyc-pan"), "the completed card shows its summary, not the forms");
-  click(doc, "kyc-edit");
-  check(exists(doc, '[data-kycedit="pan"]'), "Edit KYC details reopens the individual items");
+  eq(api.helpers.kycStep(api.helpers.R()), "complete", "KYC sits on its completed summary");
+  check(exists(doc, '[data-kycedit="pan"]'),
+        "each record on the summary can be reopened individually");
   clickSel(doc, '[data-kycedit="pan"]');
-  check(exists(doc, "#kyc-pan"), "reopening PAN brings its form back");
+  check(exists(doc, "#kyc-pan"), "reopening PAN brings its own card back");
+  eq(api.helpers.kycStep(api.helpers.R()), "pan", "and the sequence lands on that record");
   eq($(doc, "kyc-pan").value, "ABCDE1234F", "prefilled with what was entered");
   check(!api.helpers.R().kyc.pan.done, "and it is no longer counted as verified");
   check(disabled(doc, "kyc-continue"), "Continue is disabled until it is verified again");
@@ -1395,6 +1452,9 @@ async function testBackAndPhoto() {
   type(doc, "kyc-pan-father", "Suresh Verma");
   click(doc, "kyc-pan-go");
   eq(api.helpers.R().kyc.pan.value, "ZZZZZ9999Z", "the edited PAN is saved");
+  click(doc, "kyc-ack-pan");
+  eq(api.helpers.kycStep(api.helpers.R()), "complete",
+     "re-verifying returns to the summary, not back through the whole sequence");
   check(!disabled(doc, "kyc-continue"), "and Continue opens again");
   click(doc, "kyc-continue");
   eq(api.helpers.phaseId(), "hub", "forward again to hub details");

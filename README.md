@@ -98,6 +98,16 @@ deliberate product decisions, not gaps in the build.
 design, lat-long, mapping — but it happens in a separate system outside the captain-facing
 flow, so it isn't a step the captain waits on as its own screen.
 
+### KYC is one record at a time
+
+Both roles walk KYC as a sequence, matching `KYC-01`…`KYC-14`: **Aadhaar → PAN → bank →
+GST**, each on its own card, with a confirmation screen between them rather than one long
+scrollable form. The Aadhaar confirmation shows the record fetched from Aadhaar (name, date
+of birth, address); the bank step carries a read-only *account holder name* filled in after
+the penny-drop; GST is a two-way radio where the GSTIN field appears only once *GST
+registered* is chosen. The final card (`KYC-14`) summarises all four, and each row there can
+be reopened and redone individually.
+
 **3. KYC differs in four ways.**
 
 | | LM | FM |
@@ -350,7 +360,7 @@ build from.
 npm install && npm test
 ```
 
-**511 assertions across 14 groups:**
+**540 assertions across 14 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
