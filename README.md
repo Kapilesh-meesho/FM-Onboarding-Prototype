@@ -59,16 +59,31 @@ completes a flow lands in the same Captain Hub with one hub.
 ### LM Captain — 9 phases
 
 ```
-Personal details → KYC → Background verification → Cluster Head review
-→ Security deposit → Hub details → Area Manager verification → Agreements → Activation
+Personal details → KYC → Hub details → Background verification → Cluster Head review
+→ Security deposit → Area Manager verification → Agreements → Activation
 ```
 
 ### FM Captain — 7 phases
 
 ```
-Personal details → KYC → Background verification → Cluster Head review
-→ Hub details → Agreements → Activation
+Personal details → KYC → Hub details → Background verification → Cluster Head review
+→ Agreements → Activation
 ```
+
+**Hub details sits before background verification.** The facility is described up front, so
+everything downstream has something to work from — in particular the Area Manager's survey
+and, for FM, the hub categorisation that sets the rate ceiling at Cluster Head review.
+
+Two things follow from the order, and both are handled rather than left to break:
+
+- **An Area Manager rejection still returns to the Area Manager.** Hub details is now early
+  in the flow, so reopening it from an AM rejection and resubmitting jumps straight back to
+  the AM instead of walking the captain forward through background verification, Cluster
+  Head review and the deposit a second time.
+- **Continue-button labels are derived from the phase list**, not hardcoded, so reordering
+  phases cannot leave a button pointing at the wrong screen. Each phase carries an explicit
+  mid-sentence name (`lc`) because lowercasing the title produced *"cluster Head review"*
+  and *"area Manager verification"*.
 
 The shared phases reuse the same screens and components. The differences below are
 deliberate product decisions, not gaps in the build.
@@ -232,16 +247,16 @@ does not re-ask for them. The handoff creates a fresh onboarding draft for the c
 copies the captain-level record into it (personal details, Aadhaar, PAN, bank, background
 verification) and marks those phases complete, applies the GST choice, and drops the captain
 into the same onboarding flow — same rail, same dev panel, same Cluster Head / Area Manager
-/ Zonal Head logic — starting at **Cluster Head review**, the first phase that is actually
-about this hub. On activation the finished hub joins My Hubs.
+/ Zonal Head logic — starting at **hub details**, the first phase that is actually about
+this hub. Carried-over phases are skipped rather than re-walked, so the captain is not shown
+a background check they have already passed. On activation the finished hub joins My Hubs.
 
-Two notes on that screen:
+One note on that screen:
 
-- **The design's button reads "Continue to hub details".** Taken literally that would skip
-  Cluster Head review, which for an FM hub is where the category and rate card are set —
-  so the new hub would have no ceiling and no rate card. The button here reads *Continue to
-  onboarding* and starts at Cluster Head review instead. If skipping straight to hub details
-  is the intent, it is a one-line change.
+- **The button reads "Continue to hub details", matching the design.** That was not true
+  when hub details sat later in the flow — starting there would have skipped Cluster Head
+  review and left an FM hub with no category or rate ceiling. With hub details now ahead of
+  background verification it is the correct first stop, so the design's own label is used.
 - **Role choice is an addition.** `HB-07` assumes a single role context, but this prototype
   has two, so the screen asks which role the new hub is for. FM hubs cannot choose Non-GST,
   since GST is mandatory for First Mile — the same rule the onboarding KYC enforces.
@@ -298,7 +313,7 @@ build from.
 npm install && npm test
 ```
 
-**392 assertions across 12 groups:**
+**411 assertions across 13 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -326,6 +341,9 @@ npm install && npm test
    (including the 10MT-vs-9MT case a string compare gets wrong); area/manpower/vehicles
    required; range and membership validation; values preserved on a rejected submit and
    prefilled on reopen; captured for both roles
+10b. **Phase order** — both role orders pinned, hub details asserted ahead of background
+   verification and Cluster Head review, every continue-button label checked against the
+   screen it actually leads to, and proper nouns checked for capitalisation
 11. **Captain Hub** — the login switch; existing captain seeding and landing; `HB-01`
    grouping, per-hub codes and GST state; `PR-01` masking; the full bank-change journey
    including lockout, validation and a failed penny-drop; per-hub GSTIN add/update/remove;

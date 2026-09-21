@@ -768,26 +768,29 @@ var HUB_CATEGORIES = {
 };
 var CATEGORY_ORDER = ["standalone_mini","standalone","lm_as_fm","mall","sah"];
 
+/* Hub details sits before background verification: the facility is described
+   up front, so the AM survey (and, for FM, the hub categorisation that sets the
+   rate ceiling at Cluster Head review) has something to work from. */
 var PHASES = {
   LM: [
-    { id:"pd",  title:"Personal details",          sub:"Name, email, alternate phone, pincode" },
-    { id:"kyc", title:"KYC verification",          sub:"Aadhaar, PAN, bank, GST status" },
-    { id:"bgv", title:"Background verification",   sub:"Secure background check" },
-    { id:"ch",  title:"Cluster Head review",       sub:"Interview and rate card" },
-    { id:"sd",  title:"Security deposit",          sub:"Final deposit and receipt" },
-    { id:"hub", title:"Hub details",               sub:"Address details" },
-    { id:"am",  title:"Area Manager verification", sub:"Facility check" },
-    { id:"ag",  title:"Agreements",                sub:"Rate card and service agreement" },
-    { id:"act", title:"Activation",                sub:"Hub goes live" }
+    { id:"pd",  title:"Personal details",          sub:"Name, email, alternate phone, pincode", lc:"personal details" },
+    { id:"kyc", title:"KYC verification",          sub:"Aadhaar, PAN, bank, GST status", lc:"KYC verification" },
+    { id:"hub", title:"Hub details",               sub:"Address and facility", lc:"hub details" },
+    { id:"bgv", title:"Background verification",   sub:"Secure background check", lc:"background verification" },
+    { id:"ch",  title:"Cluster Head review",       sub:"Interview and rate card", lc:"Cluster Head review" },
+    { id:"sd",  title:"Security deposit",          sub:"Final deposit and receipt", lc:"security deposit" },
+    { id:"am",  title:"Area Manager verification", sub:"Facility check", lc:"Area Manager verification" },
+    { id:"ag",  title:"Agreements",                sub:"Rate card and service agreement", lc:"agreements" },
+    { id:"act", title:"Activation",                sub:"Hub goes live", lc:"activation" }
   ],
   FM: [
-    { id:"pd",  title:"Personal details",        sub:"Name, email, alternate phone, pincode" },
-    { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST, MSME" },
-    { id:"bgv", title:"Background verification", sub:"Secure background check" },
-    { id:"ch",  title:"Cluster Head review",     sub:"Hub category and rate card" },
-    { id:"hub", title:"Hub details",             sub:"Address details" },
-    { id:"ag",  title:"Agreements",              sub:"Rate card and service agreement" },
-    { id:"act", title:"Activation",              sub:"Hub goes live" }
+    { id:"pd",  title:"Personal details",        sub:"Name, email, alternate phone, pincode", lc:"personal details" },
+    { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST, MSME", lc:"KYC verification" },
+    { id:"hub", title:"Hub details",             sub:"Address and facility", lc:"hub details" },
+    { id:"bgv", title:"Background verification", sub:"Secure background check", lc:"background verification" },
+    { id:"ch",  title:"Cluster Head review",     sub:"Hub category and rate card", lc:"Cluster Head review" },
+    { id:"ag",  title:"Agreements",              sub:"Rate card and service agreement", lc:"agreements" },
+    { id:"act", title:"Activation",              sub:"Hub goes live", lc:"activation" }
   ]
 };
 
@@ -938,7 +941,8 @@ function blankRole(role) {
     sd:  { status:"pending", amount:25000, attempts:0 },
     hub: { address:"", mapLink:"", pincode:"", city:"",
            areaSqft:"", manpower:"", vehicles:[],
-           submitted:false, hubCode:null, errors:{} },
+           submitted:false, hubCode:null, returnTo:null, errors:{} },
+    carried: null,
     am:  { status:"pending", rejections:0, reason:"", escalated:false },
     ag:  { rateAccepted:false, serviceRead:false, serviceAccepted:false },
     act: { status:"idle", done:{}, partnerId:null, vendorId:null, failed:false, activatedOn:null }
@@ -1119,10 +1123,38 @@ function goPhase(id) {
     if (list[i].id === id) { R().phaseIdx = i; save(); render(); return; }
   }
 }
+/* Phases carried over from the captain record when adding a second hub — they
+   are already satisfied and must not be walked through again. */
+function isCarried(r, id) { return !!(r.carried && r.carried[id]); }
+
 function nextPhase() {
-  var r = R();
-  if (r.phaseIdx < phases().length - 1) r.phaseIdx++;
+  var r = R(), list = phases();
+  var i = r.phaseIdx + 1;
+  while (i < list.length - 1 && isCarried(r, list[i].id)) i++;
+  if (i <= list.length - 1) r.phaseIdx = i;
   save(); render();
+}
+
+/* Title of the phase the captain goes to next, skipping anything carried over.
+   Continue-button labels read from this so a reordering of PHASES cannot leave
+   a button pointing at the wrong screen. */
+function nextTitle(r) {
+  var list = phases(), i = r.phaseIdx + 1;
+  while (i < list.length && isCarried(r, list[i].id)) i++;
+  return i < list.length ? list[i].title : null;
+}
+function nextPhaseMeta(r) {
+  var list = phases(), i = r.phaseIdx + 1;
+  while (i < list.length && isCarried(r, list[i].id)) i++;
+  return i < list.length ? list[i] : null;
+}
+function nextLabel(r, fallback) {
+  var p = nextPhaseMeta(r);
+  return p ? "Continue to " + p.lc + " →" : (fallback || "Continue →");
+}
+function nextRowLabel(r) {
+  var p = nextPhaseMeta(r);
+  return p ? "Next: " + p.lc : "Next step";
 }
 
 /* Progress bar counts completed phases, not the index, so a rejection that
@@ -1691,10 +1723,10 @@ function panelAddHub() {
             : "") +
 
       '<div style="margin-top:20px">' +
-        '<button class="btn btn-primary" id="addhub-go">Continue to onboarding →</button>' +
+        '<button class="btn btn-primary" id="addhub-go">Continue to hub details →</button>' +
         '<div style="margin-top:10px;font-size:11px;color:var(--muted)">' +
           'Personal details, KYC and background verification carry over — you start at ' +
-          esc(PHASES[a.role][3].title) + '.</div>' +
+          'hub details.</div>' +
       '</div>' +
     '</div></div>';
 }
@@ -1723,8 +1755,10 @@ function viewFlow() {
   var cur = list[idx];
 
   var steps = list.map(function (p, i) {
-    var cls = i < idx ? "done" : (i === idx ? "here" : "");
-    var mark = i < idx ? "✓" : String(i + 1);
+    // a phase carried over from the captain record counts as already cleared
+    var isDone = i < idx || isCarried(r, p.id);
+    var cls = i === idx ? "here" : (isDone ? "done" : "");
+    var mark = (isDone && i !== idx) ? "✓" : String(i + 1);
     return '<div class="rstep ' + cls + '">' +
              '<div class="dot">' + mark + '</div>' +
              '<div class="txt"><b>' + esc(p.title) + '</b><span>' + esc(p.sub) + '</span></div>' +
@@ -2167,7 +2201,7 @@ function phaseKYC(r) {
         (fm ? '<div class="row"><span class="k">MSME certificate</span><span class="v ok">Uploaded</span></div>' : '') +
       '</div>' +
       '<div style="display:flex;justify-content:center;margin-top:20px">' +
-        '<button class="btn btn-primary" id="kyc-continue">Continue to background verification →</button>' +
+        '<button class="btn btn-primary" id="kyc-continue">' + esc(nextLabel(r)) + '</button>' +
       '</div>'
     : aad + pan + bank + gst + msme + cheque +
       '<div class="cfoot"><span class="note">' +
@@ -2196,7 +2230,7 @@ function phaseBGV(r) {
         tlRow("ok", "Risk screening", "No adverse records found.") +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
-        '<button class="btn btn-primary" id="bgv-continue">Continue to Cluster Head review →</button></div>';
+        '<button class="btn btn-primary" id="bgv-continue">' + esc(nextLabel(r)) + '</button></div>';
   } else if (b.status === "failed") {
     inner = statusBlock("bad", "Background verification failed",
         "We could not clear your background check. Review your KYC records and resubmit.") +
@@ -2213,7 +2247,7 @@ function phaseBGV(r) {
       '<div class="tl">' +
         tlRow("ok", "KYC submitted", "Your identity and payout records were received.") +
         tlRow("now", "Background check running", "Identity and risk screening in progress.") +
-        tlRow("", "Next: Cluster Head review", "A Cluster Head is assigned once the check clears.") +
+        tlRow("", nextRowLabel(r), "Available once the check clears.") +
       '</div>';
   }
 
@@ -2324,7 +2358,7 @@ function phaseCH(r) {
   }
 
   if (ch.status === "approved") {
-    var nxtLabel = fm ? "Continue to hub details →" : "Continue to security deposit →";
+    var nxtLabel = nextLabel(r);
     inner = statusBlock("ok", "Cluster Head review approved",
         ch.decidedBy === "zh"
           ? "Your above-benchmark rate card was approved by the Zonal Head."
@@ -2351,7 +2385,7 @@ function phaseCH(r) {
       '<div class="tl">' +
         tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Reviewed and forwarded for approval.") +
         tlRow("now", "Zonal Head: " + ZH_CONTACT.name, "Above-benchmark rate approval pending.") +
-        tlRow("", "Next: hub details", "Available once the Zonal Head approves.") +
+        tlRow("", nextRowLabel(r), "Available once the Zonal Head approves.") +
       '</div>';
     side = sideDefault(r, chContactCard("zh"));
 
@@ -2385,8 +2419,7 @@ function phaseCH(r) {
       '<div class="tl">' +
         tlRow("ok", "Background verification passed", "Identity and risk checks cleared.") +
         tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Phone: " + CH_CONTACT.phone) +
-        tlRow("", fm ? "Next: hub details" : "Next: security deposit",
-                   fm ? "Available after approval." : "Final deposit appears after approval.") +
+        tlRow("", nextRowLabel(r), "Available after approval.") +
       '</div>';
     side = sideDefault(r, chContactCard("ch"));
   }
@@ -2414,7 +2447,7 @@ function phaseSD(r) {
         '<div class="row"><span class="k">Status</span><span class="v ok">Verified</span></div>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end">' +
-        '<button class="btn btn-primary" id="sd-continue">Continue to hub details →</button></div>';
+        '<button class="btn btn-primary" id="sd-continue">' + esc(nextLabel(r)) + '</button></div>';
   } else if (sd.status === "failed") {
     inner = statusBlock("bad", "Payment failed", "Your payment did not go through. No amount was deducted.") +
       '<div class="notice bad"><b>Try again</b>Use a different payment method if the problem repeats.</div>' +
@@ -2611,7 +2644,7 @@ function phaseHUB(r) {
           'For First Mile hubs the code is assigned during design and hub-code mapping, ' +
           'after your Area Manager&rsquo;s survey is processed. You will see it on activation.</div>' +
         '<div style="display:flex;justify-content:flex-end">' +
-          '<button class="btn btn-primary" id="hub-continue">Continue to agreements →</button></div>';
+          '<button class="btn btn-primary" id="hub-continue">' + esc(nextLabel(r)) + '</button></div>';
     } else {
       inner = statusBlock("ok", "Hub details submitted",
           "Your hub code has been generated.") +
@@ -2623,7 +2656,7 @@ function phaseHUB(r) {
           hubSpecRows(h) +
         '</div>' +
         '<div style="display:flex;justify-content:flex-end">' +
-          '<button class="btn btn-primary" id="hub-continue">Continue to Area Manager verification →</button></div>';
+          '<button class="btn btn-primary" id="hub-continue">' + esc(nextLabel(r)) + '</button></div>';
     }
   } else {
     var reconfirm = (!fm && r.am.status === "rejected")
@@ -2701,7 +2734,7 @@ function phaseAM(r) {
         tlRow("ok", "Hub mapping", "Hub recorded against your pincode.") +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
-        '<button class="btn btn-primary" id="am-continue">Continue to agreements →</button></div>';
+        '<button class="btn btn-primary" id="am-continue">' + esc(nextLabel(r)) + '</button></div>';
   } else if (am.status === "escalated") {
     inner = statusBlock("wait", "Escalated to Cluster Head",
         "Your facility was rejected twice by the Area Manager, so the case has been escalated " +
@@ -2729,7 +2762,7 @@ function phaseAM(r) {
       '<div class="tl">' +
         tlRow("ok", "Hub details submitted", "Hub code " + esc(r.hub.hubCode || "—") + " generated.") +
         tlRow("now", "Facility check", "Area Manager site visit pending.") +
-        tlRow("", "Next: agreements", "Rate card and service agreement follow approval.") +
+        tlRow("", nextRowLabel(r), "Follows facility approval.") +
       '</div>';
   }
 
@@ -3252,12 +3285,23 @@ var A = {
   hubContinue: function () {
     var r = R();
     if (!r.hub.submitted) return;
-    if (r.role === "LM") r.am.status = "pending";
+    /* Hub details now sits early in the flow, so a captain sent back here by an
+       Area Manager rejection must return to the AM — not walk forward through
+       phases they have already cleared. */
+    if (r.hub.returnTo) {
+      var back = r.hub.returnTo;
+      r.hub.returnTo = null;
+      r.am.status = "pending";
+      r.am.reason = "";
+      goPhase(back);
+      return;
+    }
     nextPhase();
   },
   hubReopen: function () {
     var r = R();
     r.hub.submitted = false;
+    r.hub.returnTo = "am";
     goPhase("hub");
   },
 
@@ -3531,10 +3575,12 @@ var A = {
     r.kyc.msme    = { done:role === "FM", fileName:role === "FM" ? "udyam-registration.pdf" : "" };
     r.bgv.status  = "passed";
     r.newHubGst   = gst;
+    // these are captain-level and already done — never walk them again
+    r.carried     = { pd:true, kyc:true, bgv:true };
 
-    // start at Cluster Head review — the first phase that is about this hub
+    // start at hub details — the first phase that is about this hub
     var idx = 0;
-    PHASES[role].forEach(function (p, i) { if (p.id === "ch") idx = i; });
+    PHASES[role].forEach(function (p, i) { if (p.id === "hub") idx = i; });
     r.phaseIdx = idx;
 
     S.roles[role] = r;

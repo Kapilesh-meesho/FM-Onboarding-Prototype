@@ -215,9 +215,17 @@ async function testLM() {
   eq(api.helpers.R().pd.selected, "560076", "serviceable pincode selected");
 
   doKyc(doc, "LM");
-  eq(api.helpers.phaseId(), "bgv", "KYC → background verification");
+  eq(api.helpers.phaseId(), "hub", "KYC → hub details (now before background verification)");
   check(api.helpers.R().kyc.gst.registered === false,
         "LM accepted Non-GST as a complete GST answer (optional toggle)");
+
+  doHubDetails(doc);
+  const lmHubCode = api.helpers.R().hub.hubCode;
+  check(!!lmHubCode && /^[A-Z]{3}$/.test(lmHubCode),
+        "LM hub code generated at hub submit (" + lmHubCode + ")");
+
+  click(doc, "hub-continue");
+  eq(api.helpers.phaseId(), "bgv", "hub details → background verification");
 
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
@@ -229,15 +237,7 @@ async function testLM() {
 
   click(doc, "sd-pay");
   click(doc, "sd-continue");
-  eq(api.helpers.phaseId(), "hub", "deposit paid → hub details");
-
-  doHubDetails(doc);
-  const lmHubCode = api.helpers.R().hub.hubCode;
-  check(!!lmHubCode && /^[A-Z]{3}$/.test(lmHubCode),
-        "LM hub code generated at hub submit (" + lmHubCode + ")");
-
-  click(doc, "hub-continue");
-  eq(api.helpers.phaseId(), "am", "hub details → Area Manager verification");
+  eq(api.helpers.phaseId(), "am", "deposit paid → Area Manager verification");
 
   api.actions.amApprove();
   click(doc, "am-continue");
@@ -281,7 +281,8 @@ async function testFMCombined() {
   pickRole(doc, "FM");
 
   const ids = api.config.PHASES.FM.map(p => p.id);
-  eq(ids, ["pd","kyc","bgv","ch","hub","ag","act"], "FM phase list has no SD and no AM");
+  eq(ids, ["pd","kyc","hub","bgv","ch","ag","act"], "FM phase list has no SD and no AM");
+  eq(ids.indexOf("hub") < ids.indexOf("bgv"), true, "hub details comes before background verification");
   check(ids.indexOf("sd") === -1, "FM has no security deposit phase");
   check(ids.indexOf("am") === -1, "FM has no standalone Area Manager phase");
 
@@ -317,7 +318,17 @@ async function testFMCombined() {
   check(!disabled(doc, "kyc-continue"),
         "FM Continue enables only once Aadhaar, PAN, bank, GST and MSME are all done");
   click(doc, "kyc-continue");
-  eq(api.helpers.phaseId(), "bgv", "FM KYC → background verification");
+  eq(api.helpers.phaseId(), "hub", "FM KYC → hub details (now before background verification)");
+
+  doHubDetails(doc, { address: "Plot 7, Bommasandra Industrial Area, Bengaluru",
+                      map: "https://maps.google.com/?q=12.8156,77.6982",
+                      area: "6500", manpower: "18", vehicles: ["10MT_32FT"] });
+  check(!api.helpers.R().hub.hubCode,
+        "FM hub details submit does NOT generate a hub code");
+  check(exists(doc, '[data-testid="fm-no-hubcode"]'),
+        "FM is told the hub code is finalised later");
+  click(doc, "hub-continue");
+  eq(api.helpers.phaseId(), "bgv", "FM hub details → background verification");
 
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
@@ -349,18 +360,8 @@ async function testFMCombined() {
         "no split caveat shown in combined mode");
 
   click(doc, "ch-continue");
-  eq(api.helpers.phaseId(), "hub", "FM CH approved → hub details (no security deposit)");
-
-  doHubDetails(doc, { address: "Plot 7, Bommasandra Industrial Area, Bengaluru",
-                      map: "https://maps.google.com/?q=12.8156,77.6982",
-                      area: "6500", manpower: "18", vehicles: ["10MT_32FT"] });
-  check(!api.helpers.R().hub.hubCode,
-        "FM hub details submit does NOT generate a hub code");
-  check(exists(doc, '[data-testid="fm-no-hubcode"]'),
-        "FM is told the hub code is finalised later");
-
-  click(doc, "hub-continue");
-  eq(api.helpers.phaseId(), "ag", "FM hub details → agreements (no AM phase)");
+  eq(api.helpers.phaseId(), "ag",
+     "FM CH approved → agreements (no security deposit, no AM phase)");
 
   doAgreements(doc, api);
   eq(api.helpers.phaseId(), "act", "FM agreements → activation");
@@ -406,6 +407,8 @@ async function testFMEscalation() {
   pickRole(doc, "FM");
   doPersonalDetails(doc);
   doKyc(doc, "FM");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  click(doc, "hub-continue");
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
   eq(api.helpers.phaseId(), "ch", "reached Cluster Head review");
@@ -443,7 +446,7 @@ async function testFMEscalation() {
   eq(r.ch.decidedBy, "zh", "approval is attributed to the Zonal Head");
 
   click(doc, "ch-continue");
-  eq(api.helpers.phaseId(), "hub", "ZH-approved request moves on to hub details");
+  eq(api.helpers.phaseId(), "ag", "ZH-approved request moves on to agreements");
 
   /* every reject path routes somewhere the captain can act */
   api.helpers.goPhase("ch");
@@ -472,6 +475,8 @@ async function testRoleIndependence() {
   pickRole(doc, "LM");
   doPersonalDetails(doc, { name: "Karan LM", pin: "560076" });
   doKyc(doc, "LM");
+  doHubDetails(doc, { address: "No. 42, Koramangala" });
+  click(doc, "hub-continue");
   api.actions.bgvSet("passed");
   const lmBefore = JSON.parse(JSON.stringify(api.state.roles.LM));
   eq(lmBefore.pd.name, "Karan LM", "LM captured its own name");
@@ -740,14 +745,14 @@ async function testAmTwoStrike() {
   pickRole(doc, "LM");
   doPersonalDetails(doc);
   doKyc(doc, "LM");
+  doHubDetails(doc);
+  click(doc, "hub-continue");
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
   api.actions.chApprove();
   click(doc, "ch-continue");
   click(doc, "sd-pay");
   click(doc, "sd-continue");
-  doHubDetails(doc);
-  click(doc, "hub-continue");
   eq(api.helpers.phaseId(), "am", "reached Area Manager verification");
 
   api.actions.amReject("Loading bay too narrow.");
@@ -762,6 +767,12 @@ async function testAmTwoStrike() {
 
   doHubDetails(doc, { address: "No. 42, 4th Cross, Koramangala, Bengaluru (rear gate)" });
   click(doc, "hub-continue");
+  /* Hub details now sits before background verification, so resubmitting after an
+     AM rejection must jump straight back to the AM rather than walking the captain
+     forward through BGV, Cluster Head and the deposit all over again. */
+  eq(api.helpers.phaseId(), "am",
+     "resubmitted hub details returns to the Area Manager, not back through BGV");
+  eq(api.helpers.R().am.status, "pending", "the AM check is pending again");
 
   api.actions.amReject("Still not compliant.");
   r = api.helpers.R();
@@ -816,6 +827,9 @@ async function testDevPanel() {
 
   const devText = () => $(doc, "dev").textContent.replace(/\s+/g, " ");
 
+  eq(api.helpers.phaseId(), "hub", "at hub details");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  click(doc, "hub-continue");
   eq(api.helpers.phaseId(), "bgv", "at background verification");
   check(devText().indexOf("Mark BGV passed") >= 0 && devText().indexOf("Mark BGV failed") >= 0,
         "BGV: pass and fail actions offered");
@@ -850,6 +864,8 @@ async function testDevPanel() {
   pickRole(doc, "LM");
   doPersonalDetails(doc);
   doKyc(doc, "LM");
+  doHubDetails(doc, { address: "No. 42, Koramangala" });
+  click(doc, "hub-continue");
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
   api.actions.chApprove();
@@ -865,8 +881,6 @@ async function testDevPanel() {
   check(!!sel(doc, "#sd-retry"), "failed payment offers a retry route");
   api.actions.sdSet("paid");
   click(doc, "sd-continue");
-  doHubDetails(doc, { address: "No. 42, Koramangala", map: "https://maps.google.com/?q=1,1" });
-  click(doc, "hub-continue");
   const d5 = devText();
   check(d5.indexOf("Area Manager decision") >= 0, "Area Manager approve/reject offered (LM only)");
 
@@ -1012,13 +1026,7 @@ async function testHubFacilityInputs() {
   pickRole(doc, "LM");
   doPersonalDetails(doc);
   doKyc(doc, "LM");
-  api.actions.bgvSet("passed");
-  click(doc, "bgv-continue");
-  api.actions.chApprove();
-  click(doc, "ch-continue");
-  click(doc, "sd-pay");
-  click(doc, "sd-continue");
-  eq(api.helpers.phaseId(), "hub", "reached hub details");
+  eq(api.helpers.phaseId(), "hub", "reached hub details, straight after KYC");
 
   /* the three inputs are rendered, with every vehicle type selectable */
   check(exists(doc, "#hub-area"), "area input rendered");
@@ -1170,6 +1178,13 @@ async function testHubFacilityInputs() {
 
   /* values survive a reopen after an AM rejection */
   click(doc, "hub-continue");
+  api.actions.bgvSet("passed");
+  click(doc, "bgv-continue");
+  api.actions.chApprove();
+  click(doc, "ch-continue");
+  click(doc, "sd-pay");
+  click(doc, "sd-continue");
+  eq(api.helpers.phaseId(), "am", "walked forward to the Area Manager");
   api.actions.amReject("Loading bay too narrow.");
   click(doc, "am-fix-hub");
   eq($(doc, "hub-area").value, "4000", "area is prefilled on reopen");
@@ -1182,12 +1197,7 @@ async function testHubFacilityInputs() {
   pickRole(doc, "FM");
   doPersonalDetails(doc, { pin: "560076" });
   doKyc(doc, "FM");
-  api.actions.bgvSet("passed");
-  click(doc, "bgv-continue");
-  api.actions.chSetCategory("standalone");
-  api.actions.chApprove("combined");
-  click(doc, "ch-continue");
-  eq(api.helpers.phaseId(), "hub", "FM reached hub details");
+  eq(api.helpers.phaseId(), "hub", "FM reached hub details, straight after KYC");
   check(exists(doc, "#hub-area") && exists(doc, "#hub-manpower") && exists(doc, "#veh-toggle"),
         "FM hub details captures area, manpower and vehicle types too");
   doHubDetails(doc, { address: "Plot 7, Bommasandra", area: "6500",
@@ -1199,6 +1209,61 @@ async function testHubFacilityInputs() {
      "FM max vehicle size is derived from the selection");
   check(!fh.hubCode, "FM still gets no hub code at submit");
   check(txt(doc).indexOf("10MT_32FT") >= 0, "FM summary shows the max vehicle size");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
+   10b. Phase order and the labels derived from it
+   ====================================================================== */
+
+async function testPhaseOrder() {
+  section("10b. Phase order — hub details before background verification");
+  const { win, doc, api } = await boot();
+
+  const lm = api.config.PHASES.LM.map(p => p.id);
+  const fm = api.config.PHASES.FM.map(p => p.id);
+  eq(lm, ["pd","kyc","hub","bgv","ch","sd","am","ag","act"], "LM order puts hub details third");
+  eq(fm, ["pd","kyc","hub","bgv","ch","ag","act"], "FM order puts hub details third");
+  check(lm.indexOf("hub") < lm.indexOf("bgv"), "LM: hub details precedes background verification");
+  check(fm.indexOf("hub") < fm.indexOf("bgv"), "FM: hub details precedes background verification");
+  check(lm.indexOf("hub") < lm.indexOf("ch"), "LM: hub details precedes Cluster Head review");
+  check(fm.indexOf("hub") < fm.indexOf("ch"),
+        "FM: hub details precedes Cluster Head review, so the AM has something to classify");
+  check(lm.indexOf("am") > lm.indexOf("sd"), "LM: Area Manager still follows the deposit");
+
+  /* Every continue button is derived from the phase list, so a future reorder
+     cannot leave a button pointing at the wrong screen. */
+  login(doc);
+  pickRole(doc, "LM");
+  doPersonalDetails(doc);
+  const seen = {};
+  doKyc(doc, "LM");
+  doHubDetails(doc);
+  seen.hub = $(doc, "hub-continue").textContent.trim();
+  click(doc, "hub-continue");
+  api.actions.bgvSet("passed");
+  seen.bgv = $(doc, "bgv-continue").textContent.trim();
+  click(doc, "bgv-continue");
+  api.actions.chApprove();
+  seen.ch = $(doc, "ch-continue").textContent.trim();
+  click(doc, "ch-continue");
+  click(doc, "sd-pay");
+  seen.sd = $(doc, "sd-continue").textContent.trim();
+  click(doc, "sd-continue");
+  api.actions.amApprove();
+  seen.am = $(doc, "am-continue").textContent.trim();
+
+  eq(seen.hub, "Continue to background verification →", "hub details points at BGV");
+  eq(seen.bgv, "Continue to Cluster Head review →", "BGV points at Cluster Head review");
+  eq(seen.ch,  "Continue to security deposit →", "Cluster Head points at the deposit");
+  eq(seen.sd,  "Continue to Area Manager verification →", "deposit points at the Area Manager");
+  eq(seen.am,  "Continue to agreements →", "Area Manager points at agreements");
+  /* Proper nouns must survive: deriving the label by lowercasing the phase
+     title produced "cluster Head review" and "area Manager verification". */
+  check(seen.bgv.indexOf("cluster Head") === -1 && seen.sd.indexOf("area Manager") === -1,
+        "proper nouns in phase names are not lowercased");
 
   api.stopTimers();
   win.close();
@@ -1416,7 +1481,7 @@ async function testCaptainHub() {
   click(doc, "addhub-go");
   eq(api.state.screen, "flow", "Add new hub hands off to the onboarding flow");
   eq(api.state.activeRole, "LM", "into the role chosen for the new hub");
-  eq(api.helpers.phaseId(), "ch", "starting at Cluster Head review, the first hub-specific phase");
+  eq(api.helpers.phaseId(), "hub", "starting at hub details, the first hub-specific phase");
 
   const nr = api.helpers.R();
   check(nr.pd.name === "Karan Verma" && nr.pd.emailVerified,
@@ -1425,16 +1490,19 @@ async function testCaptainHub() {
         "KYC carries over and is not asked again");
   eq(nr.bgv.status, "passed", "background verification carries over");
   eq(nr.kyc.gst.gstin, "29ABCDE1234F1Z5", "the chosen GSTIN is applied to the new hub");
-  check(txt(doc).indexOf("Cluster Head review") >= 0, "the onboarding rail is back on screen");
+  check(txt(doc).indexOf("Hub details") >= 0, "the onboarding rail is back on screen");
 
   /* finish it and confirm the hub joins My Hubs */
+  api.helpers.R().pd.selected = "560076";
+  doHubDetails(doc, { address: "12, 1st Main, Jayanagar, Bengaluru" });
+  click(doc, "hub-continue");
+  /* background verification was carried over, so the walk skips it entirely
+     rather than re-running a check this captain already passed */
+  eq(api.helpers.phaseId(), "ch", "carried-over background verification is skipped");
   api.actions.chApprove();
   click(doc, "ch-continue");
   click(doc, "sd-pay");
   click(doc, "sd-continue");
-  api.helpers.R().pd.selected = "560076";
-  doHubDetails(doc, { address: "12, 1st Main, Jayanagar, Bengaluru" });
-  click(doc, "hub-continue");
   api.actions.amApprove();
   click(doc, "am-continue");
   doAgreements(doc, api);
@@ -1459,13 +1527,13 @@ async function testCaptainHub() {
   pickRole(doc, "FM");
   doPersonalDetails(doc);
   doKyc(doc, "FM");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  click(doc, "hub-continue");
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
   api.actions.chSetCategory("standalone");
   api.actions.chApprove("combined");
   click(doc, "ch-continue");
-  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
-  click(doc, "hub-continue");
   doAgreements(doc, api);
   api.stopTimers();
   api.actions.finishActivation();
@@ -1502,6 +1570,7 @@ async function testCaptainHub() {
     await testDevPanel();
     await testBulkPincodes();
     await testHubFacilityInputs();
+    await testPhaseOrder();
     await testCaptainHub();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
