@@ -1283,6 +1283,150 @@ async function testPhaseOrder() {
 }
 
 /* =========================================================================
+   10c. Stepping back through the opening phases, and the optional photo
+   ====================================================================== */
+
+// a 1x1 gif, enough to stand in for an uploaded image
+const TINY_IMG = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+async function testBackAndPhoto() {
+  section("10c. Back navigation and the optional location photo");
+  const { win, doc, api } = await boot();
+  const E = api.errors;
+
+  login(doc);
+  pickRole(doc, "LM");
+
+  /* page 1 has nowhere to go back to */
+  eq(api.helpers.phaseId(), "pd", "on personal details");
+  check(!api.helpers.canGoBack(api.helpers.R()), "no Back on the first page");
+  check(!exists(doc, "#phase-back"), "and no Back button rendered");
+
+  doPersonalDetails(doc);
+  eq(api.helpers.phaseId(), "kyc", "on KYC");
+
+  /* page 2 → page 1, and the captured values are still editable */
+  check(api.helpers.canGoBack(api.helpers.R()), "Back is available on KYC");
+  eq(api.helpers.backLabel(api.helpers.R()), "← Back to personal details",
+     "Back names the page it returns to");
+  click(doc, "phase-back");
+  eq(api.helpers.phaseId(), "pd", "Back returns to personal details");
+  eq($(doc, "pd-name").value, "Karan Verma", "the captured name is still there");
+  type(doc, "pd-name", "Karan V Verma");
+  eq(api.helpers.R().pd.name, "Karan V Verma", "and can be edited");
+  eq(api.helpers.R().pd.pincodes, ["560076"], "pincodes survive the round trip");
+  click(doc, "pd-continue");
+  eq(api.helpers.phaseId(), "kyc", "forward again to KYC");
+
+  /* a verified KYC item can be reopened and redone */
+  doKyc(doc, "LM");
+  eq(api.helpers.phaseId(), "hub", "KYC complete → hub details");
+  click(doc, "phase-back");
+  eq(api.helpers.phaseId(), "kyc", "Back returns to KYC");
+  check(!exists(doc, "#kyc-pan"), "the completed card shows its summary, not the forms");
+  click(doc, "kyc-edit");
+  check(exists(doc, '[data-kycedit="pan"]'), "Edit KYC details reopens the individual items");
+  clickSel(doc, '[data-kycedit="pan"]');
+  check(exists(doc, "#kyc-pan"), "reopening PAN brings its form back");
+  eq($(doc, "kyc-pan").value, "ABCDE1234F", "prefilled with what was entered");
+  check(!api.helpers.R().kyc.pan.done, "and it is no longer counted as verified");
+  check(disabled(doc, "kyc-continue"), "Continue is disabled until it is verified again");
+  type(doc, "kyc-pan", "ZZZZZ9999Z");
+  type(doc, "kyc-pan-father", "Suresh Verma");
+  click(doc, "kyc-pan-go");
+  eq(api.helpers.R().kyc.pan.value, "ZZZZZ9999Z", "the edited PAN is saved");
+  check(!disabled(doc, "kyc-continue"), "and Continue opens again");
+  click(doc, "kyc-continue");
+  eq(api.helpers.phaseId(), "hub", "forward again to hub details");
+
+  /* page 3 → page 2 */
+  check(api.helpers.canGoBack(api.helpers.R()), "Back is available on hub details");
+  eq(api.helpers.backLabel(api.helpers.R()), "← Back to KYC verification",
+     "Back names KYC, with its proper-noun casing intact");
+
+  /* beyond hub details the flow has handed off, so Back stops */
+  doHubDetails(doc);
+  check(exists(doc, "#hub-edit"), "a submitted hub can be reopened for correction");
+  click(doc, "hub-edit");
+  check(!api.helpers.R().hub.submitted, "Edit hub details reopens the form");
+  eq($(doc, "hub-address").value, "No. 42, 4th Cross, Koramangala, Bengaluru",
+     "prefilled with what was submitted");
+  click(doc, "hub-submit");
+  click(doc, "hub-continue");
+  eq(api.helpers.phaseId(), "bgv", "on background verification");
+  check(!api.helpers.canGoBack(api.helpers.R()),
+        "no Back from background verification — the flow has handed off");
+  check(!exists(doc, "#phase-back"), "and no Back button is rendered there");
+
+  /* ---- the optional location photo ---- */
+  api.reset();
+  login(doc);
+  pickRole(doc, "LM");
+  doPersonalDetails(doc);
+  doKyc(doc, "LM");
+  eq(api.helpers.phaseId(), "hub", "back at hub details");
+
+  check(exists(doc, "#hub-photo-btn"), "an upload button sits beside the map link");
+  check(!!sel(doc, "#hub-map").closest(".box").querySelector("#hub-photo-btn"),
+        "the button is inside the map link field, beside the input");
+  check(exists(doc, "#hub-photo-file"), "backed by a real file input");
+  eq($(doc, "hub-photo-file").getAttribute("accept"), "image/*", "which accepts images");
+  check(!exists(doc, '[data-testid="hub-photo"]'), "no thumbnail before anything is uploaded");
+  check($(doc, "hub-photo-btn").textContent.indexOf("Add photo") >= 0, "button offers to add one");
+
+  /* the photo is optional — hub details submits without it */
+  doHubDetails(doc, { address: "No. 42, Koramangala" });
+  check(api.helpers.R().hub.submitted, "hub details submits with no photo attached");
+  check(!api.helpers.R().hub.photo, "and no photo is recorded");
+  click(doc, "hub-edit");
+
+  /* uploading renders a thumbnail */
+  api.actions.setHubPhoto(TINY_IMG, "gate.jpg");
+  check(exists(doc, '[data-testid="hub-photo"]'), "a thumbnail appears once uploaded");
+  const thumb = $(doc, "hub-photo-thumb");
+  check(!!thumb && thumb.tagName === "IMG", "the thumbnail is a rendered image");
+  eq(thumb.getAttribute("src"), TINY_IMG, "showing the uploaded image itself");
+  check(txt(doc).indexOf("gate.jpg") >= 0, "the file name is shown");
+  check($(doc, "hub-photo-btn").textContent.indexOf("Replace photo") >= 0,
+        "the button now offers to replace it");
+
+  /* it can be viewed full size and removed */
+  click(doc, "hub-photo-thumb");
+  check(exists(doc, "#photo-lb"), "clicking the thumbnail opens it full size");
+  click(doc, "photo-lb");
+  check(!exists(doc, "#photo-lb"), "and clicking again closes it");
+  click(doc, "hub-photo-remove");
+  check(!api.helpers.R().hub.photo, "Remove clears the photo");
+  check(!exists(doc, '[data-testid="hub-photo"]'), "and the thumbnail goes away");
+
+  /* non-images and oversized images are refused */
+  api.actions.setHubPhoto("not-a-data-url", "notes.txt");
+  check(txt(doc).indexOf(E.photoType) >= 0, "a non-image is refused");
+  check(!api.helpers.R().hub.photo, "and nothing is stored");
+  api.actions.setHubPhoto("data:image/png;base64," + "A".repeat(2000001), "huge.png");
+  check(txt(doc).indexOf(E.photoSize) >= 0, "an oversized image is refused");
+  check(!api.helpers.R().hub.photo, "and nothing is stored");
+
+  /* A file that claims to be an image but does not decode used to be stored
+     anyway, rendering as a broken thumbnail with no explanation. */
+  api.actions.setHubPhoto(TINY_IMG, "ok.gif");
+  api.actions.rejectHubPhoto(E.photoUnreadable);
+  check(txt(doc).indexOf(E.photoUnreadable) >= 0, "an undecodable image is refused");
+  check(!api.helpers.R().hub.photo, "and any previous photo is cleared rather than left broken");
+  check(!exists(doc, '[data-testid="hub-photo"]'), "no broken thumbnail is rendered");
+
+  /* it survives submission and reaches the summary */
+  api.actions.setHubPhoto(TINY_IMG, "gate.jpg");
+  click(doc, "hub-submit");
+  check(api.helpers.R().hub.submitted, "submits with a photo attached");
+  check(!!sel(doc, '.kv .row img'), "the submitted summary renders the photo");
+  check(txt(doc).indexOf("Location photo") >= 0, "and labels it");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
    11. Captain Hub — logged-in Profile & Hubs (Figma page 96:2)
    ====================================================================== */
 
@@ -1584,6 +1728,7 @@ async function testCaptainHub() {
     await testBulkPincodes();
     await testHubFacilityInputs();
     await testPhaseOrder();
+    await testBackAndPhoto();
     await testCaptainHub();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));

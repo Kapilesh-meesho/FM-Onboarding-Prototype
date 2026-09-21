@@ -172,6 +172,15 @@ rather than red, because some entries did land. The 5-pincode cap still holds, a
 any new pincode clears a previous availability result so a stale one can't be carried
 forward.
 
+**The first three phases can be stepped back through.** Personal details, KYC and hub
+details all carry a *← Back* control naming the page it returns to, and captured values are
+still there and still editable. A verified KYC item is reopened individually — *Edit KYC
+details* brings the blocks back, and *Edit* on any one of them clears just that item's
+verified flag while keeping its values, so the form prefills and Continue re-gates until it
+is verified again. A submitted hub can be reopened the same way. Back stops at hub details:
+past that the flow has handed off to background checks and Cluster Head review, so there is
+nothing the captain can usefully edit.
+
 **Hub details captures the facility spec**, for both roles:
 
 | Field | Validation |
@@ -181,7 +190,12 @@ forward.
 | Max vehicle size the location can accommodate | one of the 24 listed types |
 
 All three are required to submit, and they appear in the submitted summary alongside the
-address. For FM these are the inputs that feed the Area Manager's survey and, through it,
+address. A **photo of the location is optional** — the button sits inside the Google Maps
+link field, beside the input, and an uploaded image renders as a small thumbnail with its
+file name, click-to-enlarge, and Remove. It is stored as a data URL downscaled to 640px via
+canvas, because a full-size phone photo would exhaust the `localStorage` quota on its own.
+Files that are not images, are too large, or do not decode are refused with a reason rather
+than stored as a broken thumbnail. For FM these are the inputs that feed the Area Manager's survey and, through it,
 the hub categorisation that sets the benchmark ceiling.
 
 Vehicle size is **one input**: the captain picks only the largest vehicle the hub can take,
@@ -323,7 +337,7 @@ build from.
 npm install && npm test
 ```
 
-**428 assertions across 13 groups:**
+**486 assertions across 14 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -354,6 +368,11 @@ npm install && npm test
 10b. **Phase order** — both role orders pinned, hub details asserted ahead of background
    verification and Cluster Head review, every continue-button label checked against the
    screen it actually leads to, and proper nouns checked for capitalisation
+10c. **Back navigation and the location photo** — Back absent on page 1 and past hub
+   details, present and correctly labelled on pages 2 and 3, values still editable after a
+   round trip, per-item KYC reopen with re-gating, reopening a submitted hub, and the photo:
+   optional, thumbnail rendering, enlarge, remove, and refusal of non-images, oversized
+   files and undecodable images
 11. **Captain Hub** — the login switch; existing captain seeding and landing; `HB-01`
    grouping, per-hub codes and GST state; `PR-01` masking; the full bank-change journey
    including lockout, validation and a failed penny-drop; per-hub GSTIN add/update/remove;

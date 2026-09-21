@@ -715,6 +715,33 @@ img{max-width:100%}
 /* controls inside a row must not re-trigger the row */
 .choice input,.choice select{cursor:auto}
 
+/* optional location photo, beside the map link */
+.photo-row{
+  display:flex;gap:12px;align-items:center;margin-top:10px;
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--sum-bg);
+}
+.photo-row img{
+  width:72px;height:54px;flex:none;object-fit:cover;border-radius:7px;
+  border:1px solid var(--line);background:#fff;cursor:zoom-in;
+}
+.photo-row .pm{flex:1;min-width:0}
+.photo-row .pm b{
+  display:block;font-size:12px;font-weight:700;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.photo-row .pm span{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}
+.photo-row button{font-size:11px;font-weight:700;color:var(--err);padding:0;flex:none}
+.kv .row .v img{
+  width:56px;height:42px;object-fit:cover;border-radius:6px;
+  border:1px solid var(--line);vertical-align:middle;
+}
+/* full-size peek */
+.photo-lb{
+  position:fixed;inset:0;z-index:200;background:rgba(6,14,28,.72);
+  display:flex;align-items:center;justify-content:center;padding:40px;cursor:zoom-out;
+}
+.photo-lb img{max-width:100%;max-height:100%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+
 /* ------------------------------------------------------------- dev panel -- */
 #dev{
   position:fixed;right:18px;bottom:18px;z-index:9999;width:330px;
@@ -933,6 +960,9 @@ var ERR = {
   phone:         "Enter a valid 10-digit mobile number.",
   hubAddress:    "Hub address is required.",
   hubArea:       "Enter the hub area in sq ft (100–1,000,000).",
+  photoType:     "That file is not an image. Upload a JPG or PNG.",
+  photoSize:     "That image is too large. Try a smaller photo.",
+  photoUnreadable: "That image could not be read. Try a different file.",
   hubManpower:   "Enter the estimated manpower (1–5,000).",
   hubVehicle:    "Select at least one vehicle type the location can accommodate.",
   otpWrong:      "Incorrect OTP. Please try again.",
@@ -959,6 +989,7 @@ function blankRole(role) {
       bank:{ done:false, acc:"", ifsc:"", pennyDone:false },
       gst:{ registered:null, gstin:"", done:false },
       msme:{ done:false, fileName:"" },
+      showBlocks:false,
       cheque:{ done:false, fileName:"" },
       errors:{}
     },
@@ -967,6 +998,7 @@ function blankRole(role) {
     sd:  { status:"pending", amount:25000, attempts:0 },
     hub: { address:"", mapLink:"", pincode:"", city:"",
            areaSqft:"", manpower:"", maxVehicle:"",
+           photo:"", photoName:"",
            submitted:false, hubCode:null, returnTo:null, errors:{} },
     carried: null,
     am:  { status:"pending", rejections:0, reason:"", escalated:false },
@@ -1025,7 +1057,7 @@ function makeHub(o) {
     address:"", pincode:"", city:"",
     status:"active",                       // active | inactive | in_progress
     gst:{ registered:false, gstin:"" },
-    areaSqft:"", manpower:"", maxVehicle:"",
+    areaSqft:"", manpower:"", maxVehicle:"", photo:"", photoName:"",
     category:null, activatedOn:"", deactivatedOn:""
   }, o || {});
 }
@@ -1165,6 +1197,37 @@ function nextPhase() {
   while (i < list.length - 1 && isCarried(r, list[i].id)) i++;
   if (i <= list.length - 1) r.phaseIdx = i;
   save(); render();
+}
+function prevPhase() {
+  var r = R(), i = prevEditableIdx(r);
+  if (i < 0) return;
+  r.phaseIdx = i;
+  save(); render();
+}
+
+/* The captain can step back through the opening phases to correct something.
+   Beyond hub details the flow has handed off to other people — background
+   checks, Cluster Head review — so going back stops there. */
+var BACK_EDITABLE = ["pd", "kyc", "hub"];
+
+function prevEditableIdx(r) {
+  var list = phases();
+  if (BACK_EDITABLE.indexOf(list[r.phaseIdx].id) < 0) return -1;
+  var i = r.phaseIdx - 1;
+  while (i >= 0 && isCarried(r, list[i].id)) i--;
+  if (i < 0 || BACK_EDITABLE.indexOf(list[i].id) < 0) return -1;
+  return i;
+}
+function canGoBack(r) { return prevEditableIdx(r) >= 0; }
+function backLabel(r) {
+  var i = prevEditableIdx(r);
+  return i < 0 ? "" : "← Back to " + phases()[i].lc;
+}
+/* Rendered on the left of a card footer, opposite Continue. */
+function backBtn(r) {
+  return canGoBack(r)
+    ? '<button class="btn btn-ghost" id="phase-back">' + esc(backLabel(r)) + '</button>'
+    : '';
 }
 
 /* Title of the phase the captain goes to next, skipping anything carried over.
@@ -1833,7 +1896,7 @@ function viewFlow() {
     '</div>' +
   '</div>';
 
-  return '<div class="flow">' + rail +
+  return photoLightbox() + '<div class="flow">' + rail +
     '<div class="main">' + top +
       '<div class="content">' +
         '<div class="col-left">' + body.left + '</div>' +
@@ -2052,6 +2115,7 @@ function phasePD(r) {
     (results ? '<div style="margin-top:16px">' + results + '</div>' : '') +
 
     '<div class="cfoot">' +
+      backBtn(r) +
       '<span class="note">By continuing, you agree that VALMO can use this information to ' +
         'process your onboarding request.</span>' +
       '<button class="btn btn-primary" id="pd-continue"' + (canContinue ? '' : ' disabled') +
@@ -2068,6 +2132,13 @@ function phasePD(r) {
 
 /* -------------------------------------------------------- 2. KYC (LM/FM) */
 
+/* Verified items can be reopened and redone — clearing `done` keeps the values,
+   so the input form comes back prefilled. */
+function kycEditBtn(id) {
+  return '<button class="btn-link" data-kycedit="' + id + '" ' +
+         'style="margin-left:10px;font-size:12px">Edit</button>';
+}
+
 function phaseKYC(r) {
   var k = r.kyc, e = k.errors || {}, fm = r.role === "FM";
 
@@ -2075,7 +2146,7 @@ function phaseKYC(r) {
   var aad = k.aadhaar.done
     ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>Aadhaar (DigiLocker)</b>' +
       '<span>Verified via DigiLocker · ' + esc(k.aadhaar.value.replace(/\d(?=\d{4})/g, "•")) +
-      '</span></div><span class="tag ok">Verified</span></div></div>'
+      '</span></div><span class="tag ok">Verified</span>' + kycEditBtn("aadhaar") + '</div></div>'
     : '<div class="kyc-item"><div class="h"><div class="lt"><b>Aadhaar (DigiLocker)</b>' +
       '<span>We fetch your Aadhaar record from DigiLocker with an OTP.</span></div></div>' +
       '<div class="body">' +
@@ -2098,7 +2169,7 @@ function phaseKYC(r) {
   var pan = k.pan.done
     ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>PAN</b>' +
       '<span>' + esc(k.pan.value) + ' · ' + esc(k.pan.father) + '</span></div>' +
-      '<span class="tag ok">Verified</span></div></div>'
+      '<span class="tag ok">Verified</span>' + kycEditBtn("pan") + '</div></div>'
     : '<div class="kyc-item"><div class="h"><div class="lt"><b>PAN</b>' +
       '<span>PAN is matched against your Aadhaar name.</span></div></div>' +
       '<div class="body"><div class="grid2">' +
@@ -2118,7 +2189,8 @@ function phaseKYC(r) {
   var bank = k.bank.done
     ? '<div class="kyc-item done"><div class="h"><div class="lt"><b>Bank account</b>' +
       '<span>' + esc(k.bank.acc.replace(/\d(?=\d{4})/g, "•")) + ' · ' + esc(k.bank.ifsc) +
-      ' · ₹1 penny-drop confirmed</span></div><span class="tag ok">Verified</span></div></div>'
+      ' · ₹1 penny-drop confirmed</span></div><span class="tag ok">Verified</span>' +
+      kycEditBtn("bank") + '</div></div>'
     : '<div class="kyc-item"><div class="h"><div class="lt"><b>Bank account</b>' +
       '<span>We deposit ₹1 to confirm the account belongs to you.</span></div></div>' +
       '<div class="body"><div class="grid2">' +
@@ -2146,7 +2218,7 @@ function phaseKYC(r) {
       (fm ? ' <span class="req">*</span>' : ' status') + '</b><span>' +
       (k.gst.registered ? esc(k.gst.gstin) : "Non-GST registered") +
       '</span></div><span class="tag ok">' +
-      (k.gst.registered ? "Verified" : "Recorded") + '</span></div></div>';
+      (k.gst.registered ? "Verified" : "Recorded") + '</span>' + kycEditBtn("gst") + '</div></div>';
   } else if (fm) {
     gst = '<div class="kyc-item"><div class="h"><div class="lt"><b>GST <span class="req">*</span></b>' +
       '<span>GST registration is mandatory for First Mile hub partners.</span></div>' +
@@ -2217,7 +2289,7 @@ function phaseKYC(r) {
       '</div>';
   }
 
-  var done = kycComplete(r);
+  var done = kycComplete(r) && !k.showBlocks;
 
   var summary = done
     ? statusBlock("ok", "KYC verification complete",
@@ -2241,16 +2313,21 @@ function phaseKYC(r) {
           '<span>Optional — attach it now, or add it later.</span></div>' +
           '<button class="btn btn-ghost" id="kyc-msme-go">Upload file</button></div>'
         : '') +
-      '<div style="display:flex;justify-content:center;margin-top:20px">' +
+      '<div class="cfoot">' + backBtn(r) +
+        '<button class="btn btn-ghost" id="kyc-edit">Edit KYC details</button>' +
         '<button class="btn btn-primary" id="kyc-continue">' + esc(nextLabel(r)) + '</button>' +
       '</div>'
     : aad + pan + bank + gst + msme + cheque +
-      '<div class="cfoot"><span class="note">' +
+      '<div class="cfoot">' + backBtn(r) + '<span class="note">' +
         (fm
           ? "FM captains must complete Aadhaar, PAN, bank and GST before continuing. MSME is optional."
           : "Complete Aadhaar, PAN, bank and your GST status before continuing.") +
       '</span>' +
-      '<button class="btn btn-primary" id="kyc-continue" disabled>Continue →</button></div>';
+      /* The blocks view is no longer only shown while incomplete — it is also
+         how a verified item gets reopened — so Continue follows the real gate. */
+      '<button class="btn btn-primary" id="kyc-continue"' +
+        (kycComplete(r) ? '' : ' disabled') + '>' +
+        (kycComplete(r) ? esc(nextLabel(r)) : "Continue →") + '</button></div>';
 
   return {
     left: phaseHeader(r, "KYC verification", "Identity and payout details are verified.") +
@@ -2521,6 +2598,26 @@ function phaseSD(r) {
 
 /* ------------------------------------------------------------ 6. hub details */
 
+/* Optional photo of the location, shown as a small thumbnail next to the map
+   link. Click it to see it full size. */
+function photoRow(h) {
+  if (!h.photo) return "";
+  return '<div class="photo-row" data-testid="hub-photo">' +
+    '<img id="hub-photo-thumb" src="' + esc(h.photo) + '" alt="Photo of the hub location">' +
+    '<span class="pm"><b>' + esc(h.photoName || "Location photo") + '</b>' +
+      '<span>Optional · click to view full size</span></span>' +
+    '<button type="button" id="hub-photo-remove">Remove</button>' +
+  '</div>';
+}
+function photoLightbox() {
+  if (!photoOpen) return "";
+  var h = R().hub;
+  if (!h.photo) return "";
+  return '<div class="photo-lb" id="photo-lb"><img src="' + esc(h.photo) +
+         '" alt="Photo of the hub location"></div>';
+}
+var photoOpen = false;
+
 /* Facility spec captured at hub details. For FM these feed the Area Manager's
    survey and, through it, the hub categorisation. */
 /* Vehicle-type multi-select. Open/closed and the search text are view state, so
@@ -2631,6 +2728,10 @@ function hubSpecRows(h) {
            '<span class="v">' + esc(h.manpower || "—") + '</span></div>' +
          '<div class="row"><span class="k">Max vehicle size</span>' +
            '<span class="v">' + esc(maxV || "—") + '</span></div>' +
+         (h.photo
+            ? '<div class="row"><span class="k">Location photo</span>' +
+              '<span class="v"><img src="' + esc(h.photo) + '" alt="Photo of the hub location"></span></div>'
+            : '') +
          '<div class="row"><span class="k">Smaller types also accommodated</span>' +
            '<span class="v' + (maxV ? '' : ' mute') + '">' +
            (maxV ? alsoFits + " of " + (VEHICLE_TYPES.length - 1) : "—") + '</span></div>';
@@ -2657,7 +2758,8 @@ function phaseHUB(r) {
         '<div class="notice info" data-testid="fm-no-hubcode"><b>Your hub code is issued later</b>' +
           'For First Mile hubs the code is assigned during design and hub-code mapping, ' +
           'after your Area Manager&rsquo;s survey is processed. You will see it on activation.</div>' +
-        '<div style="display:flex;justify-content:flex-end">' +
+        '<div class="cfoot">' + backBtn(r) +
+          '<button class="btn btn-ghost" id="hub-edit">Edit hub details</button>' +
           '<button class="btn btn-primary" id="hub-continue">' + esc(nextLabel(r)) + '</button></div>';
     } else {
       inner = statusBlock("ok", "Hub details submitted",
@@ -2669,7 +2771,8 @@ function phaseHUB(r) {
           '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
           hubSpecRows(h) +
         '</div>' +
-        '<div style="display:flex;justify-content:flex-end">' +
+        '<div class="cfoot">' + backBtn(r) +
+          '<button class="btn btn-ghost" id="hub-edit">Edit hub details</button>' +
           '<button class="btn btn-primary" id="hub-continue">' + esc(nextLabel(r)) + '</button></div>';
     }
   } else {
@@ -2688,9 +2791,18 @@ function phaseHUB(r) {
           (e.address || "Enter the full address of the proposed hub.") + '</div></div>' +
       '<div class="fl"><label>Google Maps link</label>' +
         '<div class="box' + (e.mapLink ? ' bad' : '') + '">' +
-        '<input id="hub-map" placeholder="https://maps.google.com/?q=..." value="' + esc(h.mapLink) + '"></div>' +
-        '<div class="hint' + (e.mapLink ? ' err' : '') + '">' +
-          (e.mapLink || "Paste a valid Google Maps link.") + '</div></div>' +
+          '<input id="hub-map" placeholder="https://maps.google.com/?q=..." ' +
+            'value="' + esc(h.mapLink) + '">' +
+          '<button class="btn-sm" id="hub-photo-btn" type="button" ' +
+            'title="Optional photo of the location">📷 ' +
+            (h.photo ? "Replace photo" : "Add photo") + '</button>' +
+          '<input type="file" id="hub-photo-file" accept="image/*" hidden>' +
+        '</div>' +
+        '<div class="hint' + (e.mapLink || e.photo ? ' err' : '') + '">' +
+          (e.photo || e.mapLink || "Paste a valid Google Maps link. A photo of the location is optional.") +
+        '</div>' +
+        photoRow(h) +
+      '</div>' +
       '<div class="grid2">' +
         '<div class="fl"><label>Hub pincode</label>' +
           '<div class="box"><input id="hub-pin" value="' + esc(h.pincode || r.pd.selected || "") + '" disabled></div>' +
@@ -2714,7 +2826,8 @@ function phaseHUB(r) {
             (e.manpower || "People you expect to employ at this hub.") + '</div></div>' +
       '</div>' +
       vehicleField(maxVehicle, e.maxVehicle) +
-      '<div class="cfoot"><span class="note">Sensitive details are masked and used only for ' +
+      '<div class="cfoot">' + backBtn(r) +
+        '<span class="note">Sensitive details are masked and used only for ' +
         'onboarding verification.</span>' +
         '<button class="btn btn-primary" id="hub-submit">Review hub details →</button></div>';
   }
@@ -3138,6 +3251,7 @@ var A = {
   },
   kycContinue: function () {
     var r = R();
+    r.kyc.showBlocks = false;
     if (!kycComplete(r)) {
       r.kyc.errors = r.kyc.errors || {};
       if (r.role === "FM") {
@@ -3148,6 +3262,61 @@ var A = {
     }
     r.bgv.status = "pending";
     nextPhase();
+  },
+
+  /* ---- stepping back through the opening phases ---- */
+  goBack: function () { prevPhase(); },
+  /* Reopen the completed KYC card so individual items can be redone. */
+  kycShowBlocks: function () { R().kyc.showBlocks = true; save(); render(); },
+  /* Clear one item's verified flag, keeping its values so the form prefills. */
+  kycReopen: function (id) {
+    var k = R().kyc;
+    if (!k[id]) return;
+    k[id].done = false;
+    k.showBlocks = true;
+    k.errors = {};
+    if (id === "aadhaar") k.aadhaar.otpOpen = false;
+    save(); render();
+  },
+  /* Optional location photo. Stored as a downscaled data URL — a full-size
+     phone photo would blow the localStorage quota on its own. */
+  setHubPhoto: function (dataUrl, name) {
+    var h = R().hub;
+    h.errors = h.errors || {};
+    delete h.errors.photo;
+    if (!dataUrl) { h.photo = ""; h.photoName = ""; save(); render(); return; }
+    if (!/^data:image\//.test(dataUrl)) {
+      h.errors.photo = ERR.photoType; save(); render(); return;
+    }
+    if (dataUrl.length > 2000000) {          // ~1.5 MB of image
+      h.errors.photo = ERR.photoSize; save(); render(); return;
+    }
+    h.photo = dataUrl;
+    h.photoName = name || "location-photo.jpg";
+    save(); render();
+  },
+  /* An image we cannot decode is refused rather than stored — otherwise the
+     thumbnail renders as a broken image and the captain has no idea why. */
+  rejectHubPhoto: function (msg) {
+    var h = R().hub;
+    h.errors = h.errors || {};
+    h.errors.photo = msg || ERR.photoType;
+    h.photo = ""; h.photoName = "";
+    save(); render();
+  },
+  clearHubPhoto: function () {
+    var h = R().hub;
+    h.photo = ""; h.photoName = "";
+    if (h.errors) delete h.errors.photo;
+    save(); render();
+  },
+  viewHubPhoto: function (open) { photoOpen = !!open; render(); },
+
+  /* Reopen submitted hub details for correction. */
+  hubEdit: function () {
+    var r = R();
+    r.hub.submitted = false;
+    save(); render();
   },
 
   /* ---- BGV ---- */
@@ -3405,6 +3574,7 @@ var A = {
       status: "active", gst: gst,
       areaSqft: r.hub.areaSqft, manpower: r.hub.manpower,
       maxVehicle: r.hub.maxVehicle || "",
+      photo: r.hub.photo || "", photoName: r.hub.photoName || "",
       category: r.ch.category, activatedOn: r.act.activatedOn
     });
     // replace the in-progress placeholder for this role, if one was listed
@@ -3822,6 +3992,14 @@ function bind() {
   on("kyc-cheque-go", "click", A.uploadCheque);
   on("kyc-continue", "click", A.kycContinue);
 
+  /* back through the opening phases */
+  on("phase-back", "click", A.goBack);
+  on("kyc-edit", "click", A.kycShowBlocks);
+  on("hub-edit", "click", A.hubEdit);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-kycedit]"), function (el) {
+    el.addEventListener("click", function () { A.kycReopen(el.getAttribute("data-kycedit")); });
+  });
+
   /* bgv */
   on("bgv-continue", "click", A.bgvContinue);
   on("bgv-retry", "click", A.bgvRetry);
@@ -3837,6 +4015,20 @@ function bind() {
   on("sd-retry", "click", function () { A.sdSet("pending"); });
   on("sd-requote", "click", A.sdRequote);
   on("sd-continue", "click", A.sdContinue);
+
+  /* optional location photo: read, downscale, store as a data URL */
+  on("hub-photo-btn", "click", function () {
+    var f = document.getElementById("hub-photo-file");
+    if (f) f.click();
+  });
+  on("hub-photo-file", "change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (file) readHubPhoto(file);
+    e.target.value = "";
+  });
+  on("hub-photo-remove", "click", A.clearHubPhoto);
+  on("hub-photo-thumb", "click", function () { A.viewHubPhoto(true); });
+  on("photo-lb", "click", function () { A.viewHubPhoto(false); });
 
   /* hub */
   on("hub-address", "input", function (e) { r.hub.address = e.target.value; save(); });
@@ -3881,6 +4073,35 @@ function bind() {
   /* activation */
   on("act-retry", "click", A.actRetry);
   on("act-panel", "click", function () { A.openPanel("hubs", "hubs"); });
+}
+
+/* Read a picked image and hand a downscaled data URL to the action. Falls back
+   to the raw result if canvas is unavailable. */
+function readHubPhoto(file) {
+  if (!/^image\//.test(file.type || "")) { A.rejectHubPhoto(ERR.photoType); return; }
+  var reader = new FileReader();
+  reader.onerror = function () { A.rejectHubPhoto(ERR.photoUnreadable); };
+  reader.onload = function (ev) {
+    var raw = ev.target.result;
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var max = 640, scale = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        A.setHubPhoto(c.toDataURL("image/jpeg", 0.72), file.name);
+      } catch (err) {
+        // canvas unavailable — keep the original, it decoded fine
+        A.setHubPhoto(raw, file.name);
+      }
+    };
+    // decoded nothing: refuse it rather than showing a broken thumbnail
+    img.onerror = function () { A.rejectHubPhoto(ERR.photoUnreadable); };
+    img.src = raw;
+  };
+  reader.readAsDataURL(file);
 }
 
 /* ------------------------------------------------------- Captain Hub bind */
@@ -4197,6 +4418,7 @@ if (typeof window !== "undefined") {
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,
+      canGoBack: canGoBack, backLabel: backLabel,
       vehUI: function () { return vehUI; },
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
       seedExistingCaptain: seedExistingCaptain
