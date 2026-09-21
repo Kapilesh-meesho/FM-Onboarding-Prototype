@@ -59,7 +59,27 @@ async function boot() {
 
 const $ = (doc, id) => doc.getElementById(id);
 const sel = (doc, q) => doc.querySelector(q);
-const txt = (doc) => doc.body.textContent.replace(/\s+/g, " ");
+/* Just the phase's own content column, and just the summary column beside it —
+   scoped so an assertion about one screen cannot match the left nav rail, whose
+   step labels describe other phases. */
+const mainTxt = (doc) => {
+  const col = doc.querySelector(".col-left");
+  return col ? col.textContent.replace(/\s+/g, " ") : "";
+};
+const sideTxt = (doc) => {
+  const col = doc.querySelector(".col-side");
+  return col ? col.textContent.replace(/\s+/g, " ") : "";
+};
+/* What the app actually renders. body.textContent would also sweep in the
+   inline <script> source — so assertions could match code comments instead of
+   anything on screen — and the dev panel, which is not captain-facing. */
+const txt = (doc) => {
+  const app = doc.getElementById("app");
+  if (!app) return "";
+  const clone = app.cloneNode(true);
+  [...clone.querySelectorAll("script,style")].forEach(n => n.remove());
+  return clone.textContent.replace(/\s+/g, " ");
+};
 
 function click(doc, id) {
   const el = $(doc, id);
@@ -338,11 +358,21 @@ async function testFMCombined() {
   click(doc, "bgv-continue");
   eq(api.helpers.phaseId(), "ch", "FM BGV → Cluster Head review");
 
-  /* --- hub category gate --- */
+  /* --- hub category gate: internal, and not explained to the captain --- */
   check(exists(doc, '[data-testid="waiting-category"]'),
-        "FM Cluster Head blocks with a waiting-on-hub-classification state");
+        "FM Cluster Head holds the request while the category is unset");
   check(!api.helpers.chCanDecide(api.helpers.R()),
         "Cluster Head cannot decide before the AM sets hub category");
+  /* The captain is shown a plain "under review" state — none of the internal
+     mechanics about who classifies the hub or when. */
+  const waitingCopy = txt(doc);
+  check(waitingCopy.indexOf("Cluster Head review in progress") >= 0,
+        "the captain sees a plain review-in-progress state");
+  ["Area Manager input", "not something you fill in", "hub classification",
+   "site survey", "benchmark rate ceiling is determined"].forEach(phrase => {
+    check(waitingCopy.indexOf(phrase) === -1,
+          "no hub-category explainer shown to the captain: \"" + phrase + "\"");
+  });
   api.actions.chApprove("combined");
   eq(api.helpers.R().ch.status, "pending",
      "approve is a no-op while hub category is unset");
@@ -360,6 +390,10 @@ async function testFMCombined() {
   eq(ch.decidedBy, "ch", "decided by Cluster Head, not escalated");
   eq(ch.rateMode, "combined", "combined rate card mode recorded");
   check(!api.helpers.isAboveCeiling(api.helpers.R()), "booked rate is within the ceiling");
+  check(txt(doc).indexOf("within ceiling") === -1,
+        "a within-ceiling rate is shown without a 'within ceiling' suffix");
+  check(txt(doc).indexOf("set by Area Manager") === -1,
+        "and the category is not attributed to the Area Manager");
   check(!exists(doc, '[data-testid="split-caveat"]'),
         "no split caveat shown in combined mode");
 
@@ -367,6 +401,11 @@ async function testFMCombined() {
   eq(api.helpers.phaseId(), "ag",
      "FM CH approved → agreements (no security deposit, no AM phase)");
 
+  check(mainTxt(doc).indexOf("Hub category") === -1,
+        "the agreements card does not show hub category");
+  check(sideTxt(doc).indexOf("Hub category") === -1,
+        "and neither does the application summary beside it");
+  check(mainTxt(doc).indexOf("Agreed rate") >= 0, "it shows the agreed rate instead");
   doAgreements(doc, api);
   eq(api.helpers.phaseId(), "act", "FM agreements → activation");
 
@@ -425,6 +464,8 @@ async function testFMEscalation() {
   eq(r.ch.status, "escalated", "above-ceiling rate escalates to Zonal Head");
   eq(r.ch.rateMode, "split", "split rate card mode recorded");
   check(api.helpers.isAboveCeiling(r), "4.5 is above the 2.0 mall-hub ceiling");
+  check(txt(doc).indexOf("above ceiling") >= 0,
+        "an above-ceiling rate still says so — that is why it escalates");
   check(txt(doc).indexOf("Zonal Head") >= 0, "Zonal Head contact card is shown");
   check(exists(doc, '[data-testid="split-caveat"]'),
         "split mode shows the 'indicative, formula being confirmed' caveat");
@@ -1143,6 +1184,7 @@ async function testHubFacilityInputs() {
   eq(api.helpers.R().hub.maxVehicle, "7MT_20FT", "a type outside the list is ignored");
 
   /* all three are required */
+  api.actions.setMaxVehicle("");          // the picker tests above left one chosen
   type(doc, "hub-address", "No. 42, 4th Cross, Koramangala, Bengaluru");
   type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
   click(doc, "hub-submit");

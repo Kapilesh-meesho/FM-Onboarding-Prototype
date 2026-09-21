@@ -1935,7 +1935,9 @@ function sideDefault(r, extraTop) {
     ["Request ID", r.requestId || "—"],
     ["Status", list[idx].title]
   ];
-  if (r.role === "FM" && r.ch.category) {
+  /* Hub category is shown at Cluster Head review, where it explains the rate
+     ceiling — but not on agreements, where it is noise the captain cannot act on. */
+  if (r.role === "FM" && r.ch.category && list[idx].id !== "ag") {
     rows.splice(3, 0, ["Hub category", HUB_CATEGORIES[r.ch.category].label]);
   }
   if (r.hub.hubCode) rows.splice(rows.length - 1, 0, ["Hub code", r.hub.hubCode]);
@@ -2411,7 +2413,7 @@ function rateCardPanel(r) {
   var above = isAboveCeiling(r);
 
   var rows =
-    '<div class="row"><span class="k">Hub category (set by Area Manager)</span>' +
+    '<div class="row"><span class="k">Hub category</span>' +
       '<span class="v">' + esc(meta.label) + '</span></div>' +
     '<div class="row"><span class="k">Benchmark ceiling</span>' +
       '<span class="v">' + money(meta.ceiling) + ' / shipment</span></div>' +
@@ -2421,7 +2423,7 @@ function rateCardPanel(r) {
   if (r.ch.rate != null) {
     rows += '<div class="row"><span class="k">Proposed rate</span>' +
       '<span class="v' + (above ? '' : ' ok') + '">' + money(r.ch.rate) +
-      (above ? ' · above ceiling' : ' · within ceiling') + '</span></div>';
+      (above ? ' · above ceiling' : '') + '</span></div>';
   }
 
   var modeBlock = "";
@@ -2456,21 +2458,20 @@ function phaseCH(r) {
 
   /* FM blocks on hub classification before anything else can be judged. */
   if (fm && !ch.category && ch.status !== "approved") {
-    inner = statusBlock("wait", "Waiting on hub classification",
-        "Your Area Manager has not classified this hub yet. The Cluster Head cannot review " +
-        "the rate card until the hub category is set.") +
-      '<div class="notice warn" data-testid="waiting-category"><b>Hub category is an Area Manager input</b>' +
-        'Hub category is captured by the Area Manager during the site survey — it is not something ' +
-        'you fill in. Once it is set, your benchmark rate ceiling is determined automatically.</div>' +
+    inner = '<div data-testid="waiting-category">' +
+      statusBlock("run", "Cluster Head review in progress",
+        CH_CONTACT.name.split(" ")[0] + " is reviewing your request — usually within 48 hours. " +
+        "No need to wait here; we’ll notify you at " + maskPhone(S.phone) +
+        " when there’s an update.") +
       '<div class="tl">' +
         tlRow("ok", "Background verification passed", "Identity and risk checks cleared.") +
-        tlRow("now", "Area Manager survey", "Hub category pending from the AM’s site survey.") +
-        tlRow("", "Cluster Head review", "Rate card review starts once the category arrives.") +
-      '</div>';
+        tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Phone: " + CH_CONTACT.phone) +
+        tlRow("", nextRowLabel(r), "Available after approval.") +
+      '</div></div>';
     side = sideDefault(r, chContactCard("ch"));
     return {
       left: phaseHeader(r, "Cluster Head review", "Cluster Head is reviewing your request.") +
-            cardWrap("Cluster Head review", "Waiting on hub classification from the Area Manager.", inner),
+            cardWrap("Cluster Head review", "Cluster Head is reviewing your request.", inner),
       side: side
     };
   }
@@ -2907,11 +2908,8 @@ function phaseAG(r) {
 
   var rateBoxes;
   if (fm && r.ch.category) {
-    var meta = HUB_CATEGORIES[r.ch.category];
     rateBoxes =
-      '<div class="rate-grid">' +
-        '<div class="rate-box"><span>Hub category</span><b style="font-size:16px">' +
-          esc(meta.label) + '</b></div>' +
+      '<div class="rate-grid" style="grid-template-columns:1fr">' +
         '<div class="rate-box"><span>Agreed rate (' + esc(r.ch.rateMode) + ')</span><b>' +
           money(r.ch.rate) + '</b></div>' +
       '</div>' +

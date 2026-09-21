@@ -114,9 +114,13 @@ without it, the card flips to its summary while MSME is still outstanding — so
 stays available there too, otherwise it could never be attached at all. It is likewise not
 carried over when adding a second hub, since there may be nothing to carry.
 
-**4. Hub category is an Area Manager input, never a captain field.** Cluster Head review
-blocks on a *waiting on hub classification* state until the AM sets it. Once set, it is
-shown read-only next to the benchmark ceiling it drives.
+**4. Hub category is an Area Manager input, never a captain field** — and the captain is
+not told any of that. Until the AM sets it, Cluster Head review simply reads *review in
+progress*; who classifies the hub, when, and what it drives are internal mechanics the
+captain cannot act on. The gate is real (`chCanDecide` refuses a decision without a
+category, and the dev panel is where it gets set), it is just not narrated. Once set, the
+category is shown read-only beside the benchmark ceiling at Cluster Head review — but
+nowhere else, including agreements.
 
 **5. Cluster Head review includes rate card approval against a benchmark ceiling**
 determined by that hub category:
@@ -129,8 +133,10 @@ determined by that hub category:
 | Mall hub | 2 | ₹2 |
 | SAH (seller as hub) | 1.5 | ₹1.5 |
 
-A rate **within** the ceiling clears at Cluster Head. A rate **above** it escalates to the
-**Zonal Head**, who gets their own contact card and approve/reject states.
+A rate **within** the ceiling clears at Cluster Head and is shown plainly, with no
+"within ceiling" annotation. A rate **above** it escalates to the **Zonal Head**, who gets
+their own contact card and approve/reject states — that one *is* annotated, since the
+overage is the reason it escalated.
 
 Two rate card modes:
 
@@ -337,7 +343,7 @@ build from.
 npm install && npm test
 ```
 
-**486 assertions across 14 groups:**
+**498 assertions across 14 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
