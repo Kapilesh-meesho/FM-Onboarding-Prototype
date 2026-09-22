@@ -28,6 +28,13 @@ gets that status view, so nobody can act outside their remit.
 
 Any desk that can act can also reject, which sends the request back to the captain.
 
+**A request's status is only ever *Pending* or *SLA breach*.** Which desk holds it is its
+*stage*, tracked separately and surfaced as the tab it appears under and as "pending with"
+on the Zonal Head's status view — so there are no stage-specific statuses like *AM pending*
+or *CH pending*, and the design's *VLS fields missing* is not a status either. A settled
+request leaves the working queues entirely, since every tab filters by stage; whether it was
+approved or rejected is recorded on the request as `settled`.
+
 # Valmo — Captain Self-Serve Onboarding Prototype
 
 A clickable prototype of Valmo's captain self-serve onboarding, covering **two roles with
@@ -480,7 +487,7 @@ build from.
 npm install && npm test
 ```
 
-**723 assertions across 15 groups:**
+**732 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

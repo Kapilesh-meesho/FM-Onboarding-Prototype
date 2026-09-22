@@ -66,6 +66,8 @@ const mainTxt = (doc) => {
   const col = doc.querySelector(".col-left");
   return col ? col.textContent.replace(/\s+/g, " ") : "";
 };
+const apVisible = (doc) =>
+  [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
 const railTxt = (doc) => {
   const rail = doc.querySelector(".rail");
   return rail ? rail.textContent.replace(/\s+/g, " ") : "";
@@ -1899,9 +1901,21 @@ async function testAdminPanel() {
 
   const amRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
   check(amRows.length === 3, "three AM-stage requests listed");
-  check(txt(doc).indexOf("AM pending") >= 0, "with their statuses");
-  check(txt(doc).indexOf("VLS fields missing") >= 0, "including VLS fields missing");
-  check(txt(doc).indexOf("SLA breach") >= 0, "and an SLA breach");
+  /* --- status is only ever Pending or SLA breach --- */
+  eq(Object.keys(api.config.AP_STATUS), ["pending","sla_breach"],
+     "there are exactly two statuses");
+  eq(Object.keys(api.config.AP_STATUS).map(k => api.config.AP_STATUS[k].label),
+     ["Pending","SLA breach"], "labelled Pending and SLA breach");
+  check(txt(doc).indexOf("Pending") >= 0, "the list shows Pending");
+  check(txt(doc).indexOf("SLA breach") >= 0, "and SLA breach");
+  ["AM pending","CH pending","ZH pending","Central pending","VLS fields missing"].forEach(l =>
+    check(txt(doc).indexOf(l) === -1, "no stage-specific status: \"" + l + "\""));
+  check(api.state.adminRequests.every(r => r.status === "pending" || r.status === "sla_breach"),
+        "every request carries one of the two");
+  /* which desk holds it is the stage, not the status */
+  check(api.state.adminRequests.some(r => r.stage === "am") &&
+        api.state.adminRequests.some(r => r.stage === "ch"),
+        "the desk a request sits with is tracked separately as its stage");
 
   /* the captain's phone sits under their name in the table */
   check(txt(doc).indexOf("+91 98450 22119") >= 0, "the captain's phone is shown in the row");
@@ -2062,8 +2076,10 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("send to agreements") >= 0,
         "a within-ceiling request is settled by the Cluster Head");
   click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78219").status, "approved", "and approved");
+  eq(api.helpers.apById("OBD-78219").settled, "approved", "and approved");
   eq(api.helpers.apById("OBD-78219").stage, "done", "which settles it");
+  check(!apVisible(doc).length || apVisible(doc).indexOf("OBD-78219") === -1,
+        "a settled request drops out of the working queue");
 
   /* an above-ceiling request the CH must raise onward */
   api.actions.adminOpen("OBD-78222");
@@ -2117,7 +2133,7 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("Raised by the Cluster Head") >= 0, "attributed to the Cluster Head");
   check(exists(doc, "#ap-approve"), "Central Admin can approve it");
   click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78222").status, "approved", "and does");
+  eq(api.helpers.apById("OBD-78222").settled, "approved", "and does");
   eq(api.helpers.apById("OBD-78222").stage, "done", "which settles the request");
   noSd("the Central console");
 

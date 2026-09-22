@@ -1770,15 +1770,13 @@ var ADMIN_TABS = {
             { id:"users",label:"User mapping" }]
 };
 
+/* A request's status is only ever one of two things: it is pending with whoever
+   holds it, or it has breached its SLA. Which desk it sits with is `stage`, not
+   status — so the stage-specific "AM pending" / "CH pending" variants are gone,
+   and so is the design's "VLS fields missing". */
 var AP_STATUS = {
-  am_pending:   { label:"AM pending",         tone:"blue"  },
-  vls_missing:  { label:"VLS fields missing",  tone:"amber" },
-  sla_breach:   { label:"SLA breach",          tone:"red"   },
-  ch_pending:   { label:"CH pending",          tone:"blue"  },
-  zh_pending:   { label:"ZH pending",          tone:"amber" },
-  central_pending: { label:"Central pending",  tone:"amber" },
-  approved:     { label:"Approved",            tone:"green" },
-  rejected:     { label:"Rejected",            tone:"red"   }
+  pending:    { label:"Pending",    tone:"blue" },
+  sla_breach: { label:"SLA breach", tone:"red"  }
 };
 
 function apReq(o) {
@@ -1787,11 +1785,11 @@ function apReq(o) {
     // hub category is an Area Manager input; its benchmark ceiling is the
     // threshold a rate card has to stay within
     // hub category and the rate card are both Area Manager inputs
-    hubCategory:"", rateEscalated:false,
+    hubCategory:"", rateEscalated:false, settled:null,
     rate:{ payoutType:"Combined",
            slabs:[ { from:"0", to:"500", rate:"" } ],
            touchpoint:"" },
-    stage:"am", status:"am_pending", sla:"41h left", slaTone:"",
+    stage:"am", status:"pending", sla:"41h left", slaTone:"",
     kyc:true, bgv:true,
     am:{ visitDate:"03 Jul 2026", by:"Self", floor:"750", landmark:"Near Metro Pillar 128",
          gates:{ cctv:null, fire:null, computer:null, scanner:null, scanTable:null,
@@ -1810,19 +1808,19 @@ function seedAdminRequests() {
   return [
     apReq({ id:"OBD-78222", captain:"Mahesh Kumar", phone:"+91 98450 22119", hubAppId:"HUB-APP-90222",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560038",
-            stage:"am", status:"am_pending", sla:"41h left" }),
+            stage:"am", status:"pending", sla:"41h left" }),
     apReq({ id:"OBD-78231", captain:"Amit Bansal", phone:"+91 99012 31447", hubAppId:"HUB-APP-90231",
             address:"No. 8, Service Road, Hebbal, Bengaluru", pincode:"560071",
-            stage:"am", status:"vls_missing", sla:"2h left", slaTone:"warn" }),
+            stage:"am", status:"pending", sla:"2h left", slaTone:"warn" }),
     apReq({ id:"OBD-78240", captain:"Neha S", phone:"+91 91088 40233", hubAppId:"HUB-APP-90240",
             address:"Unit 3, HSR Layout, Bengaluru", pincode:"560102",
             stage:"am", status:"sla_breach", sla:"5h overdue", slaTone:"warn" }),
     apReq({ id:"OBD-78219", hubCategory:"standalone", rate:{ payoutType:"Combined", slabs:[{from:"0",to:"500",rate:"4.50"},{from:"501",to:"",rate:"4.00"}], touchpoint:"5.00" }, captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560076",
-            stage:"ch", status:"ch_pending", sla:"6h left", slaTone:"warn" }),
+            stage:"ch", status:"pending", sla:"6h left", slaTone:"warn" }),
     apReq({ id:"OBD-78255", hubCategory:"mall", captain:"Rajesh Gupta", phone:"+91 88617 55092", hubAppId:"HUB-APP-90255",
             address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
-            stage:"zh", status:"zh_pending", sla:"22h left",
+            stage:"zh", status:"pending", sla:"22h left",
             // the AM priced this one above the mall-hub ceiling, so it was
             // raised to the Cluster Head and is on its way to Central Admin
             rateEscalated:true,
@@ -2375,9 +2373,9 @@ function apTabs() {
 
 function apStats() {
   var rows = apRowsFor(S.admin.tab);
-  var pending  = rows.filter(function (r) { return r.status === "am_pending" || r.status === "ch_pending" || r.status === "zh_pending"; }).length;
+  var pending  = rows.filter(function (r) { return r.status === "pending"; }).length;
   var breaches = rows.filter(function (r) { return r.status === "sla_breach"; }).length;
-  var approved = S.adminRequests.filter(function (r) { return r.status === "approved"; }).length;
+  var approved = S.adminRequests.filter(function (r) { return r.settled === "approved"; }).length;
   var stat = function (cls, k, v, sub) {
     return '<div class="ap-stat ' + cls + '"><span class="k">' + k + '</span><b>' + v +
            '</b><span class="s">' + sub + '</span></div>';
@@ -5062,7 +5060,7 @@ var A = {
     if (!r) return;
     if (decision === "approve") {
       if (r.stage === "am") {
-        r.stage = "ch"; r.status = "ch_pending"; r.am.done = true;
+        r.stage = "ch"; r.status = "pending"; r.am.done = true;
         // an above-ceiling rate card travels as an approval request
         r.rateEscalated = !apWithinThreshold(r);
         S.admin.toast = r.rateEscalated
@@ -5074,17 +5072,17 @@ var A = {
           S.admin.toast = "This rate card is above ceiling — raise it to Central Admin.";
           save(); render(); return;
         }
-        r.stage = "done"; r.status = "approved"; r.ch.done = true;
+        r.stage = "done"; r.status = "pending"; r.ch.done = true; r.settled = "approved";
         S.admin.toast = "Request approved · sent to agreements.";
       } else {
-        r.stage = "done"; r.status = "approved"; r.central = { decision:"approved" };
+        r.stage = "done"; r.status = "pending"; r.settled = "approved";
         S.admin.toast = "Rate card approved by Central Admin · sent to agreements.";
       }
     } else if (decision === "central") {
-      r.stage = "central"; r.status = "central_pending";
+      r.stage = "central"; r.status = "pending";
       S.admin.toast = "Raised to Central Admin for approval.";
     } else {
-      r.status = "rejected";
+      r.stage = "done"; r.settled = "rejected";
       if (r.stage === "zh") r.zh.decision = "rejected";
       S.admin.toast = "Request rejected · sent back to the captain.";
     }
@@ -5893,7 +5891,7 @@ if (typeof window !== "undefined") {
     errors: ERR,
     config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT,
               ADMIN_ROLES: ADMIN_ROLES, ADMIN_TABS: ADMIN_TABS, ADMIN_ROLE_ORDER: ADMIN_ROLE_ORDER,
-              AM_GATES: AM_GATES,
+              AM_GATES: AM_GATES, AP_STATUS: AP_STATUS,
               SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
               VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
     helpers: {
