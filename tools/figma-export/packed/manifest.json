@@ -1,0 +1,474 @@
+[
+  {
+    "name": "1.01 Login",
+    "file": "1-01-login.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 3218,
+    "packed": 753
+  },
+  {
+    "name": "1.02 OTP entry",
+    "file": "1-02-otp-entry.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 5614,
+    "packed": 877
+  },
+  {
+    "name": "1.03 Role selection",
+    "file": "1-03-role-selection.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 8322,
+    "packed": 1585
+  },
+  {
+    "name": "1.04 Personal details",
+    "file": "1-04-personal-details.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 38430,
+    "packed": 6546
+  },
+  {
+    "name": "1.05 Personal details filled",
+    "file": "1-05-personal-details-filled.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 41093,
+    "packed": 6874
+  },
+  {
+    "name": "1.06 KYC · Aadhaar",
+    "file": "1-06-kyc-aadhaar.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 32051,
+    "packed": 5282
+  },
+  {
+    "name": "1.07 KYC · Aadhaar OTP",
+    "file": "1-07-kyc-aadhaar-otp.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34649,
+    "packed": 5698
+  },
+  {
+    "name": "1.08 KYC · Aadhaar verified",
+    "file": "1-08-kyc-aadhaar-verified.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34979,
+    "packed": 5747
+  },
+  {
+    "name": "1.09 KYC · PAN",
+    "file": "1-09-kyc-pan.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 33475,
+    "packed": 5467
+  },
+  {
+    "name": "1.10 KYC · PAN verified",
+    "file": "1-10-kyc-pan-verified.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 33668,
+    "packed": 5473
+  },
+  {
+    "name": "1.11 KYC · Bank account",
+    "file": "1-11-kyc-bank-account.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34999,
+    "packed": 5754
+  },
+  {
+    "name": "1.12 KYC · Bank verified",
+    "file": "1-12-kyc-bank-verified.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34440,
+    "packed": 5589
+  },
+  {
+    "name": "1.13 KYC · GST status",
+    "file": "1-13-kyc-gst-status.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 33552,
+    "packed": 5416
+  },
+  {
+    "name": "1.14 KYC · GSTIN entered",
+    "file": "1-14-kyc-gstin-entered.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 35252,
+    "packed": 5701
+  },
+  {
+    "name": "1.15 KYC · MSME optional",
+    "file": "1-15-kyc-msme-optional.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 38538,
+    "packed": 6254
+  },
+  {
+    "name": "1.16 KYC complete",
+    "file": "1-16-kyc-complete.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 36658,
+    "packed": 5903
+  },
+  {
+    "name": "1.17 Hub details",
+    "file": "1-17-hub-details.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 41510,
+    "packed": 6859
+  },
+  {
+    "name": "1.18 Hub details · vehicle picker",
+    "file": "1-18-hub-details-vehicle-picker.json",
+    "w": 1440,
+    "h": 1074,
+    "bytes": 55914,
+    "packed": 8564
+  },
+  {
+    "name": "1.19 Hub details complete",
+    "file": "1-19-hub-details-complete.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 42289,
+    "packed": 6895
+  },
+  {
+    "name": "1.20 Hub submitted",
+    "file": "1-20-hub-submitted.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39923,
+    "packed": 6591
+  },
+  {
+    "name": "1.21 Background verification",
+    "file": "1-21-background-verification.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34408,
+    "packed": 5545
+  },
+  {
+    "name": "1.22 Background verification passed",
+    "file": "1-22-background-verification-passed.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 33564,
+    "packed": 5410
+  },
+  {
+    "name": "1.23 Cluster Head review · waiting",
+    "file": "1-23-cluster-head-review-waiting.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 37642,
+    "packed": 5968
+  },
+  {
+    "name": "1.24 Cluster Head review · approved",
+    "file": "1-24-cluster-head-review-approved.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39364,
+    "packed": 6342
+  },
+  {
+    "name": "1.25 Agreements",
+    "file": "1-25-agreements.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39167,
+    "packed": 6945
+  },
+  {
+    "name": "1.26 Agreements accepted",
+    "file": "1-26-agreements-accepted.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39227,
+    "packed": 6922
+  },
+  {
+    "name": "1.27 Activation",
+    "file": "1-27-activation.json",
+    "w": 1440,
+    "h": 1019,
+    "bytes": 40842,
+    "packed": 6323
+  },
+  {
+    "name": "2.01 Login switch · existing captain",
+    "file": "2-01-login-switch-existing-captain.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 3245,
+    "packed": 779
+  },
+  {
+    "name": "2.02 Captain Hub · my hubs",
+    "file": "2-02-captain-hub-my-hubs.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 23670,
+    "packed": 3574
+  },
+  {
+    "name": "2.03 Captain Hub · profile",
+    "file": "2-03-captain-hub-profile.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 18142,
+    "packed": 2904
+  },
+  {
+    "name": "2.04 Captain Hub · hubs tab",
+    "file": "2-04-captain-hub-hubs-tab.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 23671,
+    "packed": 3575
+  },
+  {
+    "name": "2.05 Add a hub · choices",
+    "file": "2-05-add-a-hub-choices.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 17799,
+    "packed": 2941
+  },
+  {
+    "name": "2.06 Add a hub · FM, new GSTIN",
+    "file": "2-06-add-a-hub-fm-new-gstin.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 18553,
+    "packed": 3061
+  },
+  {
+    "name": "2.07 Hub details · KYC carried over",
+    "file": "2-07-hub-details-kyc-carried-over.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 40310,
+    "packed": 6653
+  },
+  {
+    "name": "2.08 Hub details · vehicle picker",
+    "file": "2-08-hub-details-vehicle-picker.json",
+    "w": 1440,
+    "h": 1074,
+    "bytes": 54690,
+    "packed": 8353
+  },
+  {
+    "name": "2.09 Hub details complete",
+    "file": "2-09-hub-details-complete.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 41062,
+    "packed": 6680
+  },
+  {
+    "name": "2.10 Hub submitted",
+    "file": "2-10-hub-submitted.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 38713,
+    "packed": 6386
+  },
+  {
+    "name": "2.11 Cluster Head review · waiting",
+    "file": "2-11-cluster-head-review-waiting.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 37642,
+    "packed": 5972
+  },
+  {
+    "name": "2.12 Cluster Head review · approved",
+    "file": "2-12-cluster-head-review-approved.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39364,
+    "packed": 6346
+  },
+  {
+    "name": "2.13 Agreements",
+    "file": "2-13-agreements.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39167,
+    "packed": 6949
+  },
+  {
+    "name": "2.14 Agreements accepted",
+    "file": "2-14-agreements-accepted.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39227,
+    "packed": 6926
+  },
+  {
+    "name": "2.15 Activation",
+    "file": "2-15-activation.json",
+    "w": 1440,
+    "h": 1019,
+    "bytes": 40842,
+    "packed": 6327
+  },
+  {
+    "name": "2.16 Captain Hub · four hubs",
+    "file": "2-16-captain-hub-four-hubs.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 23672,
+    "packed": 3576
+  },
+  {
+    "name": "3.01 Login switch · admin",
+    "file": "3-01-login-switch-admin.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 3234,
+    "packed": 768
+  },
+  {
+    "name": "3.02 Admin role picker",
+    "file": "3-02-admin-role-picker.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 10408,
+    "packed": 1933
+  },
+  {
+    "name": "3.03 AM · my requests",
+    "file": "3-03-am-my-requests.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 31091,
+    "packed": 5135
+  },
+  {
+    "name": "3.04 AM · infra checklist",
+    "file": "3-04-am-infra-checklist.json",
+    "w": 1440,
+    "h": 1234,
+    "bytes": 52805,
+    "packed": 7750
+  },
+  {
+    "name": "3.05 AM · infra checklist passed",
+    "file": "3-05-am-infra-checklist-passed.json",
+    "w": 1440,
+    "h": 1234,
+    "bytes": 54237,
+    "packed": 7839
+  },
+  {
+    "name": "3.06 AM · rate card",
+    "file": "3-06-am-rate-card.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 35163,
+    "packed": 6247
+  },
+  {
+    "name": "3.07 AM · rate card within ceiling",
+    "file": "3-07-am-rate-card-within-ceiling.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34552,
+    "packed": 5992
+  },
+  {
+    "name": "3.08 AM · rate card above ceiling",
+    "file": "3-08-am-rate-card-above-ceiling.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 36043,
+    "packed": 6413
+  },
+  {
+    "name": "3.09 CH · my requests",
+    "file": "3-09-ch-my-requests.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 28524,
+    "packed": 4637
+  },
+  {
+    "name": "3.10 CH · review within ceiling",
+    "file": "3-10-ch-review-within-ceiling.json",
+    "w": 1440,
+    "h": 1014,
+    "bytes": 39672,
+    "packed": 6526
+  },
+  {
+    "name": "3.11 CH · review above ceiling",
+    "file": "3-11-ch-review-above-ceiling.json",
+    "w": 1440,
+    "h": 1123,
+    "bytes": 41542,
+    "packed": 7012
+  },
+  {
+    "name": "3.12 ZH · pendency monitor",
+    "file": "3-12-zh-pendency-monitor.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 32621,
+    "packed": 5304
+  },
+  {
+    "name": "3.13 ZH · CH pendency",
+    "file": "3-13-zh-ch-pendency.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 28530,
+    "packed": 4640
+  },
+  {
+    "name": "3.14 ZH · request status",
+    "file": "3-14-zh-request-status.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 28869,
+    "packed": 5066
+  },
+  {
+    "name": "3.15 Central Admin · queue",
+    "file": "3-15-central-admin-queue.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 26009,
+    "packed": 4178
+  },
+  {
+    "name": "3.16 Central Admin · rate card approval",
+    "file": "3-16-central-admin-rate-card-approval.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 29411,
+    "packed": 5486
+  }
+]
