@@ -340,10 +340,16 @@ supported yet. The value is refused in state as well as disabled in the dropdown
 rule does not depend on the select to enforce it.
 
 The rate card is **slab-based**: each slab takes an order-volume band and a single rate for
-it — there is no separate forward and reverse rate. The Cluster Head can add as many slabs
-as needed; a new one starts where the previous band ended, and the top band's upper bound
-is left blank to mean *and above*. Approval needs a rating of 4 or 5 **and** a complete rate
-card: every slab needs a starting volume, a rate, and an upper bound above its start.
+it — there is no separate forward and reverse rate — plus one **touchpoint rate** for the
+hub, paid on top of the slab rate. The Cluster Head can add as many slabs as needed; a new
+one starts where the previous band ended, and the top band's upper bound is left blank to
+mean *and above*. Approval needs a rating of 4 or 5 **and** a complete rate card: every slab
+needs a starting volume, a rate and an upper bound above its start, and the hub needs a
+touchpoint rate.
+
+The approved card is what the **captain** then sees — the same bands and the same touchpoint
+rate, on the Cluster Head screen and again on agreements. The hub category and the benchmark
+ceiling that produced it stay internal.
 
 ### The AM infra checklist
 
@@ -428,7 +434,7 @@ build from.
 npm install && npm test
 ```
 
-**704 assertions across 15 groups:**
+**731 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

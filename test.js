@@ -443,10 +443,35 @@ async function testFMCombined() {
   check(!exists(doc, '[data-testid="split-caveat"]'),
         "no split caveat shown in combined mode");
 
+  /* --- the approved rate card reaches the captain, slab-wise --- */
+  const capCh = api.helpers.R().ch;
+  check(capCh.slabs.length > 1, "approval books a slab rate card for the captain");
+  check(!!capCh.touchpoint, "with a touchpoint rate");
+  check(exists(doc, '[data-testid="captain-rate-card"]'), "shown on the Cluster Head screen");
+  const rateTxt = mainTxt(doc);
+  check(rateTxt.indexOf("Approved rate card") >= 0, "labelled as the approved rate card");
+  capCh.slabs.forEach(sl => {
+    check(rateTxt.indexOf(api.helpers.slabLabel(sl)) >= 0,
+          "the captain sees the band: " + api.helpers.slabLabel(sl));
+    check(rateTxt.indexOf("₹" + sl.rate) >= 0, "and its rate: ₹" + sl.rate);
+  });
+  check(rateTxt.indexOf("Touchpoint rate") >= 0, "and the touchpoint rate");
+  check(rateTxt.indexOf("₹" + capCh.touchpoint) >= 0, "with its value");
+  /* still no category or ceiling */
+  ["Hub category","ceiling","Standalone"].forEach(w =>
+    check(rateTxt.indexOf(w) === -1, "the slab card reveals no internals: " + w));
+
   click(doc, "ch-continue");
   eq(api.helpers.phaseId(), "ag",
      "FM CH approved → agreements (no security deposit, no AM phase)");
 
+  check(exists(doc, '[data-testid="agreement-rate-card"]'),
+        "agreements shows the agreed rate card slab-wise");
+  const agTxt = mainTxt(doc);
+  api.helpers.R().ch.slabs.forEach(sl =>
+    check(agTxt.indexOf(api.helpers.slabLabel(sl)) >= 0,
+          "agreements lists the band: " + api.helpers.slabLabel(sl)));
+  check(agTxt.indexOf("Touchpoint rate") >= 0, "and the touchpoint rate");
   check(mainTxt(doc).indexOf("Hub category") === -1,
         "the agreements card does not show hub category");
   check(sideTxt(doc).indexOf("Hub category") === -1,
@@ -2047,6 +2072,21 @@ async function testAdminPanel() {
   check(api.helpers.slabsValid(chReq.ch.slabs), "completing the slab makes the card valid");
   api.actions.chRate(4);
   check(!disabled(doc, "ap-approve"), "and approval opens");
+
+  /* touchpoint rate sits alongside the slabs */
+  check(exists(doc, "#ch-touchpoint"), "a touchpoint rate is captured");
+  check(txt(doc).indexOf("Touchpoint rate") >= 0, "and labelled");
+  eq(chReq.ch.touchpoint, "5.00", "with a value in play");
+  api.actions.chField("touchpoint", "");
+  check(!api.helpers.rateCardValid(chReq.ch), "a rate card without a touchpoint is incomplete");
+  check(disabled(doc, "ap-approve"), "so approval is blocked");
+  api.actions.chField("touchpoint", "6.00");
+  check(api.helpers.rateCardValid(chReq.ch), "restoring it completes the card");
+  api.actions.chRate(4);
+  check(!disabled(doc, "ap-approve"), "and approval opens again");
+  check(!api.helpers.rateOk("abc"), "a touchpoint rate must be numeric");
+  check(api.helpers.rateOk("5"), "whole numbers are fine");
+  check(api.helpers.rateOk("5.25"), "and two decimals");
 
   /* slab validation */
   check(!api.helpers.slabValid({ from:"", to:"100", rate:"10" }), "a slab needs a start volume");

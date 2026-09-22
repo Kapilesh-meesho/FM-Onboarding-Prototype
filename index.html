@@ -929,6 +929,18 @@ img{max-width:100%}
 }
 .slab-row .srm:disabled{opacity:.35;cursor:not-allowed;color:var(--muted)}
 .slab-row .srm:hover:not(:disabled){background:var(--err-bg);border-color:var(--err-br)}
+.slab-tp{
+  display:flex;gap:12px;align-items:flex-end;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line-soft);
+}
+.slab-tp .sf{flex:none}
+.slab-tp .sl{display:block;font-size:10px;font-weight:700;color:var(--cyan-label);margin-bottom:4px}
+.slab-tp input{
+  width:100%;height:36px;padding:0 10px;border:1px solid var(--line-field);
+  border-radius:7px;font-size:13px;font-weight:500;color:var(--ink);outline:none;background:#fff;
+}
+.slab-tp input:focus{border-color:var(--cyan-label);box-shadow:0 0 0 3px rgba(7,142,185,.12)}
+.slab-tp .tph{font-size:11px;font-weight:500;color:var(--muted);padding-bottom:10px}
 
 .ap-toast{
   position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:300;
@@ -1189,7 +1201,9 @@ function blankRole(role) {
       errors:{}
     },
     bgv: { status:"pending" },
-    ch:  { status:"pending", category:null, rateMode:"combined", slab:null, rate:null, decidedBy:null, reason:"" },
+    ch:  { status:"pending", category:null, rateMode:"combined", slab:null, rate:null,
+           // the approved rate card the captain is shown: slab bands + touchpoint
+           slabs:[], touchpoint:"", decidedBy:null, reason:"" },
     sd:  { status:"pending", amount:25000, attempts:0 },
     hub: { address:"", mapLink:"", pincode:"", city:"",
            areaSqft:"", manpower:"", maxVehicle:"",
@@ -1503,6 +1517,19 @@ function isAboveCeiling(r) {
 /* Split mode, captain side. The payouts team has NOT confirmed this formula —
    it is rendered as an indicative figure with a caveat and is deliberately not
    used to gate or compute anything downstream. */
+/* The approved rate card the captain is shown: volume slabs plus a touchpoint
+   rate — the same shape a Cluster Head fills in on the admin panel. */
+function bookRateCard(r) {
+  if (r.ch.slabs && r.ch.slabs.length) return;      // already booked
+  var base = r.ch.rate != null ? r.ch.rate : 0;
+  r.ch.slabs = [
+    { from:"0",   to:"500", rate: base.toFixed(2) },
+    { from:"501", to:"",    rate: Math.max(0, base - 0.5).toFixed(2) }
+  ];
+  var tp = tpFor(r);
+  r.ch.touchpoint = tp != null ? tp.toFixed(2) : "";
+}
+
 function indicativeCaptainSplit(r) {
   var slab = r.ch.slab != null ? r.ch.slab : r.ch.rate;
   if (slab == null) return null;
@@ -1759,8 +1786,9 @@ function apReq(o) {
     ch:{ mode:"Phone", date:"03 Jul 2026", experience:"Relevant business",
          ownership:"Leased formal", pilots:"Ready", capacity:"Adequate",
          rating:0, payoutType:"Combined",
-         // rate card is slab-based: an order-volume band and a rate per band
-         slabs:[ { from:"0", to:"500", rate:"14.50" } ],
+         // rate card is slab-based: an order-volume band and a rate per band,
+         // plus a single touchpoint rate for the hub
+         slabs:[ { from:"0", to:"500", rate:"14.50" } ], touchpoint:"5.00",
          reason:"", notes:"", done:false },
     zh:{ decision:null, reason:"" }
   }, o || {});
@@ -1787,7 +1815,7 @@ function seedAdminRequests() {
                  ownership:"Owned", pilots:"Ready", capacity:"Adequate", rating:4,
                  payoutType:"Combined",
                  slabs:[ { from:"0", to:"500", rate:"18.00" },
-                         { from:"501", to:"", rate:"16.50" } ],
+                         { from:"501", to:"", rate:"16.50" } ], touchpoint:"6.00",
                  reason:"Above benchmark for this volume band", notes:"", done:true } })
   ];
 }
@@ -1818,6 +1846,9 @@ function slabValid(sl) {
 function slabsValid(list) {
   return Array.isArray(list) && list.length > 0 && list.every(slabValid);
 }
+function rateOk(v) { return /^\d+(\.\d{1,2})?$/.test(String(v == null ? "" : v).trim()); }
+/* A complete rate card is every slab plus a touchpoint rate. */
+function rateCardValid(c) { return slabsValid(c.slabs) && rateOk(c.touchpoint); }
 function slabLabel(sl) {
   var to = String(sl.to).trim();
   return sl.from + (to ? "–" + to : "+") + " orders";
@@ -2553,7 +2584,7 @@ function slabEditor(c) {
     '</div>';
   }).join("");
 
-  var complete = slabsValid(c.slabs);
+  var complete = slabsValid(c.slabs) && rateOk(c.touchpoint);
   return '<div class="slabs" data-testid="ch-slabs">' +
     '<div class="sh"><div><b>Rate card slabs</b>' +
       '<span>Set a rate per order-volume band. Leave the top band&rsquo;s upper bound blank ' +
@@ -2562,8 +2593,14 @@ function slabEditor(c) {
         (c.slabs || []).length + ' slab' + ((c.slabs || []).length === 1 ? '' : 's') + '</span></div>' +
     rows +
     '<button class="btn btn-ghost" id="ch-slab-add" style="margin-top:4px">＋ Add slab</button>' +
+    '<div class="slab-tp"><div class="sf" style="max-width:230px">' +
+      '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
+      '<input id="ch-touchpoint" inputmode="decimal" placeholder="5.00" ' +
+        'value="' + esc(c.touchpoint || "") + '"></div>' +
+      '<span class="tph">Paid per touchpoint, on top of the slab rate.</span></div>' +
     (complete ? '' : '<div class="hint err" style="padding-top:8px">' +
-      'Every slab needs a starting volume and a rate, and an upper bound above its start.</div>') +
+      'Every slab needs a starting volume and a rate, an upper bound above its start, ' +
+      'and the hub needs a touchpoint rate.</div>') +
   '</div>';
 }
 
@@ -2576,7 +2613,7 @@ function apChDetail(r) {
   var stars = [1,2,3,4,5].map(function (n) {
     return '<button data-rating="' + n + '"' + (c.rating === n ? ' class="on"' : '') + '>' + n + '</button>';
   }).join("");
-  var canApprove = c.rating >= 4 && slabsValid(c.slabs);
+  var canApprove = c.rating >= 4 && rateCardValid(c);
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Cluster Head review</b>' +
@@ -2654,6 +2691,8 @@ function apZhDetail(r) {
           return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
                  '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
         }).join("") +
+        '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
+          esc(c.touchpoint || "—") + ' / shipment</span></div>' +
         '<div class="row"><span class="k">Cluster Head rating</span><span class="v">' + esc(c.rating || "—") + '</span></div>' +
         '<div class="row"><span class="k">Reason for escalation</span>' +
           '<span class="v" style="max-width:60%;white-space:normal">' + esc(c.reason || "—") + '</span></div>' +
@@ -3284,21 +3323,35 @@ function chContactCard(who) {
       ' if it&rsquo;s urgent.</span></div></div></div>';
 }
 
+/* The approved rate card as the captain sees it: one row per volume slab, plus
+   the touchpoint rate. No benchmark ceiling and no hub category. */
+function captainRateRows(ch) {
+  var slabs = (ch.slabs || []);
+  if (!slabs.length) return "";
+  return slabs.map(function (sl) {
+    return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
+           '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
+  }).join("") +
+  (ch.touchpoint
+    ? '<div class="row"><span class="k">Touchpoint rate</span>' +
+      '<span class="v">₹' + esc(ch.touchpoint) + ' / shipment</span></div>'
+    : "");
+}
+
 /* Rate card panel — FM only. Reads the ceiling from the AM-set hub category. */
 function rateCardPanel(r) {
   var cat = r.ch.category;
   if (!cat) return "";
   var meta = HUB_CATEGORIES[cat];
 
-  var rows =
+  var booked = captainRateRows(r.ch);
+  var rows = booked || (
     '<div class="row"><span class="k">Touchpoint rate</span>' +
-      '<span class="v">' + money(meta.tp) + '</span></div>';
-
-  if (r.ch.rate != null) {
-    // no ceiling annotation either way — the captain is not shown the ceiling
-    rows += '<div class="row"><span class="k">Proposed rate</span>' +
-      '<span class="v">' + money(r.ch.rate) + '</span></div>';
-  }
+      '<span class="v">' + money(meta.tp) + '</span></div>' +
+    (r.ch.rate != null
+      ? '<div class="row"><span class="k">Proposed rate</span>' +
+        '<span class="v">' + money(r.ch.rate) + '</span></div>'
+      : ""));
 
   var modeBlock = "";
   if (r.ch.rate != null) {
@@ -3324,7 +3377,12 @@ function rateCardPanel(r) {
     }
   }
 
-  return '<div class="kv" style="margin-bottom:16px">' + rows + '</div>' + modeBlock;
+  return (booked
+    ? '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
+      'Approved rate card</p>'
+    : "") +
+    '<div class="kv" style="margin-bottom:16px" data-testid="captain-rate-card">' + rows +
+    '</div>' + modeBlock;
 }
 
 function phaseCH(r) {
@@ -3795,11 +3853,17 @@ function phaseAG(r) {
 
   var rateBoxes;
   if (fm && r.ch.category) {
+    var agreed = captainRateRows(r.ch);
     rateBoxes =
-      '<div class="rate-grid" style="grid-template-columns:1fr">' +
-        '<div class="rate-box"><span>Agreed rate (' + esc(r.ch.rateMode) + ')</span><b>' +
-          money(r.ch.rate) + '</b></div>' +
-      '</div>' +
+      (agreed
+        ? '<div style="margin-bottom:18px" data-testid="agreement-rate-card">' +
+          '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
+            'Agreed rate card (' + esc(r.ch.rateMode) + ')</p>' +
+          '<div class="kv">' + agreed + '</div></div>'
+        : '<div class="rate-grid" style="grid-template-columns:1fr">' +
+          '<div class="rate-box"><span>Agreed rate (' + esc(r.ch.rateMode) + ')</span><b>' +
+            money(r.ch.rate) + '</b></div>' +
+          '</div>') +
       (r.ch.rateMode === "split"
         ? '<div class="notice warn" data-testid="split-caveat-ag"><b>Indicative — formula being confirmed</b>' +
           'The captain-side split figure is a placeholder pending confirmation from the payouts team.</div>'
@@ -4265,9 +4329,12 @@ var A = {
       if (r.ch.rate == null || r.ch.rate > ceil) r.ch.rate = ceil;
       r.ch.slab = r.ch.rate;
     }
+    bookRateCard(r);
     r.ch.status = "approved"; r.ch.decidedBy = "ch"; r.ch.reason = "";
     save(); render();
   },
+  /* The approved rate card the captain sees: volume slabs plus a touchpoint
+     rate. Mirrors what a Cluster Head sets in the admin panel. */
   chEscalate: function (mode, rate) {
     var r = R();
     if (r.role !== "FM" || !chCanDecide(r)) return;
@@ -4276,6 +4343,7 @@ var A = {
     r.ch.rate = rate != null ? rate : +(ceil + 1.5).toFixed(2);
     r.ch.slab = r.ch.rate;
     r.ch.status = "escalated"; r.ch.decidedBy = null;
+    r.ch.slabs = []; r.ch.touchpoint = "";     // rebooked when the decision lands
     save(); render();
   },
   chReject: function (reason) {
@@ -4293,6 +4361,7 @@ var A = {
     var r = R();
     if (r.ch.status !== "escalated") return;
     r.ch.status = "approved"; r.ch.decidedBy = "zh"; r.ch.reason = "";
+    bookRateCard(r);
     save(); render();
   },
   zhReject: function (reason) {
@@ -4773,6 +4842,9 @@ var A = {
     if (field === "payoutType" && !payoutAllowed(v)) { render(); return; }
     r.ch[field] = v;
     save();
+    // the touchpoint rate gates approval, so keep the button honest without
+    // re-rendering the field being typed into
+    if (field === "touchpoint") paintSlabState();
   },
   amField: function (field, v) {
     var r = apById(S.admin.selected);
@@ -5166,7 +5238,7 @@ function paintSlabState() {
     var sl = r.ch.slabs[+row.getAttribute("data-slabrow")];
     if (sl) row.classList.toggle("bad", !slabValid(sl));
   });
-  var ok = slabsValid(r.ch.slabs) && r.ch.rating >= 4;
+  var ok = rateCardValid(r.ch) && r.ch.rating >= 4;
   var approve = document.getElementById("ap-approve");
   if (approve) approve.disabled = !ok;
 }
@@ -5231,7 +5303,7 @@ function bindAdmin() {
   /* the review forms now actually capture — Save draft had nothing to save */
   [["ch-mode","mode"],["ch-date","date"],["ch-exp","experience"],["ch-own","ownership"],
    ["ch-pilots","pilots"],["ch-cap","capacity"],["ch-payout","payoutType"],
-   ["ch-reason","reason"],["ch-notes","notes"]].forEach(function (pair) {
+   ["ch-reason","reason"],["ch-notes","notes"],["ch-touchpoint","touchpoint"]].forEach(function (pair) {
     var el = document.getElementById(pair[0]);
     if (!el) return;
     el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () {
@@ -5587,7 +5659,8 @@ if (typeof window !== "undefined") {
       apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
       amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
       slabValid: slabValid, slabsValid: slabsValid, slabLabel: slabLabel,
-      payoutAllowed: payoutAllowed,
+      payoutAllowed: payoutAllowed, rateOk: rateOk, rateCardValid: rateCardValid,
+      captainRateRows: captainRateRows, bookRateCard: bookRateCard,
       seedExistingCaptain: seedExistingCaptain
     },
     render: render,
