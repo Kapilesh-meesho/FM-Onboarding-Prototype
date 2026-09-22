@@ -1891,9 +1891,24 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("AM verification · approve") >= 0, "opens the infra check");
   check(txt(doc).indexOf("Area Manager infra check") >= 0, "with the hard-gate card");
   const gates = [...doc.querySelectorAll("[data-gate]")].map(b => b.getAttribute("data-gate"));
-  eq([...new Set(gates)], ["cctv","computer","printer","address","vehicle"],
-     "all five hard gates present");
+  eq([...new Set(gates)],
+     ["cctv","fire","computer","scanner","scanTable","scanStand","power","printer","address"],
+     "all nine hard gates present, in the given order");
+  check(txt(doc).indexOf("1. CCTV installed and operational") >= 0, "the list is numbered");
+  check(txt(doc).indexOf("Fire extinguisher") >= 0, "fire extinguisher is a gate");
+  check(txt(doc).indexOf("Scanner / handheld devices available") >= 0, "scanner is a gate");
+  check(txt(doc).indexOf("Scan table") >= 0 && txt(doc).indexOf("Scan stand") >= 0,
+        "scan table and scan stand are separate gates");
+  check(txt(doc).indexOf("Power backup provisioned") >= 0, "power backup is a gate");
   check(disabled(doc, "ap-approve"), "approve is blocked until every gate is answered");
+
+  /* 10. max vehicle size review — a pass/fail on the captain's declared size,
+     with its own update flow rather than being a hard gate */
+  check(exists(doc, '[data-testid="am-vehicle-review"]'), "the max vehicle size review is present");
+  check(txt(doc).indexOf("10. Max. vehicle size review") >= 0, "numbered tenth");
+  check(txt(doc).indexOf("Captain declared: 7MT_20FT") >= 0, "showing what the captain declared");
+  check(!!sel(doc, '[data-vehreview="yes"]') && !!sel(doc, '[data-vehreview="no"]'),
+        "offered as pass / fail");
   noSd("the AM detail");
   check(txt(doc).indexOf("Captain & hub context") >= 0, "the read-only context card is shown");
   check(txt(doc).indexOf("AM SLA") >= 0, "with the SLA card");
@@ -1904,9 +1919,42 @@ async function testAdminPanel() {
   check(!exists(doc, "#ap-approve"), "and approve is no longer offered");
   check(txt(doc).indexOf("Hard gate failed") >= 0, "the card says a hard gate failed");
 
-  ["cctv","computer","printer","address","vehicle"].forEach(g => api.actions.amGate(g, "yes"));
-  check(txt(doc).indexOf("Ready to approve") >= 0, "all gates passing marks it ready");
+  api.config.AM_GATES.forEach(g => api.actions.amGate(g.id, "yes"));
+  check(disabled(doc, "ap-approve"),
+        "nine passing gates are not enough — the vehicle review is still open");
+
+  /* failing the review opens the picker and requires a corrected size */
+  clickSel(doc, '[data-vehreview="no"]');
+  check(exists(doc, '[data-testid="am-vehicle-picker"]'),
+        "failing the review opens the vehicle picker");
+  check(exists(doc, "#veh-toggle"), "which is the same vehicle dropdown the captain uses");
+  check(!api.helpers.amVehicleSettled(api.helpers.apById("OBD-78222")),
+        "a failed review is unsettled until a size is chosen");
+  check(disabled(doc, "ap-approve"), "and approve stays blocked");
+
+  api.actions.setMaxVehicle("3.5MT_14FT");
+  const amReq = api.helpers.apById("OBD-78222");
+  eq(amReq.am.maxVehicle, "3.5MT_14FT", "the AM's corrected size is recorded");
+  eq(amReq.am.declaredVehicle, "7MT_20FT", "the captain's declared size is kept separately");
+  eq(api.helpers.amEffectiveVehicle(amReq), "3.5MT_14FT", "the correction takes effect");
+  check(api.helpers.amVehicleSettled(amReq), "and the review is settled");
+  check(txt(doc).indexOf("Corrected to 3.5MT_14FT") >= 0, "the row reports the correction");
+  check(txt(doc).indexOf("AM updated") >= 0, "and the context card flags it as AM-updated");
+  check(txt(doc).indexOf("Ready to approve") >= 0, "the card is now ready to approve");
   check(!disabled(doc, "ap-approve"), "and approve opens");
+
+  /* passing it instead needs no correction */
+  clickSel(doc, '[data-vehreview="yes"]');
+  eq(api.helpers.apById("OBD-78222").am.maxVehicle, "",
+     "passing the review clears any correction");
+  check(api.helpers.amVehicleSettled(api.helpers.apById("OBD-78222")),
+        "and a pass settles it on its own");
+  check(!disabled(doc, "ap-approve"), "approve is open on a pass too");
+
+  /* a failed vehicle review is a correction, not a hard-gate failure */
+  check(!exists(doc, "#ap-reject"),
+        "the vehicle review never forces rejection the way a hard gate does");
+
   click(doc, "ap-approve");
   eq(api.helpers.apById("OBD-78222").stage, "ch", "approving routes the request to the Cluster Head");
   eq(api.state.admin.selected, null, "and returns to the list");

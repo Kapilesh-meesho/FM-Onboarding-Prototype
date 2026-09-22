@@ -1724,7 +1724,10 @@ function apReq(o) {
     stage:"am", status:"am_pending", sla:"41h left", slaTone:"",
     kyc:true, bgv:true,
     am:{ visitDate:"03 Jul 2026", by:"Self", floor:"750", landmark:"Near Metro Pillar 128",
-         gates:{ cctv:null, computer:null, printer:null, address:null, vehicle:null },
+         gates:{ cctv:null, fire:null, computer:null, scanner:null, scanTable:null,
+                 scanStand:null, power:null, printer:null, address:null },
+         // captain-declared max vehicle size, and the AM's review of it
+         declaredVehicle:"7MT_20FT", vehicleReview:null, maxVehicle:"", vehicleEditing:false,
          notes:"", done:false },
     ch:{ mode:"Phone", date:"03 Jul 2026", experience:"Relevant business",
          ownership:"Leased formal", pilots:"Ready", capacity:"Adequate",
@@ -2334,6 +2337,9 @@ function apContext(r) {
         '<div class="row"><span class="k">Map link</span>' +
           '<span class="v"><a href="#" style="color:var(--cyan-ink);text-decoration:none">' +
           'Open map location →</a></span></div>' +
+        '<div class="row"><span class="k">Max vehicle size</span><span class="v">' +
+          esc(amEffectiveVehicle(r) || "—") +
+          (r.am.maxVehicle ? ' <span class="st amber">AM updated</span>' : '') + '</span></div>' +
       '</div>' +
     '</div></div>';
 }
@@ -2346,59 +2352,110 @@ function apSla(r, label, sub) {
 
 /* ---------------------------------------------------- AM · infra checklist */
 
+/* Nine hard gates — any failure requires rejection — followed by a max vehicle
+   size review, which is a different thing: failing it means the captain's
+   declared size was wrong, and the AM corrects it rather than rejecting. */
 var AM_GATES = [
-  { id:"cctv",     label:"CCTV installed &amp; operational" },
-  { id:"computer", label:"Computer / laptop + internet" },
-  { id:"printer",  label:"Printer available &amp; working" },
-  { id:"address",  label:"Address matches submitted" },
-  { id:"vehicle",  label:"Vehicle access possible" }
+  { id:"cctv",      label:"CCTV installed and operational" },
+  { id:"fire",      label:"Fire extinguisher" },
+  { id:"computer",  label:"Computer / laptop + Internet" },
+  { id:"scanner",   label:"Scanner / handheld devices available" },
+  { id:"scanTable", label:"Scan table" },
+  { id:"scanStand", label:"Scan stand" },
+  { id:"power",     label:"Power backup provisioned" },
+  { id:"printer",   label:"Printer available and working" },
+  { id:"address",   label:"Address matches submitted" }
 ];
 
-function apAmDetail(r) {
-  var g = r.am.gates;
-  var allYes = AM_GATES.every(function (x) { return g[x.id] === true; });
-  var anyNo  = AM_GATES.some(function (x) { return g[x.id] === false; });
+/* The vehicle review is settled once it passes, or once it fails and the AM has
+   set a corrected size. */
+function amVehicleSettled(r) {
+  var a = r.am;
+  if (a.vehicleReview === true) return true;
+  if (a.vehicleReview === false) return !!a.maxVehicle;
+  return false;
+}
+function amEffectiveVehicle(r) {
+  return r.am.maxVehicle || r.am.declaredVehicle || "";
+}
 
-  var gates = AM_GATES.map(function (x) {
-    return '<div class="ap-gate"><div><b>' + x.label + '</b><span>Hard gate</span></div>' +
+function apAmDetail(r) {
+  var a = r.am, g = a.gates;
+  var gatesPass  = AM_GATES.every(function (x) { return g[x.id] === true; });
+  var gateFailed = AM_GATES.some(function (x) { return g[x.id] === false; });
+  var vehOk      = amVehicleSettled(r);
+  var ready      = gatesPass && vehOk;
+
+  var gates = AM_GATES.map(function (x, i) {
+    return '<div class="ap-gate"><div><b>' + (i + 1) + '. ' + x.label + '</b><span>Hard gate</span></div>' +
       '<div class="yn">' +
         '<button class="yes' + (g[x.id] === true ? ' on' : '') + '" data-gate="' + x.id + '" data-val="yes">Yes</button>' +
         '<button class="no' + (g[x.id] === false ? ' on' : '') + '" data-gate="' + x.id + '" data-val="no">No</button>' +
       '</div></div>';
   }).join("");
 
+  /* 10. Max vehicle size review — a pass/fail on what the captain declared,
+     with an update flow that reuses the vehicle picker. */
+  var reviewSub = a.vehicleReview === false
+    ? (a.maxVehicle
+        ? "Corrected to " + a.maxVehicle
+        : "Marked incorrect — set the size the location can actually take")
+    : "Captain declared: " + (a.declaredVehicle || "—");
+
+  var vehicleRow =
+    '<div class="ap-gate" data-testid="am-vehicle-review" style="align-items:flex-start;' +
+      'flex-direction:column;gap:12px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%">' +
+        '<div><b>' + (AM_GATES.length + 1) + '. Max. vehicle size review</b>' +
+          '<span>' + esc(reviewSub) + '</span></div>' +
+        '<div class="yn">' +
+          '<button class="yes' + (a.vehicleReview === true ? ' on' : '') +
+            '" data-vehreview="yes">Pass</button>' +
+          '<button class="no' + (a.vehicleReview === false ? ' on' : '') +
+            '" data-vehreview="no">Fail</button>' +
+        '</div>' +
+      '</div>' +
+      (a.vehicleEditing
+        ? '<div style="width:100%" data-testid="am-vehicle-picker">' +
+            vehicleField(a.maxVehicle || "", null) +
+            '<button class="btn-link" id="am-veh-cancel" style="font-size:11px">Cancel update</button>' +
+          '</div>'
+        : '<button class="btn-link" id="am-veh-edit" style="font-size:11px">' +
+          (a.maxVehicle ? "Change the corrected size" : "Update max vehicle size") + '</button>') +
+    '</div>';
+
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Area Manager infra check</b>' +
       '<span>Any failed hard gate requires rejection. Floor area is AM-entered value.</span></div>' +
-      (allYes ? '<span class="st green">Ready to approve</span>'
-              : (anyNo ? '<span class="st red">Hard gate failed</span>'
-                       : '<span class="st grey">In progress</span>')) + '</div>' +
+      (ready ? '<span class="st green">Ready to approve</span>'
+             : (gateFailed ? '<span class="st red">Hard gate failed</span>'
+                           : '<span class="st grey">In progress</span>')) + '</div>' +
     '<div class="ap-form">' +
       '<div class="grid2">' +
         '<div class="fl"><label>Visit date</label><div class="box">' +
-          '<input id="am-date" value="' + esc(r.am.visitDate) + '"></div></div>' +
+          '<input id="am-date" value="' + esc(a.visitDate) + '"></div></div>' +
         '<div class="fl"><label>Visit performed by</label><div class="box sel">' +
           '<select id="am-by">' + ["Self","Field executive","Third-party agency"].map(function (o) {
-            return '<option' + (r.am.by === o ? ' selected' : '') + '>' + o + '</option>'; }).join("") +
+            return '<option' + (a.by === o ? ' selected' : '') + '>' + o + '</option>'; }).join("") +
           '</select></div></div>' +
       '</div>' +
       '<div class="grid2">' +
         '<div class="fl"><label>Floor area (sq ft)</label><div class="box">' +
-          '<input id="am-floor" inputmode="numeric" value="' + esc(r.am.floor) + '"></div></div>' +
+          '<input id="am-floor" inputmode="numeric" value="' + esc(a.floor) + '"></div></div>' +
         '<div class="fl"><label>Landmark</label><div class="box">' +
-          '<input id="am-landmark" value="' + esc(r.am.landmark) + '"></div></div>' +
+          '<input id="am-landmark" value="' + esc(a.landmark) + '"></div></div>' +
       '</div>' +
-      gates +
+      gates + vehicleRow +
       '<div class="pnote" style="margin-top:14px"><span>ⓘ</span><span>Please ensure you have drawn ' +
         'the polygon on Atlas and that the central team has completed all mandatory checks.</span></div>' +
     '</div>' +
     '<div class="ap-foot">' +
       '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
       '<button class="btn btn-ghost" id="ap-save">Save draft</button>' +
-      (anyNo
+      (gateFailed
         ? '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
           'Reject infra check →</button>'
-        : '<button class="btn btn-primary" id="ap-approve"' + (allYes ? '' : ' disabled') +
+        : '<button class="btn btn-primary" id="ap-approve"' + (ready ? '' : ' disabled') +
           '>Approve infra check →</button>') +
     '</div></div>';
 
@@ -3426,10 +3483,24 @@ function paintVehicleOpen() {
   }
 }
 
+/* The same picker serves the captain's hub details and the Area Manager's
+   correction, so it reads and writes whichever field is currently on screen. */
+function vehicleCtx() {
+  if (S.screen === "admin" && S.admin.selected) {
+    var req = apById(S.admin.selected);
+    if (req) {
+      return { get: function () { return req.am.maxVehicle || ""; },
+               set: function (v) { req.am.maxVehicle = v; if (v) req.am.vehicleEditing = false; } };
+    }
+  }
+  return { get: function () { return R().hub.maxVehicle || ""; },
+           set: function (v) { R().hub.maxVehicle = v; } };
+}
+
 function paintVehicleList() {
   var list = document.getElementById("veh-list");
   if (!list) return;
-  list.innerHTML = vehRows(R().hub.maxVehicle || "");
+  list.innerHTML = vehRows(vehicleCtx().get());
   bindVehicleRows();
 }
 
@@ -4187,12 +4258,30 @@ var A = {
   /* One input: the largest vehicle the hub can take. Everything below it in
      the ascending list is implied, so there is nothing else to tick. */
   setMaxVehicle: function (v) {
-    var h = R().hub;
     if (v && !V.vehicle(v)) return;
-    h.maxVehicle = v || "";
-    if (h.errors) delete h.errors.maxVehicle;
+    vehicleCtx().set(v || "");
+    var h = (S.screen === "admin") ? null : R().hub;
+    if (h && h.errors) delete h.errors.maxVehicle;
     vehUI.open = false;
     vehUI.filter = "";
+    save(); render();
+  },
+
+  /* AM's review of the captain-declared max vehicle size. */
+  amVehicleReview: function (val) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    var pass = (val === "yes");
+    r.am.vehicleReview = pass;
+    if (pass) { r.am.maxVehicle = ""; r.am.vehicleEditing = false; }
+    else { r.am.vehicleEditing = true; }        // a failed review needs a correction
+    save(); render();
+  },
+  amVehicleEdit: function (open) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    r.am.vehicleEditing = !!open;
+    if (!open) vehUI.open = false;
     save(); render();
   },
   openVehicles: function (open) {
@@ -4961,6 +5050,17 @@ function bindAdmin() {
       A.amGate(el.getAttribute("data-gate"), el.getAttribute("data-val"));
     });
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-vehreview]"), function (el) {
+    el.addEventListener("click", function () { A.amVehicleReview(el.getAttribute("data-vehreview")); });
+  });
+  on("am-veh-edit", "click", function () { A.amVehicleEdit(true); });
+  on("am-veh-cancel", "click", function () { A.amVehicleEdit(false); });
+  bindVehicleRows();
+  on("veh-toggle", "click", function (e) { e.stopPropagation(); A.openVehicles(); });
+  on("veh-search", "input", function (e) { A.filterVehicles(e.target.value); });
+  on("veh-none", "click", function () { A.setMaxVehicle(""); });
+  var apPanel = document.getElementById("veh-panel");
+  if (apPanel) apPanel.addEventListener("click", function (e) { e.stopPropagation(); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-rating]"), function (el) {
     el.addEventListener("click", function () { A.chRate(+el.getAttribute("data-rating")); });
   });
@@ -5290,6 +5390,7 @@ if (typeof window !== "undefined") {
     errors: ERR,
     config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT,
               ADMIN_ROLES: ADMIN_ROLES, ADMIN_TABS: ADMIN_TABS, ADMIN_ROLE_ORDER: ADMIN_ROLE_ORDER,
+              AM_GATES: AM_GATES,
               SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
               VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
     helpers: {
@@ -5302,6 +5403,7 @@ if (typeof window !== "undefined") {
       vehUI: function () { return vehUI; },
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
       apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
+      amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
       seedExistingCaptain: seedExistingCaptain
     },
     render: render,

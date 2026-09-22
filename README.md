@@ -323,10 +323,25 @@ the panel picker from `panel-select`, with four consoles:
 
 Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
 SLA chip — over a request table with search and status filters, and stat tiles. Opening a
-request gives the full-page review: the AM infra checklist (five hard gates, where any
-failure forces rejection), the CH review (interview fields, 1–5 rating gating approval,
-hub type and rate card), and the ZH rate-card approval. Every review carries the read-only
-*Captain & hub context* card and an SLA card.
+request gives the full-page review: the AM infra checklist, the CH review (interview fields,
+1–5 rating gating approval, hub type and rate card), and the ZH rate-card approval. Every
+review carries the read-only *Captain & hub context* card and an SLA card.
+
+### The AM infra checklist
+
+Nine hard gates — CCTV, fire extinguisher, computer/laptop + internet, scanner/handheld
+devices, scan table, scan stand, power backup, printer, address match — where **any failure
+requires rejection**, as the design states.
+
+The tenth item, **max vehicle size review**, is deliberately not a hard gate. It is a
+pass/fail on the size the *captain* declared, and failing it means that declaration was
+wrong — not that the facility is unfit. So a fail opens the **same vehicle dropdown the
+captain uses** and the AM sets the correct size; once set, the review is settled and
+approval opens. A failed review never forces rejection the way a hard gate does.
+
+The captain's declared size and the AM's correction are stored separately, so it stays
+visible that a correction happened — the context card shows the effective size with an
+*AM updated* flag.
 
 Decisions route the request onward — AM approve sends it to the Cluster Head, CH approve
 sends it to agreements, CH escalate sends it to the Zonal Head.
@@ -395,7 +410,7 @@ build from.
 npm install && npm test
 ```
 
-**640 assertions across 15 groups:**
+**664 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
