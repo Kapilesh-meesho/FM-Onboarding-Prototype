@@ -29,6 +29,12 @@ async function build(D,ox,oy,imgHash){
       else t.textAutoResize="WIDTH_AND_HEIGHT";
       if(/center/.test(s.al))t.textAlignHorizontal="CENTER"; else if(/right|end/.test(s.al))t.textAlignHorizontal="RIGHT";
       t.x=n[2]; t.y=n[3]; t.name=n[1].slice(0,28)||"text";
+      /* Figma's Inter measures a shade wider than Chrome's, so a box sized to
+         the browser's ink width can wrap a line that fitted before. Give every
+         fixed-width run some slack, keeping its alignment anchor in place. */
+      if(t.textAutoResize==="NONE"){ var pad=10;
+        if(t.textAlignHorizontal==="CENTER") t.x-=pad/2; else if(t.textAlignHorizontal==="RIGHT") t.x-=pad;
+        t.resize(t.width+pad,t.height); }
       return;
     }
     if(n[0]===2){
@@ -60,7 +66,26 @@ async function build(D,ox,oy,imgHash){
     f.clipsContent=!!n[10];
     if(n[11]) f.opacity=n[11];
     (n[13]||[]).forEach(k=>mk(k,f));
+    raise(f);
+  };
+
+  /* The prototype's floating field labels are position:absolute, so CSS paints
+     them over the input box they straddle. Document order puts the box on top,
+     so re-append anything a later opaque sibling covers. */
+  const opaque=(x)=>Array.isArray(x.fills)&&x.fills.some(p=>p.visible!==false&&p.type==="SOLID"&&(p.opacity===undefined||p.opacity>0.9));
+  const olap=(a,b)=>{const w=Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x),
+    h=Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y);
+    return w>0&&h>0?(w*h)/Math.max(1,a.width*a.height):0;};
+  const raise=(parent)=>{
+    const kids=[...parent.children];
+    for(let i=0;i<kids.length;i++){
+      const c=kids[i];
+      if(!(c.type==="TEXT"||c.name==="label"||c.name==="sl")||c.width<1||c.height<1) continue;
+      if(kids.slice(i+1).some(x=>(x.type==="FRAME"||x.type==="RECTANGLE")&&opaque(x)&&olap(c,x)>0.25))
+        parent.appendChild(c);
+    }
   };
   (D.c||[]).forEach(n=>mk(n,root));
+  raise(root);
   return {id:root.id,name:D.n,nodes:count};
 }

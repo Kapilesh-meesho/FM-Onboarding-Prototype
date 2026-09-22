@@ -1,42 +1,57 @@
-# Figma export — where this got to
+# Figma export — complete
 
 **Figma file:** https://www.figma.com/design/fMILzWywpzbmqBTKIJwnXc
 (Valmo — FM Captain Self-Serve Onboarding (Prototype Mirror), Meesho org, in Drafts)
 
-## Done
-
 | Page | Screens | Status |
 |---|---|---|
-| `1 · New Captain onboarding` | 27 | **complete** (1.01 – 1.27) |
-| `2 · Existing Captain, new hub` | 16 | **complete** (2.01 – 2.16) |
-| `3 · Admin login flows` | 16 | not started |
+| `1 · New Captain onboarding` | 27 | complete (1.01 – 1.27) |
+| `2 · Existing Captain, new hub` | 16 | complete (2.01 – 2.16) |
+| `3 · Admin login flows` | 16 | complete (3.01 – 3.16) |
 
-## Remaining calls
+59 screens, ~4,080 text layers, the Valmo logo placed on all 53 logo slots.
 
-Each file in `calls/` is a complete, ready-to-paste `use_figma` script. Run them
-in order; they append to their page, so only run one once.
+## What the file is
 
-- [ ] `calls/3-01.js` — 3.01 Login switch · admin, 3.02 Admin role picker
-- [ ] `calls/3-02.js` — 3.03 AM · my requests, 3.04 AM · infra checklist
-- [ ] `calls/3-03.js` — 3.05 AM · infra checklist passed, 3.06 AM · rate card
-- [ ] `calls/3-04.js` — 3.07 AM · rate card within ceiling, 3.08 above ceiling
-- [ ] `calls/3-05.js` — 3.09 CH · my requests, 3.10 CH · review within ceiling
-- [ ] `calls/3-06.js` — 3.11 CH · review above ceiling, 3.12 ZH · pendency monitor
-- [ ] `calls/3-07.js` — 3.13 ZH · CH pendency, 3.14 ZH · request status
-- [ ] `calls/3-08.js` — 3.15 Central Admin · queue, 3.16 rate card approval
+A faithful mirror, not a design system. Real text layers, real colours, real
+shadows and gradients, a layer tree that follows the DOM — but frames are
+absolutely positioned, with no components and no auto-layout. Good for review
+and reference; restructuring work would rebuild from these rather than edit
+them in place.
 
-`calls/` is derived — `node gen.js` regenerates it. The `skip` values in
-`gen.js` record which screens are already built, so regenerating only ever
-emits what is still outstanding.
+Known limitations, all inherent to capturing a running page:
 
-## Still to do after the last call
+- **Emoji icons render blank.** The role-picker icons (📍 👥 🛡) are emoji in
+  the prototype and Inter has no glyphs for them. The rupee one (₹) does render.
+- **Text wraps a little differently.** Figma's Inter measures marginally wider
+  than Chrome's, so a few tight labels break a line earlier. Fixed-width runs
+  are given 10px of slack at build time to keep single lines on one line.
+- **Inline runs inside a wrapping block.** Where a block mixes an inline
+  `<span>` with loose text and the whole thing wraps, each run is captured
+  separately and the second can land on the first. One case existed in the file
+  (the AM rate-card over-ceiling notice) and was stacked by hand.
 
-1. **The Valmo logo is a grey placeholder** on every screen. Fix in two steps:
-   `upload_assets` the PNG once against any rectangle named `Valmo logo`, read
-   that rectangle's `imageHash` back with `use_figma`, then apply the same hash
-   to every other `RECTANGLE[name=Valmo logo]` in the file in one script.
-   The PNG is the data URI embedded in `index.html` — decode it to a file first.
-2. A final `get_screenshot` per page to confirm the grid reads correctly.
+## Re-running from scratch
+
+```bash
+npm i puppeteer-core          # needs Google Chrome installed at the usual path
+node capture.js               # drives the prototype in headless Chrome, writes shots/
+node compact.js               # writes packed/
+node inflate.test.js          # round-trips every payload before any of it is sent
+node gen.js                   # writes calls/ — the ready-to-paste use_figma scripts
+```
+
+Then paste each `calls/*.js` into `use_figma` in order. Reset the `skip` values
+in `gen.js` to `0` first — they record how many screens per page are already
+built, so a resumed run only emits what is outstanding.
+
+After the last call, place the logo:
+
+1. Extract the PNG from the data URI in `index.html`.
+2. `upload_assets` it against any rectangle named `Valmo logo`; the POST
+   response carries the `imageHash`.
+3. Apply that hash to every other `Valmo logo` rectangle — one `use_figma` call
+   per page, since a script may only switch pages once.
 
 ## How the pipeline works
 
@@ -52,16 +67,8 @@ calls/   ──► use_figma                 (inflate + build inside the Figma p
 The payload is compressed because the plugin sandbox has no `fetch` — every byte
 has to be inlined in the script. It is chunked with a per-chunk checksum because
 a long base64 blob is easy to garble in transit: a bad chunk is reported by index
-and nothing is written to the file.
+and nothing is written to the file. That caught four transcription slips during
+the build, each time before anything reached the canvas.
 
-## Re-running from scratch
-
-```bash
-npm i puppeteer-core          # needs Google Chrome installed at the usual path
-node capture.js               # drives the prototype, writes shots/
-node compact.js               # writes packed/
-node inflate.test.js          # round-trips every payload before any of it is sent
-node gen.js                   # writes calls/
-```
-
-`shots/` and `node_modules/` are not committed — both are regenerable.
+`shots/`, `calls/` and `node_modules/` are not committed — all three are
+regenerable from `packed/` and the scripts.
