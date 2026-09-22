@@ -2153,6 +2153,155 @@ async function testAdminPanel() {
   win.close();
 }
 
+/* =========================================================================
+   13. Above-ceiling rate card: CH → Central Admin, and revision send-backs
+   ====================================================================== */
+
+async function testCeilingEscalation() {
+  section("13. Above-ceiling rate card — raise, reject and revise");
+  const { win, doc, api } = await boot();
+
+  devClick(doc, "as:admin");
+  login(doc);
+
+  /* --- a request already sitting with the CH, priced above its ceiling --- */
+  clickSel(doc, '[data-aprole="ch"]');
+  const sample = api.helpers.apById("OBD-78255");
+  eq(sample.stage, "ch", "the sample sits with the Cluster Head");
+  eq(sample.hubCategory, "mall", "on a mall hub");
+  eq(api.helpers.apCeiling(sample), 2, "whose ceiling is 2");
+  check(!api.helpers.apWithinThreshold(sample), "and its rate card is above that");
+  eq(sample.rateEscalated, true, "so it arrived as an approval request");
+  check(apVisible(doc).indexOf("OBD-78255") >= 0, "and it is in the CH queue");
+
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  check(exists(doc, '[data-testid="ch-rate-escalated"]'),
+        "the CH is told the rate card is above ceiling");
+  check(exists(doc, '[data-testid="ch-rate-readonly"]'), "with the rate card shown read-only");
+  check(txt(doc).indexOf("above ceiling") >= 0, "and the offending slabs flagged");
+  check(!exists(doc, "#ap-approve"), "the CH cannot settle it themselves");
+  check(exists(doc, "#ap-central"), "but can raise it to Central Admin");
+  check(exists(doc, "#ap-reject"), "and can reject it instead");
+
+  /* --- reject sends it back to the AM to revise --- */
+  api.actions.chField("reason", "Rate is too high for this catchment.");
+  click(doc, "ap-reject");
+  const back = api.helpers.apById("OBD-78255");
+  eq(back.stage, "am", "rejecting returns it to the Area Manager, not to the captain");
+  eq(back.settled, null, "the request is not closed");
+  eq(back.status, "pending", "it is pending again");
+  eq(back.rateEscalated, false, "and no longer carries the escalation flag");
+  check(!!back.revision, "a revision note is attached");
+  eq(back.revision.by, "Cluster Head", "naming who sent it back");
+  eq(back.revision.reason, "Rate is too high for this catchment.", "and why");
+  check(txt(doc).indexOf("Sent back to the Area Manager") >= 0, "with a confirmation");
+
+  /* --- the AM sees why, and lands on the rate card --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  check(apVisible(doc).indexOf("OBD-78255") >= 0, "it is back in the AM queue");
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  eq(api.state.admin.amStep, "rate",
+     "a returned request opens on the rate card, not the checklist");
+  check(exists(doc, '[data-testid="am-revision"]'), "with the send-back explained");
+  check(txt(doc).indexOf("Sent back by the Cluster Head") >= 0, "naming the desk");
+  check(txt(doc).indexOf("Rate is too high for this catchment.") >= 0, "and the reason");
+
+  /* reprice within the ceiling and it goes straight through */
+  api.actions.chSlabField(0, "rate", "1.80");
+  api.actions.chSlabField(1, "rate", "1.60");
+  check(api.helpers.apWithinThreshold(api.helpers.apById("OBD-78255")),
+        "repriced inside the ceiling");
+  check($(doc, "ap-approve").textContent.indexOf("send to CH") >= 0,
+        "so it submits as a straight approval again");
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78255").stage, "ch", "and returns to the Cluster Head");
+  eq(api.helpers.apById("OBD-78255").revision, null, "with the revision note cleared");
+  eq(api.helpers.apById("OBD-78255").rateEscalated, false, "and no escalation");
+
+  /* --- price it above ceiling again and walk it up to Central Admin --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  api.actions.adminOpen("OBD-78255");
+  api.actions.chField("reason", "Still worth another look.");
+  click(doc, "ap-reject");
+
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  api.actions.chSlabField(0, "rate", "3.50");
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78255").rateEscalated, true, "above ceiling again");
+  eq(api.helpers.apById("OBD-78255").stage, "ch", "so it goes to the Cluster Head for approval");
+
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  click(doc, "ap-central");
+  eq(api.helpers.apById("OBD-78255").stage, "central", "the CH raises it to Central Admin");
+
+  /* --- Central Admin can approve or reject --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="central"]');
+  eq(api.state.admin.tab, "mine", "Central opens on its own queue");
+  check(apVisible(doc).indexOf("OBD-78255") >= 0, "where the raised request is waiting");
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  check(txt(doc).indexOf("Central Admin · rate card approval") >= 0, "opening the approval");
+  check(exists(doc, '[data-testid="central-above-threshold"]'), "with the overage stated");
+  check(txt(doc).indexOf("Raised by the Cluster Head") >= 0, "attributed to the Cluster Head");
+  check(exists(doc, "#ap-approve") && exists(doc, "#ap-reject"),
+        "Central Admin can approve or reject");
+
+  /* reject first — it goes back to the AM, not to the captain */
+  click(doc, "ap-reject");
+  const bounced = api.helpers.apById("OBD-78255");
+  eq(bounced.stage, "am", "a Central rejection also returns it to the Area Manager");
+  eq(bounced.revision.by, "Central Admin", "naming Central Admin as the sender");
+  eq(bounced.settled, null, "and the request stays open");
+
+  /* send it back up the same way and approve it this time */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  click(doc, "ap-approve");
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  click(doc, "ap-central");
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="central"]');
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78255").settled, "approved", "Central Admin approves the rate card");
+  eq(api.helpers.apById("OBD-78255").stage, "done", "which settles the request");
+
+  /* --- a desk looking at someone else's request gets read-only, not ZH copy --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  api.actions.adminOpen("OBD-78255");           /* now settled, so off the CH's desk */
+  check(exists(doc, '[data-testid="zh-monitor-only"]'), "a closed request opens read-only");
+  check(txt(doc).indexOf("Zonal Head panel") === -1,
+        "and does not tell a Cluster Head it is the Zonal Head's panel");
+  check(txt(doc).indexOf("pending with the Closed") === -1,
+        "nor describe a closed request as pending with 'Closed'");
+  check(txt(doc).indexOf("it was approved") >= 0, "it states the outcome instead");
+
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="zh"]');
+  api.actions.adminOpen("OBD-78219");
+  check(txt(doc).indexOf("Zonal Head panel") >= 0,
+        "while the Zonal Head still gets the monitoring wording");
+  check(txt(doc).indexOf("pending with the Cluster Head") >= 0, "naming the desk holding it");
+
+  /* --- nothing is ever stranded at a desk that cannot act --- */
+  const stuck = api.state.adminRequests.filter(r => r.stage === "zh");
+  eq(stuck.length, 0,
+     "no request sits at the Zonal Head, who has no actions to move it on");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -2173,6 +2322,7 @@ async function testAdminPanel() {
     await testBackAndPhoto();
     await testCaptainHub();
     await testAdminPanel();
+    await testCeilingEscalation();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

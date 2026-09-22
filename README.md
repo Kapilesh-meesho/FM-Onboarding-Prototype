@@ -1,40 +1,3 @@
-### The approval chain
-
-```
-AM: infra + hub type + rate card → CH: interview + rating → agreements
-                                 ↘ (above ceiling) CH raises → Central Admin → agreements
-```
-
-The **Area Manager** works in two pages. **Step 1** is the infra check — the nine hard gates
-and the max vehicle size review. It has to pass before **step 2** opens: the **hub type**
-(Standalone, Mall hub, LM-as-FM, SAH…) and the **rate card** — an order-volume band and rate
-per slab, plus one touchpoint rate. The two pages navigate both ways, so a reviewer can go
-back and correct the checklist without losing the rate card.
-
-The hub type sets the **ceiling**, which is shown against every slab as it is typed and
-flags any row that exceeds it. A card within ceiling goes *Approve & send to CH*; a card
-above it goes *Raise approval request to CH* instead — it can still be submitted, it just
-travels as an approval request.
-
-The **Cluster Head** does the interview and rating. The rate card is read-only here,
-attributed to the Area Manager. A within-ceiling request the CH settles themselves; an
-above-ceiling one they cannot, and the approve action is replaced by *Raise to Central
-Admin*. **Central Admin** has the last word.
-
-The **Zonal Head approves nothing.** Their panel is AM pendency and CH pendency — what is
-sitting with whom — and opening a request gives a read-only status view with no actions at
-all. A desk only gets a working screen for requests actually at its own stage; everyone else
-gets that status view, so nobody can act outside their remit.
-
-Any desk that can act can also reject, which sends the request back to the captain.
-
-**A request's status is only ever *Pending* or *SLA breach*.** Which desk holds it is its
-*stage*, tracked separately and surfaced as the tab it appears under and as "pending with"
-on the Zonal Head's status view — so there are no stage-specific statuses like *AM pending*
-or *CH pending*, and the design's *VLS fields missing* is not a status either. A settled
-request leaves the working queues entirely, since every tab filters by stage; whether it was
-approved or rejected is recorded on the request as `settled`.
-
 # Valmo — Captain Self-Serve Onboarding Prototype
 
 A clickable prototype of Valmo's captain self-serve onboarding, covering **two roles with
@@ -169,13 +132,12 @@ touchpoint rate and the proposed rate; the classification that produced them, an
 threshold it sets, stay internal.
 
 The mechanics are unchanged underneath: the category is still an Area Manager input, it
-still determines the benchmark ceiling, `chCanDecide` still refuses a Cluster Head decision
-until it is set, and a rate above the ceiling still escalates to the Zonal Head. Only the
-narration is gone. An escalated request tells the captain the rate *needs Zonal Head
-sign-off*, not why.
+still determines the benchmark ceiling, and a rate above the ceiling still escalates — to
+the Cluster Head, and from there to Central Admin. Only the narration is gone. An escalated
+request tells the captain the rate *needs sign-off*, not why.
 
-**5. Cluster Head review includes rate card approval against a benchmark ceiling**
-determined by that hub category:
+**5. The rate card is approved against a benchmark ceiling** determined by that hub
+category:
 
 | Category | Ceiling (₹/shipment) | Touchpoint rate |
 |---|---|---|
@@ -185,9 +147,9 @@ determined by that hub category:
 | Mall hub | 2 | ₹2 |
 | SAH (seller as hub) | 1.5 | ₹1.5 |
 
-A rate **within** the ceiling clears at Cluster Head. A rate **above** it escalates to the
-**Zonal Head**, who gets their own contact card and approve/reject states. Neither case is
-annotated on screen — the rate is shown as a plain figure, because the ceiling it is being
+A rate **within** the ceiling clears at Cluster Head. A rate **above** it the Cluster Head
+cannot settle at all — it goes to **Central Admin**. Neither case is annotated on the
+captain's screen: the rate is shown as a plain figure, because the ceiling it is being
 measured against is not something the captain is shown.
 
 The ceiling table above describes internal behaviour and the dev panel, not anything the
@@ -363,8 +325,8 @@ SLA chip — over a request table with search and status filters, and stat tiles
 carries the captain's phone under their name, and the search matches it however it is typed
 — spaced as displayed, unspaced, with `+91`, or as a bare `91`-prefixed number — alongside
 request ID, captain name and pincode. Opening a
-request gives the full-page review: the AM infra checklist, the CH review, and the ZH
-rate-card approval. Every review carries the read-only *Captain & hub context* card and an
+request gives the full-page review: the AM infra checklist, the AM rate card, the CH review,
+and the Central Admin approval. Every review carries the read-only *Captain & hub context* card and an
 SLA card.
 
 ### The rate card
@@ -377,11 +339,11 @@ rule does not depend on the select to enforce it.
 
 The rate card is **slab-based**: each slab takes an order-volume band and a single rate for
 it — there is no separate forward and reverse rate — plus one **touchpoint rate** for the
-hub, paid on top of the slab rate. The Cluster Head can add as many slabs as needed; a new
+hub, paid on top of the slab rate. The Area Manager can add as many slabs as needed; a new
 one starts where the previous band ended, and the top band's upper bound is left blank to
-mean *and above*. Approval needs a rating of 4 or 5 **and** a complete rate card: every slab
-needs a starting volume, a rate and an upper bound above its start, and the hub needs a
-touchpoint rate.
+mean *and above*. Submission needs a hub type **and** a complete rate card: every slab needs
+a starting volume, a rate and an upper bound above its start, and the hub needs a touchpoint
+rate. Each slab shows its ceiling as it is typed and flags the row if it goes over.
 
 The approved card is what the **captain** then sees — the same bands and the same touchpoint
 rate, on the Cluster Head screen and again on agreements. The hub category and the benchmark
@@ -406,28 +368,58 @@ visible that a correction happened — the context card shows the effective size
 ### The approval chain
 
 ```
-AM infra check → CH rate card → ZH sign-off → (Central Admin, if above threshold) → agreements
+AM: infra + hub type + rate card → CH: interview + rating → agreements
+                                 ↘ (above ceiling) CH raises → Central Admin → agreements
+                                 ↙ (rejected at either desk) back to AM to revise
 ```
 
-The Area Manager's approval routes the request to the Cluster Head, who sets the rate card
-and approves it onward to the **Zonal Head**. What the Zonal Head can do then depends on the
-rate card itself.
+The **Area Manager** works in two pages. **Step 1** is the infra check — the nine hard gates
+and the max vehicle size review. It has to pass before **step 2** opens: the **hub type**
+(Standalone, Mall hub, LM-as-FM, SAH…) and the **rate card** — an order-volume band and rate
+per slab, plus one touchpoint rate. The two pages navigate both ways, so a reviewer can go
+back and correct the checklist without losing the rate card.
 
-Every request carries a **hub category** — an Area Manager input — and that category's
-benchmark ceiling is the **threshold**. If every slab rate sits at or below it, the Zonal
-Head signs the card off and it goes to agreements. If any slab is above it, the Zonal Head
-**cannot** sign it off: the approve action is replaced by *Send to Central Admin*, with the
-overage stated (*"the highest slab rate is ₹3.00 against a ₹2.00 ceiling for a Mall hub"*),
-and each offending slab flagged in the table. **Central Admin** then has the last word, with
-its own queue and the escalation reason carried through.
+The hub type sets the **ceiling**, which is shown against every slab as it is typed and
+flags any row that exceeds it. A card within ceiling goes *Approve & send to CH*; a card
+above it goes *Raise approval request to CH* instead — it can still be submitted, it just
+travels as an approval request.
 
-Any desk can reject, which sends the request back to the captain.
+The **Cluster Head** does the interview and rating. The rate card is read-only here,
+attributed to the Area Manager. A within-ceiling request the CH settles themselves; an
+above-ceiling one they cannot, and the approve action is replaced by *Raise to Central
+Admin*. **Central Admin** has the last word: approve and the request settles; reject and it
+goes back down.
+
+The **Zonal Head approves nothing.** Their panel is AM pendency and CH pendency — what is
+sitting with whom — and opening a request gives a read-only status view with no actions at
+all. A desk only gets a working screen for requests actually at its own stage; everyone else
+gets that status view, worded for whoever is reading it rather than always for a Zonal Head,
+so nobody can act outside their remit.
+
+**Rejection sends the rate card back to the Area Manager, not to the captain.** The rate
+card is the Area Manager's work, so a rejection at either the Cluster Head or the Central
+Admin desk returns the request to stage `am` with a `revision` record naming the desk and
+the reason. It reappears in the Area Manager's queue, and because the infra check is already
+done, opening it lands directly on the rate-card page with the send-back explained in a
+banner. Repricing within ceiling clears the escalation and the request goes back up as an
+ordinary approval.
+
+`OBD-78255` is seeded to demonstrate exactly this: a mall hub priced at ₹3.00 / ₹2.80
+against a ₹2.00 ceiling, sitting in the Cluster Head's queue with both *Raise to Central
+Admin* and *Reject · send back to AM* available.
+
+**A request's status is only ever *Pending* or *SLA breach*.** Which desk holds it is its
+*stage*, tracked separately and surfaced as the tab it appears under and as "pending with"
+on the read-only status view — so there are no stage-specific statuses like *AM pending* or
+*CH pending*, and the design's *VLS fields missing* is not a status either. A settled
+request leaves the working queues entirely, since every tab filters by stage; whether it was
+approved or rejected is recorded on the request as `settled`.
 
 **Security deposit is removed throughout**, since FM hubs do not take one. That means the
 `zh-sd-detail` frame (*ZH adjust SD*) is not built at all, the *Model SD* and *Current SD*
 rows are absent from the context card, the CH form drops *Raise security deposit?* and
 *Final SD after CH*, its button reads *Approve & send to agreements* rather than *send to
-deposit*, and the Zonal Head's remit is rate-card approval instead. The Zonal Head card on
+deposit*, and the Zonal Head's remit is monitoring instead. The Zonal Head card on
 the picker is described accordingly.
 
 **Not built, as scoped:** the `geo-bind-am` / `geo-bind-ch` / `geo-bind-zh` binding screens.
@@ -487,14 +479,14 @@ build from.
 npm install && npm test
 ```
 
-**732 assertions across 15 groups:**
+**783 assertions across 16 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
    phase, mandatory GST, MSME required, no cheque upload, no hub code at submit, Partner ID
    instead of vendor ID, hub code issued at activation
-3. **FM escalation** — split mode, above benchmark → ZH reject → resubmit → ZH approve,
-   plus the caveat rendering and the CH reject/resubmit path
+3. **FM escalation** — split mode, above benchmark, the caveat rendering and the captain's
+   reject/resubmit path
 4. **Role independence** — LM parked mid-flow is byte-identical after a full FM run; both
    subtrees round-trip through localStorage; resume lands on the right phase
 5. **Validation** — pincode format, duplicate, max-5, PAN, IFSC, GSTIN, map link, hub
@@ -530,6 +522,21 @@ npm install && npm test
    KYC; and a finished hub appearing in My Hubs for both a new and an existing captain.
    Includes a regression group driving the `HB-07` GST choices by clicking and typing
    rather than calling actions — see below.
+12. **Admin panel** — the Captain/Admin login switch and the four role cards; each desk's
+   own queue and tabs; search by request ID, captain name **and phone**; the nine AM hard
+   gates with any failure forcing rejection; the max-vehicle review and its correction flow;
+   the AM's two pages and the gate between them; hub type and slab-wise rate card capture
+   with per-slab ceilings; the CH's read-only view of that card; role-aware dispatch, so a
+   desk never gets a working screen for a request at someone else's stage; and statuses
+   limited to *Pending* and *SLA breach*
+13. **Above-ceiling rate card** — `OBD-78255` reaching the CH flagged over its mall-hub
+   ceiling with both *Raise to Central Admin* and *Reject · send back to AM* offered; a
+   rejection at either desk returning the request to the Area Manager with a `revision`
+   record rather than closing it; the AM opening straight onto the rate page with the
+   send-back explained; repricing within ceiling clearing the escalation; Central Admin
+   approving and rejecting; the read-only status view being worded for whoever opens it
+   rather than always for a Zonal Head; and no request left stranded at a desk with no
+   actions
 
 Three notes on how the tests drive the app:
 
