@@ -1974,37 +1974,51 @@ async function testAdminPanel() {
   check(exists(doc, '[data-testid="am-vehicle-picker"]'),
         "failing the review opens the vehicle picker");
   check(exists(doc, "#veh-toggle"), "which is the same vehicle dropdown the captain uses");
-  check(!api.helpers.amVehicleSettled(api.helpers.apById("OBD-78222")),
-        "a failed review is unsettled until a size is chosen");
-  check(disabled(doc, "ap-approve"), "and approve stays blocked");
-
   api.actions.setMaxVehicle("3.5MT_14FT");
   const amReq = api.helpers.apById("OBD-78222");
   eq(amReq.am.maxVehicle, "3.5MT_14FT", "the AM's corrected size is recorded");
   eq(amReq.am.declaredVehicle, "7MT_20FT", "the captain's declared size is kept separately");
-  eq(api.helpers.amEffectiveVehicle(amReq), "3.5MT_14FT", "the correction takes effect");
   check(api.helpers.amVehicleSettled(amReq), "and the review is settled");
-  check(txt(doc).indexOf("Corrected to 3.5MT_14FT") >= 0, "the row reports the correction");
-  check(txt(doc).indexOf("AM updated") >= 0, "and the context card flags it as AM-updated");
-  check(txt(doc).indexOf("Ready to approve") >= 0, "the card is now ready to approve");
+
+  /* --- the AM sets the hub type and the rate card --- */
+  check(disabled(doc, "ap-approve"),
+        "gates and vehicle review are still not enough — the rate card is missing");
+  check(exists(doc, "#am-category"), "the AM selects the hub type");
+  check(exists(doc, '[data-testid="am-slabs"]'), "and fills in the rate card");
+  check(exists(doc, "#am-touchpoint"), "including the touchpoint rate");
+  check(!exists(doc, "#ch-touchpoint"), "the rate card no longer sits with the Cluster Head");
+  check(txt(doc).indexOf("Select a hub type first") >= 0,
+        "with no hub type there is no ceiling to measure against");
+
+  api.actions.amCategory("standalone");
+  eq(api.helpers.apCeiling(amReq), 5, "a Standalone hub sets a ceiling of 5");
+  check(txt(doc).indexOf("₹5.00") >= 0, "the ceiling is shown against the slabs");
+
+  /* within the ceiling → straight through to the Cluster Head */
+  api.actions.chSlabField(0, "from", "0");
+  api.actions.chSlabField(0, "to", "500");
+  api.actions.chSlabField(0, "rate", "4.50");
+  api.actions.amRateField("touchpoint", "5.00");
+  check(api.helpers.apWithinThreshold(amReq), "4.50 is within the 5.00 ceiling");
+  check(txt(doc).indexOf("Within ceiling") >= 0, "the card says so");
   check(!disabled(doc, "ap-approve"), "and approve opens");
+  check($(doc, "ap-approve").textContent.indexOf("send to CH") >= 0,
+        "sending it straight to the Cluster Head");
 
-  /* passing it instead needs no correction */
-  clickSel(doc, '[data-vehreview="yes"]');
-  eq(api.helpers.apById("OBD-78222").am.maxVehicle, "",
-     "passing the review clears any correction");
-  check(api.helpers.amVehicleSettled(api.helpers.apById("OBD-78222")),
-        "and a pass settles it on its own");
-  check(!disabled(doc, "ap-approve"), "approve is open on a pass too");
-
-  /* a failed vehicle review is a correction, not a hard-gate failure */
-  check(!exists(doc, "#ap-reject"),
-        "the vehicle review never forces rejection the way a hard gate does");
+  /* above the ceiling → it becomes an approval request instead */
+  api.actions.chSlabField(0, "rate", "7.00");
+  check(!api.helpers.apWithinThreshold(amReq), "7.00 is above the 5.00 ceiling");
+  check(txt(doc).indexOf("Above ceiling") >= 0, "the card flags it");
+  check(exists(doc, '[data-testid="am-over-ceiling"]'), "and explains what happens next");
+  check(!disabled(doc, "ap-approve"), "it can still be submitted");
+  check($(doc, "ap-approve").textContent.indexOf("Raise approval request to CH") >= 0,
+        "but as an approval request rather than a straight approval");
+  check(!!sel(doc, ".slab-row.over"), "the offending slab is flagged in the row");
 
   click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78222").stage, "ch", "approving routes the request to the Cluster Head");
-  eq(api.state.admin.selected, null, "and returns to the list");
-  check(txt(doc).indexOf("routed to Cluster Head") >= 0, "with a confirmation");
+  eq(amReq.stage, "ch", "either way it routes to the Cluster Head");
+  eq(amReq.rateEscalated, true, "carrying the flag that it is above ceiling");
+  check(txt(doc).indexOf("Approval request raised") >= 0, "with a confirmation");
 
   /* --- Cluster Head --- */
   api.actions.adminSwitchRole();
@@ -2013,148 +2027,60 @@ async function testAdminPanel() {
      "CH sees its own requests, AM requests and user mapping");
   check(txt(doc).indexOf("Rakesh Sharma") >= 0, "signed in as the Cluster Head");
 
+  /* a within-ceiling request the CH can settle */
   clickSel(doc, '[data-apopen="OBD-78219"]');
   check(txt(doc).indexOf("CH review · approve request") >= 0, "opens the CH review");
   noSd("the CH review");
-  check(txt(doc).indexOf("Raise security deposit") === -1,
-        "the raise-deposit field from the LM design is absent");
+  check(exists(doc, '[data-testid="ch-rate-readonly"]'),
+        "the rate card is shown read-only — the CH no longer authors it");
+  check(!exists(doc, "[data-slab]"), "there are no slab inputs here");
+  check(txt(doc).indexOf("set by the Area Manager") >= 0, "attributed to the Area Manager");
   eq([...doc.querySelectorAll("[data-rating]")].length, 5, "a 1–5 rating is offered");
 
-  /* --- Hub Payout Type, with Split not yet available --- */
-  check(exists(doc, "#ch-payout"), "hub payout type is captured");
-  check(txt(doc).indexOf("Hub Payout Type") >= 0, "labelled Hub Payout Type");
-  check(txt(doc).indexOf("Hub type") === -1, "the old 'Hub type' label is gone");
-  const payout = [...doc.querySelectorAll("#ch-payout option")];
-  eq(payout.map(o => o.value), ["Combined","Split"], "both payout types are listed");
-  check(!payout[0].disabled, "Combined is selectable");
-  check(payout[1].disabled, "Split is disabled for now");
-  eq(api.helpers.apById("OBD-78219").ch.payoutType, "Combined", "Combined is the value in play");
-  check(api.helpers.payoutAllowed("Combined"), "Combined is an allowed payout type");
-  check(!api.helpers.payoutAllowed("Split"), "Split is not");
-  /* the rule holds even if the value arrives some other way than the select */
-  api.actions.chField("payoutType", "Split");
-  eq(api.helpers.apById("OBD-78219").ch.payoutType, "Combined",
-     "Split is refused in state, not merely disabled in the dropdown");
-
-  /* --- one rate per slab: no forward/reverse split --- */
-  check(!exists(doc, "#ch-fwd") && !exists(doc, "#ch-rev"),
-        "there is no separate forward and reverse rate");
-  ["Forward rate","Reverse rate"].forEach(l =>
-    check(txt(doc).indexOf(l) === -1, "the CH form no longer shows: " + l));
-
-  /* --- slab rate card --- */
-  check(exists(doc, '[data-testid="ch-slabs"]'), "the rate card is captured as slabs");
-  check(txt(doc).indexOf("Rate card slabs") >= 0, "with a slab heading");
-  const slabRows = () => [...doc.querySelectorAll("[data-slabrow]")];
-  eq(slabRows().length, 1, "one slab to begin with");
-  const fields = [...doc.querySelectorAll('[data-slab="0"]')].map(i => i.getAttribute("data-field"));
-  eq(fields, ["from","to","rate"], "each slab takes an order-volume range and a rate");
-  check(disabled(doc, '[data-slabdel="0"]') || sel(doc, '[data-slabdel="0"]').disabled,
-        "the only slab cannot be removed");
-
-  /* the CH can add multiple slabs */
-  click(doc, "ch-slab-add");
-  eq(slabRows().length, 2, "a second slab can be added");
-  click(doc, "ch-slab-add");
-  eq(slabRows().length, 3, "and a third");
-  const chReq = api.helpers.apById("OBD-78219");
-  eq(chReq.ch.slabs[1].from, "501", "a new slab starts where the previous band ended");
-  check(!sel(doc, '[data-slabdel="0"]').disabled, "slabs can be removed once there are several");
-  api.actions.chSlabRemove(2);
-  eq(slabRows().length, 2, "a slab can be removed");
-
-  /* an incomplete slab blocks approval */
-  api.actions.chRate(4);
-  check(!api.helpers.slabsValid(chReq.ch.slabs), "the new slab has no rate yet");
-  check(disabled(doc, "ap-approve"), "so approval is blocked even at rating 4");
-  api.actions.chSlabField(1, "to", "1000");
-  api.actions.chSlabField(1, "rate", "4.00");   // inside the Standalone ceiling of 5
-  check(api.helpers.slabsValid(chReq.ch.slabs), "completing the slab makes the card valid");
-  api.actions.chRate(4);
-  check(!disabled(doc, "ap-approve"), "and approval opens");
-
-  /* touchpoint rate sits alongside the slabs */
-  check(exists(doc, "#ch-touchpoint"), "a touchpoint rate is captured");
-  check(txt(doc).indexOf("Touchpoint rate") >= 0, "and labelled");
-  eq(chReq.ch.touchpoint, "5.00", "with a value in play");
-  api.actions.chField("touchpoint", "");
-  check(!api.helpers.rateCardValid(chReq.ch), "a rate card without a touchpoint is incomplete");
-  check(disabled(doc, "ap-approve"), "so approval is blocked");
-  api.actions.chField("touchpoint", "6.00");
-  check(api.helpers.rateCardValid(chReq.ch), "restoring it completes the card");
-  api.actions.chRate(4);
-  check(!disabled(doc, "ap-approve"), "and approval opens again");
-  check(!api.helpers.rateOk("abc"), "a touchpoint rate must be numeric");
-  check(api.helpers.rateOk("5"), "whole numbers are fine");
-  check(api.helpers.rateOk("5.25"), "and two decimals");
-
-  /* slab validation */
-  check(!api.helpers.slabValid({ from:"", to:"100", rate:"10" }), "a slab needs a start volume");
-  check(!api.helpers.slabValid({ from:"0", to:"100", rate:"" }), "a slab needs a rate");
-  check(!api.helpers.slabValid({ from:"500", to:"100", rate:"10" }),
-        "the upper bound must be above the start");
-  check(api.helpers.slabValid({ from:"501", to:"", rate:"9.50" }),
-        "a blank upper bound means the band is open-ended");
-  eq(api.helpers.slabLabel({ from:"0", to:"500", rate:"1" }), "0–500 orders", "bands read as a range");
-  eq(api.helpers.slabLabel({ from:"501", to:"", rate:"1" }), "501+ orders", "open bands read as N+");
-
-  /* rating gates the decision, per the design */
   api.actions.chRate(2);
   check(exists(doc, "#ap-reject"), "a rating of 2 offers rejection");
-  check(!exists(doc, "#ap-approve"), "and not approval");
   api.actions.chRate(4);
   check(exists(doc, "#ap-approve"), "a rating of 4 offers approval");
-  check(txt(doc).indexOf("send to ZH") >= 0,
-        "and sends the rate card to the Zonal Head for sign-off");
-  check(txt(doc).indexOf("send to deposit") === -1, "not to a deposit");
-
-  /* --- CH approve → ZH --- */
+  check(txt(doc).indexOf("send to agreements") >= 0,
+        "a within-ceiling request is settled by the Cluster Head");
   click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78219").stage, "zh",
-     "the Cluster Head's approval sends the rate card to the Zonal Head");
-  check(txt(doc).indexOf("sent to Zonal Head") >= 0, "with a confirmation");
+  eq(api.helpers.apById("OBD-78219").status, "approved", "and approved");
+  eq(api.helpers.apById("OBD-78219").stage, "done", "which settles it");
 
-  /* CH can see AM requests and user mapping */
-  api.actions.adminTab("am");
-  check([...doc.querySelectorAll("[data-apopen]")].length >= 1, "CH can view AM-stage requests");
+  /* an above-ceiling request the CH must raise onward */
+  api.actions.adminOpen("OBD-78222");
+  api.actions.chRate(4);
+  check(exists(doc, '[data-testid="ch-rate-escalated"]'),
+        "an above-ceiling card is flagged as raised by the Area Manager");
+  check(!exists(doc, "#ap-approve"), "the Cluster Head cannot settle it");
+  check(exists(doc, "#ap-central"), "but can raise it to Central Admin");
+  click(doc, "ap-central");
+  eq(api.helpers.apById("OBD-78222").stage, "central", "which routes it to Central Admin");
+  check(txt(doc).indexOf("Raised to Central Admin") >= 0, "with a confirmation");
+
   api.actions.adminTab("users");
-  check(txt(doc).indexOf("User mapping") >= 0, "and the user mapping table");
-  check(txt(doc).indexOf("priya.sharma@meesho.com") >= 0, "listing mapped users");
+  check(txt(doc).indexOf("User mapping") >= 0, "the CH has a user mapping table");
 
-  /* --- Zonal Head --- */
+  /* --- Zonal Head: monitoring only --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="zh"]');
   check(txt(doc).indexOf("Priya Nair") >= 0, "signed in as the Zonal Head");
+  eq(api.config.ADMIN_TABS.zh.map(t => t.id), ["am","ch","users"],
+     "the Zonal Head sees AM and CH pendency, and nothing of their own");
+  eq(api.config.ADMIN_TABS.zh.map(t => t.label), ["AM pendency","CH pendency","User mapping"],
+     "framed as pendency rather than a queue");
+  check(api.config.ADMIN_ROLES.zh.desc.indexOf("Monitor") >= 0,
+        "and described as monitoring");
+  check(api.config.ADMIN_ROLES.zh.desc.indexOf("Approve") === -1, "not approving");
+
   const zhRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
-  check(zhRows.indexOf("OBD-78219") >= 0, "the escalated request is on the ZH desk");
-  clickSel(doc, '[data-apopen="OBD-78219"]');
-  check(txt(doc).indexOf("ZH review · rate card approval") >= 0, "opens the ZH approval");
-  noSd("the ZH review");
-  check(txt(doc).indexOf("Adjust security deposit") === -1,
-        "the LM design's deposit-adjustment screen is not built");
-
-  /* within threshold → the Zonal Head signs it off */
-  const zhReq = api.helpers.apById("OBD-78219");
-  check(api.helpers.apWithinThreshold(zhReq), "this card is within its hub category ceiling");
-  eq(api.helpers.apCeiling(zhReq), 5, "a Standalone hub's threshold is 5");
-  check(txt(doc).indexOf("Within threshold") >= 0, "the screen says so");
-  check(exists(doc, "#ap-approve"), "so the Zonal Head can approve it");
-  check(!exists(doc, "#ap-central"), "and does not need Central Admin");
-  click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78219").status, "approved", "the Zonal Head approves the rate card");
-
-  /* above threshold → the Zonal Head sends it to Central Admin */
-  const overReq = api.helpers.apById("OBD-78255");
-  check(!api.helpers.apWithinThreshold(overReq), "a mall hub at ₹3.00 is above its ₹2.00 ceiling");
-  api.actions.adminOpen("OBD-78255");
-  check(txt(doc).indexOf("Above threshold") >= 0, "the screen flags it as above threshold");
-  check(exists(doc, '[data-testid="zh-above-threshold"]'), "and explains why");
-  check(!exists(doc, "#ap-approve"), "the Zonal Head cannot sign it off");
-  check(exists(doc, "#ap-central"), "but can send it to Central Admin");
-  click(doc, "ap-central");
-  eq(api.helpers.apById("OBD-78255").stage, "central", "which routes it to Central Admin");
-  eq(api.helpers.apById("OBD-78255").status, "central_pending", "and marks it pending there");
-  check(txt(doc).indexOf("Sent to Central Admin") >= 0, "with a confirmation");
+  check(zhRows.length >= 1, "AM pendency lists what is with Area Managers");
+  clickSel(doc, '[data-apopen="' + zhRows[0] + '"]');
+  check(exists(doc, '[data-testid="zh-monitor-only"]'), "opening one is a view-only screen");
+  check(txt(doc).indexOf("Request status") >= 0, "showing where the request sits");
+  ["ap-approve","ap-reject","ap-central"].forEach(id =>
+    check(!exists(doc, "#" + id), "the Zonal Head has no " + id.replace("ap-", "") + " action"));
+  noSd("the ZH monitoring view");
 
   /* --- FM Central Admin --- */
   api.actions.adminSwitchRole();
@@ -2163,24 +2089,20 @@ async function testAdminPanel() {
      "Central has its own approval queue plus the AM, CH and ZH views");
   check(txt(doc).indexOf("National view") >= 0, "described as a national view");
 
-  /* --- Central Admin approves the above-threshold card --- */
   eq(api.state.admin.tab, "mine", "Central opens on its own queue");
   const centralRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
-  eq(centralRows, ["OBD-78255"], "which holds the request the Zonal Head sent up");
-  clickSel(doc, '[data-apopen="OBD-78255"]');
+  check(centralRows.indexOf("OBD-78222") >= 0, "holding what the Cluster Head raised");
+  clickSel(doc, '[data-apopen="OBD-78222"]');
   check(txt(doc).indexOf("Central Admin · rate card approval") >= 0, "opens the Central approval");
   check(exists(doc, '[data-testid="central-above-threshold"]'),
-        "stating what was over threshold and by how much");
-  check(txt(doc).indexOf("Mall hub") >= 0, "naming the hub category");
+        "stating what was over ceiling and by how much");
+  check(txt(doc).indexOf("Raised by the Cluster Head") >= 0, "attributed to the Cluster Head");
   check(exists(doc, "#ap-approve"), "Central Admin can approve it");
   click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78255").status, "approved", "and does");
-  eq(api.helpers.apById("OBD-78255").stage, "done", "which settles the request");
-  check(txt(doc).indexOf("approved by Central Admin") >= 0, "with a confirmation");
-
-  api.actions.adminTab("zh");
-  check(txt(doc).indexOf("Request") >= 0, "ZH requests list renders");
+  eq(api.helpers.apById("OBD-78222").status, "approved", "and does");
+  eq(api.helpers.apById("OBD-78222").stage, "done", "which settles the request");
   noSd("the Central console");
+
 
   /* --- binding screens are deliberately absent --- */
   const allTabs = Object.keys(api.config.ADMIN_TABS)

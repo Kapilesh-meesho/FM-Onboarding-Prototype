@@ -916,6 +916,13 @@ img{max-width:100%}
   border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;
 }
 .slab-row.bad{border-color:var(--err-br);background:var(--err-bg)}
+.slab-row.over{border-color:#f3e2c4;background:#fff9ef}
+.slab-row .ceil{flex:none;width:96px}
+.slab-row .cv{
+  display:block;height:36px;line-height:36px;font-size:12px;font-weight:700;
+  color:var(--muted);white-space:nowrap;
+}
+.slab-row .cv.over{color:var(--warn-ink)}
 .slab-row .sf{flex:1;min-width:0}
 .slab-row .sl{display:block;font-size:10px;font-weight:700;color:var(--cyan-label);margin-bottom:4px}
 .slab-row input{
@@ -1728,13 +1735,13 @@ var ADMIN_ROLES = {
   },
   zh: {
     id:"zh", label:"Zonal Head", short:"ZH", icon:"₹",
-    // the LM design describes adjusting a security deposit; FM has none, so the
-    // Zonal Head's job here is above-benchmark rate approval
-    desc:"Approve or reject above-benchmark rate cards escalated by Cluster Heads.",
+    // the LM design describes adjusting a security deposit; FM has none, and the
+    // Zonal Head does not approve — they watch what is pending with AMs and CHs
+    desc:"Monitor pendencies sitting with Area Managers and Cluster Heads across the zone.",
     cta:"Continue as ZH →",
     person:{ name:"Priya Nair", email:"priya.nair@meesho.com", scope:"Zone: South" },
     title:"FM Onboarding",
-    lede:"Escalations and requests across South zone."
+    lede:"What is pending with Area Managers and Cluster Heads across South zone."
   },
   central: {
     id:"central", label:"FM Central Admin", short:"CA", icon:"🛡",
@@ -1753,8 +1760,8 @@ var ADMIN_TABS = {
   ch:      [{ id:"mine", label:"My requests" },
             { id:"am",   label:"AM requests" },
             { id:"users",label:"User mapping" }],
-  zh:      [{ id:"mine", label:"My requests" },
-            { id:"am",   label:"AM requests" },
+  zh:      [{ id:"am",   label:"AM pendency" },
+            { id:"ch",   label:"CH pendency" },
             { id:"users",label:"User mapping" }],
   central: [{ id:"mine", label:"Pending my approval" },
             { id:"am",   label:"AM requests" },
@@ -1779,7 +1786,11 @@ function apReq(o) {
     id:"", captain:"", phone:"+91 7004301290", hubAppId:"", address:"", pincode:"",
     // hub category is an Area Manager input; its benchmark ceiling is the
     // threshold a rate card has to stay within
-    hubCategory:"standalone",
+    // hub category and the rate card are both Area Manager inputs
+    hubCategory:"", rateEscalated:false,
+    rate:{ payoutType:"Combined",
+           slabs:[ { from:"0", to:"500", rate:"" } ],
+           touchpoint:"" },
     stage:"am", status:"am_pending", sla:"41h left", slaTone:"",
     kyc:true, bgv:true,
     am:{ visitDate:"03 Jul 2026", by:"Self", floor:"750", landmark:"Near Metro Pillar 128",
@@ -1790,39 +1801,37 @@ function apReq(o) {
          notes:"", done:false },
     ch:{ mode:"Phone", date:"03 Jul 2026", experience:"Relevant business",
          ownership:"Leased formal", pilots:"Ready", capacity:"Adequate",
-         rating:0, payoutType:"Combined",
-         // rate card is slab-based: an order-volume band and a rate per band,
-         // plus a single touchpoint rate for the hub
-         slabs:[ { from:"0", to:"500", rate:"4.50" } ], touchpoint:"5.00",
-         reason:"", notes:"", done:false },
+         rating:0, reason:"", notes:"", done:false },
     zh:{ decision:null, reason:"" }
   }, o || {});
 }
 
 function seedAdminRequests() {
   return [
-    apReq({ id:"OBD-78222", hubCategory:"standalone", captain:"Mahesh Kumar", phone:"+91 98450 22119", hubAppId:"HUB-APP-90222",
+    apReq({ id:"OBD-78222", captain:"Mahesh Kumar", phone:"+91 98450 22119", hubAppId:"HUB-APP-90222",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560038",
             stage:"am", status:"am_pending", sla:"41h left" }),
-    apReq({ id:"OBD-78231", hubCategory:"mall", captain:"Amit Bansal", phone:"+91 99012 31447", hubAppId:"HUB-APP-90231",
+    apReq({ id:"OBD-78231", captain:"Amit Bansal", phone:"+91 99012 31447", hubAppId:"HUB-APP-90231",
             address:"No. 8, Service Road, Hebbal, Bengaluru", pincode:"560071",
             stage:"am", status:"vls_missing", sla:"2h left", slaTone:"warn" }),
-    apReq({ id:"OBD-78240", hubCategory:"standalone_mini", captain:"Neha S", phone:"+91 91088 40233", hubAppId:"HUB-APP-90240",
+    apReq({ id:"OBD-78240", captain:"Neha S", phone:"+91 91088 40233", hubAppId:"HUB-APP-90240",
             address:"Unit 3, HSR Layout, Bengaluru", pincode:"560102",
             stage:"am", status:"sla_breach", sla:"5h overdue", slaTone:"warn" }),
-    apReq({ id:"OBD-78219", hubCategory:"standalone", captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
+    apReq({ id:"OBD-78219", hubCategory:"standalone", rate:{ payoutType:"Combined", slabs:[{from:"0",to:"500",rate:"4.50"},{from:"501",to:"",rate:"4.00"}], touchpoint:"5.00" }, captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560076",
             stage:"ch", status:"ch_pending", sla:"6h left", slaTone:"warn" }),
     apReq({ id:"OBD-78255", hubCategory:"mall", captain:"Rajesh Gupta", phone:"+91 88617 55092", hubAppId:"HUB-APP-90255",
             address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
             stage:"zh", status:"zh_pending", sla:"22h left",
+            // the AM priced this one above the mall-hub ceiling, so it was
+            // raised to the Cluster Head and is on its way to Central Admin
+            rateEscalated:true,
+            rate:{ payoutType:"Combined",
+                   slabs:[ { from:"0", to:"500", rate:"3.00" },
+                           { from:"501", to:"", rate:"2.80" } ], touchpoint:"2.00" },
             ch:{ mode:"In person", date:"01 Jul 2026", experience:"Relevant business",
                  ownership:"Owned", pilots:"Ready", capacity:"Adequate", rating:4,
-                 payoutType:"Combined",
-                 // above the mall-hub ceiling, so this one needs Central Admin
-                 slabs:[ { from:"0", to:"500", rate:"3.00" },
-                         { from:"501", to:"", rate:"2.80" } ], touchpoint:"2.00",
-                 reason:"Above benchmark for this volume band", notes:"", done:true } })
+                 reason:"Above ceiling for this hub type", notes:"", done:true } })
   ];
 }
 
@@ -1864,16 +1873,21 @@ function apCeiling(r) {
 function apWithinThreshold(r) {
   var ceil = apCeiling(r);
   if (ceil == null) return true;
-  return (r.ch.slabs || []).every(function (sl) {
+  return (r.rate.slabs || []).every(function (sl) {
     var v = parseFloat(sl.rate);
     return isNaN(v) ? true : v <= ceil;
   });
 }
 function apHighestRate(r) {
-  return (r.ch.slabs || []).reduce(function (m, sl) {
+  return (r.rate.slabs || []).reduce(function (m, sl) {
     var v = parseFloat(sl.rate);
     return isNaN(v) ? m : Math.max(m, v);
   }, 0);
+}
+/* A slab priced above the hub type's ceiling. */
+function slabOverCeiling(r, sl) {
+  var ceil = apCeiling(r), v = parseFloat(sl.rate);
+  return ceil != null && !isNaN(v) && v > ceil;
 }
 /* A complete rate card is every slab plus a touchpoint rate. */
 function rateCardValid(c) { return slabsValid(c.slabs) && rateOk(c.touchpoint); }
@@ -2505,11 +2519,13 @@ function amEffectiveVehicle(r) {
 }
 
 function apAmDetail(r) {
-  var a = r.am, g = a.gates;
+  var a = r.am, g = a.gates, a2 = r;
   var gatesPass  = AM_GATES.every(function (x) { return g[x.id] === true; });
   var gateFailed = AM_GATES.some(function (x) { return g[x.id] === false; });
   var vehOk      = amVehicleSettled(r);
-  var ready      = gatesPass && vehOk;
+  var rateOkAll  = !!r.hubCategory && rateCardValid(r.rate);
+  var overCeil   = rateOkAll && !apWithinThreshold(r);
+  var ready      = gatesPass && vehOk && rateOkAll;
 
   var gates = AM_GATES.map(function (x, i) {
     return '<div class="ap-gate"><div><b>' + (i + 1) + '. ' + x.label + '</b><span>Hard gate</span></div>' +
@@ -2552,9 +2568,10 @@ function apAmDetail(r) {
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Area Manager infra check</b>' +
       '<span>Any failed hard gate requires rejection. Floor area is AM-entered value.</span></div>' +
-      (ready ? '<span class="st green">Ready to approve</span>'
-             : (gateFailed ? '<span class="st red">Hard gate failed</span>'
-                           : '<span class="st grey">In progress</span>')) + '</div>' +
+      (gateFailed ? '<span class="st red">Hard gate failed</span>'
+        : (ready ? (overCeil ? '<span class="st amber">Needs CH approval</span>'
+                             : '<span class="st green">Ready to approve</span>')
+                 : '<span class="st grey">In progress</span>')) + '</div>' +
     '<div class="ap-form">' +
       '<div class="grid2">' +
         '<div class="fl"><label>Visit date</label><div class="box">' +
@@ -2571,6 +2588,23 @@ function apAmDetail(r) {
           '<input id="am-landmark" value="' + esc(a.landmark) + '"></div></div>' +
       '</div>' +
       gates + vehicleRow +
+      '<div class="grid2" style="margin-top:16px">' +
+        '<div class="fl"><label>Hub type</label><div class="box sel">' +
+          '<select id="am-category">' +
+            '<option value=""' + (a2.hubCategory ? '' : ' selected') + '>Select hub type</option>' +
+            CATEGORY_ORDER.map(function (c) {
+              return '<option value="' + c + '"' + (a2.hubCategory === c ? ' selected' : '') + '>' +
+                     esc(HUB_CATEGORIES[c].label) + '</option>'; }).join("") +
+          '</select></div>' +
+          '<div class="hint">Sets the ceiling the rate card is measured against.</div></div>' +
+        '<div class="fl"><label>Hub payout type</label><div class="box sel">' +
+          '<select id="am-payout">' +
+            '<option value="Combined"' + (a2.rate.payoutType === "Combined" ? " selected" : "") + '>Combined</option>' +
+            '<option value="Split" disabled>Split (not available yet)</option>' +
+          '</select></div>' +
+          '<div class="hint">Split payouts are not enabled yet.</div></div>' +
+      '</div>' +
+      slabEditor(a2) +
       '<div class="pnote" style="margin-top:14px"><span>ⓘ</span><span>Please ensure you have drawn ' +
         'the polygon on Atlas and that the central team has completed all mandatory checks.</span></div>' +
     '</div>' +
@@ -2580,8 +2614,8 @@ function apAmDetail(r) {
       (gateFailed
         ? '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
           'Reject infra check →</button>'
-        : '<button class="btn btn-primary" id="ap-approve"' + (ready ? '' : ' disabled') +
-          '>Approve infra check →</button>') +
+        : '<button class="btn btn-primary" id="ap-approve"' + (ready ? '' : ' disabled') + '>' +
+          (overCeil ? 'Raise approval request to CH →' : 'Approve &amp; send to CH →') + '</button>') +
     '</div></div>';
 
   return '<h2>AM verification · approve</h2>' +
@@ -2594,10 +2628,11 @@ function apAmDetail(r) {
 
 /* Slab rate card: an order-volume band and its rate, as many as the Cluster
    Head needs. The top band is left open-ended by clearing its upper bound. */
-function slabEditor(c) {
-  var rows = (c.slabs || []).map(function (sl, i) {
-    var bad = !slabValid(sl);
-    return '<div class="slab-row' + (bad ? ' bad' : '') + '" data-slabrow="' + i + '">' +
+function slabEditor(r) {
+  var rc = r.rate, ceil = apCeiling(r);
+  var rows = (rc.slabs || []).map(function (sl, i) {
+    var bad = !slabValid(sl), over = slabOverCeiling(r, sl);
+    return '<div class="slab-row' + (bad ? ' bad' : (over ? ' over' : '')) + '" data-slabrow="' + i + '">' +
       '<div class="sf"><span class="sl">Orders from</span>' +
         '<input data-slab="' + i + '" data-field="from" inputmode="numeric" ' +
           'placeholder="0" value="' + esc(sl.from) + '"></div>' +
@@ -2606,30 +2641,66 @@ function slabEditor(c) {
           'placeholder="blank = and above" value="' + esc(sl.to) + '"></div>' +
       '<div class="sf"><span class="sl">Slab rate (₹ / shipment)</span>' +
         '<input data-slab="' + i + '" data-field="rate" inputmode="decimal" ' +
-          'placeholder="14.50" value="' + esc(sl.rate) + '"></div>' +
+          'placeholder="' + (ceil == null ? "0.00" : ceil.toFixed(2)) + '" ' +
+          'value="' + esc(sl.rate) + '"></div>' +
+      '<div class="sf ceil"><span class="sl">Ceiling</span>' +
+        '<span class="cv' + (over ? ' over' : '') + '">' +
+          (ceil == null ? "—" : "₹" + ceil.toFixed(2)) +
+          (over ? ' · over' : '') + '</span></div>' +
       '<button class="srm" data-slabdel="' + i + '" title="Remove slab"' +
-        ((c.slabs || []).length < 2 ? ' disabled' : '') + '>✕</button>' +
+        ((rc.slabs || []).length < 2 ? ' disabled' : '') + '>✕</button>' +
     '</div>';
   }).join("");
 
-  var complete = slabsValid(c.slabs) && rateOk(c.touchpoint);
-  return '<div class="slabs" data-testid="ch-slabs">' +
-    '<div class="sh"><div><b>Rate card slabs</b>' +
-      '<span>Set a rate per order-volume band. Leave the top band&rsquo;s upper bound blank ' +
-        'for &ldquo;and above&rdquo;.</span></div>' +
-      '<span class="st ' + (complete ? "green" : "grey") + '">' +
-        (c.slabs || []).length + ' slab' + ((c.slabs || []).length === 1 ? '' : 's') + '</span></div>' +
+  var complete = rateCardValid(rc);
+  var over = !apWithinThreshold(r);
+  return '<div class="slabs" data-testid="am-slabs">' +
+    '<div class="sh"><div><b>Rate card</b>' +
+      '<span>Set a rate per order-volume band, plus the touchpoint rate. The ceiling ' +
+        'comes from the hub type.</span></div>' +
+      '<span class="st ' + (!complete ? "grey" : (over ? "amber" : "green")) + '" ' +
+        'id="am-rate-status">' +
+        (!complete ? "Incomplete" : (over ? "Above ceiling" : "Within ceiling")) + '</span></div>' +
+    (ceil == null
+      ? '<div class="hint err" style="padding-bottom:8px">Select a hub type first — it sets ' +
+        'the ceiling each slab is measured against.</div>'
+      : '') +
     rows +
     '<button class="btn btn-ghost" id="ch-slab-add" style="margin-top:4px">＋ Add slab</button>' +
     '<div class="slab-tp"><div class="sf" style="max-width:230px">' +
       '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
-      '<input id="ch-touchpoint" inputmode="decimal" placeholder="5.00" ' +
-        'value="' + esc(c.touchpoint || "") + '"></div>' +
+      '<input id="am-touchpoint" inputmode="decimal" placeholder="5.00" ' +
+        'value="' + esc(rc.touchpoint || "") + '"></div>' +
       '<span class="tph">Paid per touchpoint, on top of the slab rate.</span></div>' +
     (complete ? '' : '<div class="hint err" style="padding-top:8px">' +
-      'Every slab needs a starting volume and a rate, an upper bound above its start, ' +
+      'Every slab needs a starting volume, a rate and an upper bound above its start, ' +
       'and the hub needs a touchpoint rate.</div>') +
+    '<div class="notice warn" style="margin:12px 0 0" data-testid="am-over-ceiling" ' +
+      'id="am-over-ceiling"' + (complete && over ? '' : ' hidden') + '>' +
+      '<b>Above the ceiling for this hub type</b>' +
+      '<span id="am-over-ceiling-text">' +
+        (ceil == null ? '' :
+          'The highest slab rate is ₹' + esc(apHighestRate(r).toFixed(2)) + ' against a ₹' +
+          esc(ceil.toFixed(2)) + ' ceiling.') +
+      '</span> You can still submit it, but it goes to the Cluster Head as an ' +
+      'approval request rather than straight through.</div>' +
   '</div>';
+}
+
+/* The rate card as set by the Area Manager, read-only downstream. */
+function apRateCardRows(r) {
+  var ceil = apCeiling(r);
+  return (r.rate.slabs || []).map(function (sl) {
+    var over = slabOverCeiling(r, sl);
+    return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
+      '<span class="v' + (over ? '' : ' ok') + '">₹' + esc(sl.rate) + ' / shipment' +
+      (over ? ' · above ceiling' : '') + '</span></div>';
+  }).join("") +
+  '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
+    esc(r.rate.touchpoint || "—") + ' / shipment</span></div>' +
+  '<div class="row"><span class="k">Ceiling (' +
+    esc((HUB_CATEGORIES[r.hubCategory] || {}).label || "—") + ')</span>' +
+    '<span class="v">' + (ceil == null ? "—" : "₹" + ceil.toFixed(2) + " / shipment") + '</span></div>';
 }
 
 function apChDetail(r) {
@@ -2641,7 +2712,7 @@ function apChDetail(r) {
   var stars = [1,2,3,4,5].map(function (n) {
     return '<button data-rating="' + n + '"' + (c.rating === n ? ' class="on"' : '') + '>' + n + '</button>';
   }).join("");
-  var canApprove = c.rating >= 4 && rateCardValid(c);
+  var canApprove = c.rating >= 4;
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Cluster Head review</b>' +
@@ -2669,18 +2740,16 @@ function apChDetail(r) {
       '<div style="margin:4px 0 18px"><span style="display:block;font-size:11px;font-weight:700;' +
         'color:var(--cyan-label);margin-bottom:8px">Overall rating</span>' +
         '<div class="rating">' + stars + '</div></div>' +
-      '<div class="grid2">' +
-        '<div class="fl"><label>Hub Payout Type</label>' +
-          '<div class="box sel"><select id="ch-payout">' +
-            '<option value="Combined"' + (c.payoutType === "Combined" ? " selected" : "") + '>Combined</option>' +
-            // Split is not supported yet — shown so the option is visible, disabled
-            '<option value="Split" disabled>Split (not available yet)</option>' +
-          '</select></div>' +
-          '<div class="hint">Split payouts are not enabled yet.</div></div>' +
-        '<div class="fl"><label>Reason</label><div class="box">' +
-          '<input id="ch-reason" placeholder="Required for rating 1–3" value="' + esc(c.reason) + '"></div></div>' +
-      '</div>' +
-      slabEditor(c) +
+      '<div class="fl"><label>Reason</label><div class="box">' +
+        '<input id="ch-reason" placeholder="Required for rating 1–3" value="' + esc(c.reason) + '"></div></div>' +
+      '<div style="margin:4px 0 18px"><span style="display:block;font-size:11px;font-weight:700;' +
+        'color:var(--cyan-label);margin-bottom:8px">Rate card (set by the Area Manager)</span>' +
+        '<div class="kv" data-testid="ch-rate-readonly">' + apRateCardRows(r) + '</div></div>' +
+      (r.rateEscalated
+        ? '<div class="notice warn" data-testid="ch-rate-escalated">' +
+          '<b>Raised by the Area Manager</b>The rate card is above the ceiling for this hub ' +
+          'type, so it cannot be settled here — raise it to Central Admin.</div>'
+        : '') +
       '<div class="fl"><label>Interview notes</label>' +
         '<div class="box" style="height:auto;padding:10px 14px">' +
         '<textarea id="ch-notes" rows="3" style="width:100%;border:none;outline:none;resize:vertical;' +
@@ -2691,7 +2760,9 @@ function apChDetail(r) {
       '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
       '<button class="btn btn-ghost" id="ap-save">Save draft</button>' +
       (canApprove
-        ? '<button class="btn btn-primary" id="ap-approve">Approve &amp; send to ZH →</button>'
+        ? (r.rateEscalated
+            ? '<button class="btn btn-primary" id="ap-central">Raise to Central Admin →</button>'
+            : '<button class="btn btn-primary" id="ap-approve">Approve &amp; send to agreements →</button>')
         : '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
           'Reject request →</button>') +
     '</div></div>';
@@ -2705,57 +2776,33 @@ function apChDetail(r) {
 /* ------------------------------------------- ZH · above-benchmark approval */
 
 function apZhDetail(r) {
-  var c = r.ch, within = apWithinThreshold(r), ceil = apCeiling(r);
-  var catLabel = (HUB_CATEGORIES[r.hubCategory] || {}).label || "—";
-
+  var stageLabel = { am:"Area Manager", ch:"Cluster Head", central:"Central Admin" }[r.stage] || "Closed";
   var left = '<div class="ap-panel">' +
-    '<div class="ph"><div><b>Zonal Head approval</b>' +
-      '<span>Sign off the rate card set by the Cluster Head.</span></div>' +
-      (within ? '<span class="st green">Within threshold</span>'
-              : '<span class="st amber">Above threshold</span>') + '</div>' +
+    '<div class="ph"><div><b>Request status</b>' +
+      '<span>Zonal Heads monitor pendencies; decisions sit with the Area Manager, ' +
+        'Cluster Head and Central Admin.</span></div>' +
+      apStatusChip(r) + '</div>' +
     '<div class="ap-form">' +
+      '<div class="notice info" data-testid="zh-monitor-only"><b>View only</b>' +
+        'This request is pending with the ' + esc(stageLabel) + '. There is nothing to ' +
+        'action here.</div>' +
       '<div class="kv" style="margin-bottom:16px">' +
-        '<div class="row"><span class="k">Hub category</span><span class="v">' + esc(catLabel) + '</span></div>' +
-        '<div class="row"><span class="k">Threshold</span><span class="v">₹' +
-          esc(ceil == null ? "—" : ceil.toFixed(2)) + ' / shipment</span></div>' +
-        '<div class="row"><span class="k">Hub payout type</span><span class="v">' +
-          esc(c.payoutType || "Combined") + '</span></div>' +
-      '</div>' +
-      '<div class="kv" style="margin-bottom:16px">' +
-        (c.slabs || []).map(function (sl) {
-          var over = parseFloat(sl.rate) > ceil;
-          return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
-                 '<span class="v' + (over ? '' : ' ok') + '">₹' + esc(sl.rate) + ' / shipment' +
-                 (over ? ' · above threshold' : '') + '</span></div>';
-        }).join("") +
-        '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
-          esc(c.touchpoint || "—") + ' / shipment</span></div>' +
+        '<div class="row"><span class="k">Pending with</span><span class="v">' + esc(stageLabel) + '</span></div>' +
+        '<div class="row"><span class="k">Hub type</span><span class="v">' +
+          esc((HUB_CATEGORIES[r.hubCategory] || {}).label || "Not set") + '</span></div>' +
         '<div class="row"><span class="k">Cluster Head rating</span><span class="v">' +
-          esc(c.rating || "—") + '</span></div>' +
+          esc(r.ch.rating || "—") + '</span></div>' +
       '</div>' +
-      (within
-        ? ''
-        : '<div class="notice warn" data-testid="zh-above-threshold"><b>Above the threshold ' +
-          'for a ' + esc(catLabel) + '</b>The highest slab rate is ₹' +
-          esc(apHighestRate(r).toFixed(2)) + ' against a ₹' + esc(ceil.toFixed(2)) +
-          ' ceiling. This cannot be signed off here — send it to Central Admin.</div>') +
-      '<div class="fl"><label>Zonal Head note</label><div class="box">' +
-        '<input id="zh-reason" placeholder="Recorded against the decision" ' +
-        'value="' + esc(r.zh.reason) + '"></div></div>' +
+      '<div class="kv">' + apRateCardRows(r) + '</div>' +
     '</div>' +
     '<div class="ap-foot">' +
       '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
-      '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
-        'Reject rate card</button>' +
-      (within
-        ? '<button class="btn btn-primary" id="ap-approve">Approve rate card →</button>'
-        : '<button class="btn btn-primary" id="ap-central">Send to Central Admin →</button>') +
     '</div></div>';
 
-  return '<h2>ZH review · rate card approval</h2>' +
-    '<p class="lede">Sign off rate cards within threshold; send the rest to Central Admin.</p>' +
+  return '<h2>Request status</h2>' +
+    '<p class="lede">Monitoring view — no action is taken from the Zonal Head panel.</p>' +
     '<div class="ap-detail"><div class="dl">' + left + '</div>' +
-    '<div class="dr">' + apContext(r) + apSla(r, "ZH SLA", "48h SLA from Cluster Head approval") + '</div></div>';
+    '<div class="dr">' + apContext(r) + apSla(r, "SLA", "Tracked against the current desk") + '</div></div>';
 }
 
 /* Central Admin — the last word on a rate card above its hub category ceiling. */
@@ -2769,7 +2816,7 @@ function apCentralDetail(r) {
       '<span class="st amber">Above threshold</span></div>' +
     '<div class="ap-form">' +
       '<div class="notice warn" data-testid="central-above-threshold">' +
-        '<b>Sent up by the Zonal Head</b>' +
+        '<b>Raised by the Cluster Head</b>' +
         'The highest slab rate is ₹' + esc(apHighestRate(r).toFixed(2)) + ' against a ₹' +
         esc(ceil == null ? "—" : ceil.toFixed(2)) + ' ceiling for a ' + esc(catLabel) + '.' +
         (r.zh.reason ? ' Zonal Head note: ' + esc(r.zh.reason) : '') + '</div>' +
@@ -2777,12 +2824,7 @@ function apCentralDetail(r) {
         '<div class="row"><span class="k">Hub category</span><span class="v">' + esc(catLabel) + '</span></div>' +
         '<div class="row"><span class="k">Threshold</span><span class="v">₹' +
           esc(ceil == null ? "—" : ceil.toFixed(2)) + ' / shipment</span></div>' +
-        (c.slabs || []).map(function (sl) {
-          return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
-                 '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
-        }).join("") +
-        '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
-          esc(c.touchpoint || "—") + ' / shipment</span></div>' +
+        apRateCardRows(r) +
       '</div>' +
       '<div class="fl"><label>Central Admin note</label><div class="box">' +
         '<input id="zh-reason" placeholder="Recorded against the decision" ' +
@@ -2806,10 +2848,14 @@ function viewAdmin() {
   if (a.selected) {
     var r = apById(a.selected);
     if (r) {
-      var d = r.stage === "ch" ? apChDetail(r)
-            : r.stage === "zh" ? apZhDetail(r)
-            : r.stage === "central" ? apCentralDetail(r)
-            : apAmDetail(r);
+      /* A desk only gets the working screen for requests that are actually with
+         it. Everyone else — the Zonal Head always — gets the read-only status
+         view, so nobody can act outside their own stage. */
+      var role = S.admin.role;
+      var d = (role === "am"      && r.stage === "am")      ? apAmDetail(r)
+            : (role === "ch"      && r.stage === "ch")      ? apChDetail(r)
+            : (role === "central" && r.stage === "central") ? apCentralDetail(r)
+            : apZhDetail(r);
       return apShell(d);
     }
   }
@@ -4905,36 +4951,53 @@ var A = {
   /* Slab edits patch state without a re-render, so the field keeps focus. */
   chSlabField: function (i, field, v) {
     var r = apById(S.admin.selected);
-    if (!r || !r.ch.slabs[i]) return;
-    r.ch.slabs[i][field] = v;
+    if (!r || !r.rate.slabs[i]) return;
+    r.rate.slabs[i][field] = v;
     save();
     paintSlabState();
   },
   chSlabAdd: function () {
     var r = apById(S.admin.selected);
     if (!r) return;
-    var last = r.ch.slabs[r.ch.slabs.length - 1];
+    var last = r.rate.slabs[r.rate.slabs.length - 1];
     var next = blankSlab();
     // start the new band where the previous one ended
     if (last && String(last.to).trim() !== "") next.from = String(+last.to + 1);
-    r.ch.slabs.push(next);
+    r.rate.slabs.push(next);
     save(); render();
   },
   chSlabRemove: function (i) {
     var r = apById(S.admin.selected);
-    if (!r || r.ch.slabs.length < 2) return;
-    r.ch.slabs.splice(i, 1);
+    if (!r || r.rate.slabs.length < 2) return;
+    r.rate.slabs.splice(i, 1);
     save(); render();
+  },
+  /* Hub type is an Area Manager input, and it sets the ceiling. */
+  amCategory: function (cat) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    if (cat && !HUB_CATEGORIES[cat]) return;
+    r.hubCategory = cat || "";
+    save(); render();
+  },
+  amPayout: function (v) {
+    var r = apById(S.admin.selected);
+    if (!r || !payoutAllowed(v)) { render(); return; }
+    r.rate.payoutType = v;
+    save(); render();
+  },
+  amRateField: function (field, v) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    r.rate[field] = v;
+    save();
+    paintSlabState();
   },
   chField: function (field, v) {
     var r = apById(S.admin.selected);
     if (!r) return;
-    if (field === "payoutType" && !payoutAllowed(v)) { render(); return; }
     r.ch[field] = v;
     save();
-    // the touchpoint rate gates approval, so keep the button honest without
-    // re-rendering the field being typed into
-    if (field === "touchpoint") paintSlabState();
   },
   amField: function (field, v) {
     var r = apById(S.admin.selected);
@@ -4959,26 +5022,26 @@ var A = {
     if (decision === "approve") {
       if (r.stage === "am") {
         r.stage = "ch"; r.status = "ch_pending"; r.am.done = true;
-        S.admin.toast = "Infra check approved · routed to Cluster Head.";
+        // an above-ceiling rate card travels as an approval request
+        r.rateEscalated = !apWithinThreshold(r);
+        S.admin.toast = r.rateEscalated
+          ? "Approval request raised to the Cluster Head."
+          : "Infra check approved · routed to Cluster Head.";
       } else if (r.stage === "ch") {
-        // the Cluster Head sets the rate card, the Zonal Head signs it off
-        r.stage = "zh"; r.status = "zh_pending"; r.ch.done = true;
-        S.admin.toast = "Rate card approved · sent to Zonal Head.";
-      } else if (r.stage === "zh") {
-        // a card above the hub category's ceiling is not the ZH's to settle
-        if (!apWithinThreshold(r)) {
-          S.admin.toast = "This rate card is above threshold — send it to Central Admin.";
+        // an above-ceiling card is not the Cluster Head's to settle
+        if (r.rateEscalated) {
+          S.admin.toast = "This rate card is above ceiling — raise it to Central Admin.";
           save(); render(); return;
         }
-        r.stage = "done"; r.status = "approved"; r.zh.decision = "approved";
-        S.admin.toast = "Rate card approved · sent to agreements.";
+        r.stage = "done"; r.status = "approved"; r.ch.done = true;
+        S.admin.toast = "Request approved · sent to agreements.";
       } else {
         r.stage = "done"; r.status = "approved"; r.central = { decision:"approved" };
         S.admin.toast = "Rate card approved by Central Admin · sent to agreements.";
       }
     } else if (decision === "central") {
-      r.stage = "central"; r.status = "central_pending"; r.zh.decision = "escalated";
-      S.admin.toast = "Sent to Central Admin for approval.";
+      r.stage = "central"; r.status = "central_pending";
+      S.admin.toast = "Raised to Central Admin for approval.";
     } else {
       r.status = "rejected";
       if (r.stage === "zh") r.zh.decision = "rejected";
@@ -5336,14 +5399,51 @@ function readHubPhoto(file) {
 /* Reflect slab validity without re-rendering the row being typed into. */
 function paintSlabState() {
   var r = apById(S.admin.selected);
-  if (!r || !r.ch) return;
+  if (!r) return;
   Array.prototype.forEach.call(document.querySelectorAll("[data-slabrow]"), function (row) {
-    var sl = r.ch.slabs[+row.getAttribute("data-slabrow")];
-    if (sl) row.classList.toggle("bad", !slabValid(sl));
+    var sl = r.rate.slabs[+row.getAttribute("data-slabrow")];
+    if (!sl) return;
+    var bad = !slabValid(sl);
+    row.classList.toggle("bad", bad);
+    row.classList.toggle("over", !bad && slabOverCeiling(r, sl));
   });
-  var ok = rateCardValid(r.ch) && r.ch.rating >= 4;
+  if (r.stage !== "am") return;
+
+  var ceil = apCeiling(r);
+  var complete = !!r.hubCategory && rateCardValid(r.rate);
+  var over = complete && !apWithinThreshold(r);
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-slabrow]"), function (row) {
+    var sl = r.rate.slabs[+row.getAttribute("data-slabrow")];
+    var cv = row.querySelector(".cv");
+    if (!sl || !cv) return;
+    var o = slabOverCeiling(r, sl);
+    cv.textContent = (ceil == null ? "—" : "₹" + ceil.toFixed(2)) + (o ? " · over" : "");
+    cv.classList.toggle("over", o);
+  });
+
+  var chip = document.getElementById("am-rate-status");
+  if (chip) {
+    chip.textContent = !complete ? "Incomplete" : (over ? "Above ceiling" : "Within ceiling");
+    chip.className = "st " + (!complete ? "grey" : (over ? "amber" : "green"));
+  }
+  var note = document.getElementById("am-over-ceiling");
+  if (note) {
+    note.hidden = !over;
+    var nt = document.getElementById("am-over-ceiling-text");
+    if (nt && ceil != null) {
+      nt.textContent = "The highest slab rate is ₹" + apHighestRate(r).toFixed(2) +
+                       " against a ₹" + ceil.toFixed(2) + " ceiling.";
+    }
+  }
+
+  var gatesPass = AM_GATES.every(function (x) { return r.am.gates[x.id] === true; });
+  var ready = gatesPass && amVehicleSettled(r) && complete;
   var approve = document.getElementById("ap-approve");
-  if (approve) approve.disabled = !ok;
+  if (approve) {
+    approve.disabled = !ready;
+    approve.innerHTML = over ? "Raise approval request to CH →" : "Approve &amp; send to CH →";
+  }
 }
 
 /* ----------------------------------------------------- Admin panel bind */
@@ -5406,13 +5506,16 @@ function bindAdmin() {
   /* the review forms now actually capture — Save draft had nothing to save */
   [["ch-mode","mode"],["ch-date","date"],["ch-exp","experience"],["ch-own","ownership"],
    ["ch-pilots","pilots"],["ch-cap","capacity"],["ch-payout","payoutType"],
-   ["ch-reason","reason"],["ch-notes","notes"],["ch-touchpoint","touchpoint"]].forEach(function (pair) {
+   ["ch-reason","reason"],["ch-notes","notes"]].forEach(function (pair) {
     var el = document.getElementById(pair[0]);
     if (!el) return;
     el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () {
       A.chField(pair[1], el.value);
     });
   });
+  on("am-category", "change", function (e) { A.amCategory(e.target.value); });
+  on("am-payout", "change", function (e) { A.amPayout(e.target.value); });
+  on("am-touchpoint", "input", function (e) { A.amRateField("touchpoint", e.target.value); });
   [["am-date","visitDate"],["am-by","by"],["am-floor","floor"],["am-landmark","landmark"]]
     .forEach(function (pair) {
       var el = document.getElementById(pair[0]);
@@ -5761,6 +5864,7 @@ if (typeof window !== "undefined") {
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
       apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
       apCeiling: apCeiling, apWithinThreshold: apWithinThreshold, apHighestRate: apHighestRate,
+      slabOverCeiling: slabOverCeiling,
       amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
       slabValid: slabValid, slabsValid: slabsValid, slabLabel: slabLabel,
       payoutAllowed: payoutAllowed, rateOk: rateOk, rateCardValid: rateCardValid,

@@ -1,3 +1,31 @@
+### The approval chain
+
+```
+AM: infra + hub type + rate card → CH: interview + rating → agreements
+                                 ↘ (above ceiling) CH raises → Central Admin → agreements
+```
+
+The **Area Manager** owns the commercials. Alongside the infra checklist they pick the
+**hub type** (Standalone, Mall hub, LM-as-FM, SAH…) and fill in the **rate card**: an
+order-volume band and rate per slab, plus one touchpoint rate.
+
+The hub type sets the **ceiling**, which is shown against every slab as it is typed and
+flags any row that exceeds it. A card within ceiling goes *Approve & send to CH*; a card
+above it goes *Raise approval request to CH* instead — it can still be submitted, it just
+travels as an approval request.
+
+The **Cluster Head** does the interview and rating. The rate card is read-only here,
+attributed to the Area Manager. A within-ceiling request the CH settles themselves; an
+above-ceiling one they cannot, and the approve action is replaced by *Raise to Central
+Admin*. **Central Admin** has the last word.
+
+The **Zonal Head approves nothing.** Their panel is AM pendency and CH pendency — what is
+sitting with whom — and opening a request gives a read-only status view with no actions at
+all. A desk only gets a working screen for requests actually at its own stage; everyone else
+gets that status view, so nobody can act outside their remit.
+
+Any desk that can act can also reject, which sends the request back to the captain.
+
 # Valmo — Captain Self-Serve Onboarding Prototype
 
 A clickable prototype of Valmo's captain self-serve onboarding, covering **two roles with
@@ -330,12 +358,11 @@ request gives the full-page review: the AM infra checklist, the CH review, and t
 rate-card approval. Every review carries the read-only *Captain & hub context* card and an
 SLA card.
 
-### The CH review
+### The rate card
 
-Interview fields, a 1–5 overall rating that gates the decision (4–5 approve, 1–3 reject),
-**Hub Payout Type**, and a slab rate card.
+Authored by the Area Manager; read-only for every desk downstream.
 
-*Hub Payout Type* offers **Combined** and **Split**, with Split disabled — it is not
+*Hub payout type* offers **Combined** and **Split**, with Split disabled — it is not
 supported yet. The value is refused in state as well as disabled in the dropdown, so the
 rule does not depend on the select to enforce it.
 
@@ -451,7 +478,7 @@ build from.
 npm install && npm test
 ```
 
-**754 assertions across 15 groups:**
+**712 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
