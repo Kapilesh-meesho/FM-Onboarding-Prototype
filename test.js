@@ -1934,7 +1934,8 @@ async function testAdminPanel() {
 
   /* --- AM infra checklist --- */
   clickSel(doc, '[data-apopen="OBD-78222"]');
-  check(txt(doc).indexOf("AM verification · approve") >= 0, "opens the infra check");
+  check(txt(doc).indexOf("step 1 of 2 · infra check") >= 0,
+        "opens on the infra check, step 1 of 2");
   check(txt(doc).indexOf("Area Manager infra check") >= 0, "with the hard-gate card");
   const gates = [...doc.querySelectorAll("[data-gate]")].map(b => b.getAttribute("data-gate"));
   eq([...new Set(gates)],
@@ -1980,15 +1981,32 @@ async function testAdminPanel() {
   eq(amReq.am.declaredVehicle, "7MT_20FT", "the captain's declared size is kept separately");
   check(api.helpers.amVehicleSettled(amReq), "and the review is settled");
 
-  /* --- the AM sets the hub type and the rate card --- */
-  check(disabled(doc, "ap-approve"),
-        "gates and vehicle review are still not enough — the rate card is missing");
-  check(exists(doc, "#am-category"), "the AM selects the hub type");
+  /* --- the rate card is a second page, after the infra check --- */
+  check(!exists(doc, "#am-category"), "hub type is not on the infra page");
+  check(!exists(doc, '[data-testid="am-slabs"]'), "nor the rate card");
+  check(!exists(doc, "#ch-touchpoint"), "the rate card no longer sits with the Cluster Head");
+  check(exists(doc, "#am-to-rate"), "the infra page continues to the rate card");
+  check(!disabled(doc, "am-to-rate"), "which opens once the infra check passes");
+  check(txt(doc).indexOf("Infra check passed") >= 0, "and says the infra check passed");
+  check(!api.helpers.amInfraReady(api.helpers.apById("OBD-78231")),
+        "a request with unanswered gates is not infra-ready");
+
+  click(doc, "am-to-rate");
+  eq(api.state.admin.amStep, "rate", "the AM moves to the rate card page");
+  check(txt(doc).indexOf("step 2 of 2 · rate card") >= 0, "which is step 2 of 2");
+  check(!exists(doc, "[data-gate]"), "the checklist is not on the rate card page");
+  check(exists(doc, "#am-category"), "the AM selects the hub type here");
   check(exists(doc, '[data-testid="am-slabs"]'), "and fills in the rate card");
   check(exists(doc, "#am-touchpoint"), "including the touchpoint rate");
-  check(!exists(doc, "#ch-touchpoint"), "the rate card no longer sits with the Cluster Head");
+  check(disabled(doc, "ap-approve"), "submission is blocked until the card is complete");
   check(txt(doc).indexOf("Select a hub type first") >= 0,
         "with no hub type there is no ceiling to measure against");
+
+  /* the two pages navigate both ways */
+  click(doc, "am-to-infra");
+  eq(api.state.admin.amStep, "infra", "and can step back to the infra check");
+  check(exists(doc, "[data-gate]"), "with the checklist intact");
+  click(doc, "am-to-rate");
 
   api.actions.amCategory("standalone");
   eq(api.helpers.apCeiling(amReq), 5, "a Standalone hub sets a ceiling of 5");

@@ -5,9 +5,11 @@ AM: infra + hub type + rate card → CH: interview + rating → agreements
                                  ↘ (above ceiling) CH raises → Central Admin → agreements
 ```
 
-The **Area Manager** owns the commercials. Alongside the infra checklist they pick the
-**hub type** (Standalone, Mall hub, LM-as-FM, SAH…) and fill in the **rate card**: an
-order-volume band and rate per slab, plus one touchpoint rate.
+The **Area Manager** works in two pages. **Step 1** is the infra check — the nine hard gates
+and the max vehicle size review. It has to pass before **step 2** opens: the **hub type**
+(Standalone, Mall hub, LM-as-FM, SAH…) and the **rate card** — an order-volume band and rate
+per slab, plus one touchpoint rate. The two pages navigate both ways, so a reviewer can go
+back and correct the checklist without losing the rate card.
 
 The hub type sets the **ceiling**, which is shown against every slab as it is typed and
 flags any row that exceeds it. A card within ceiling goes *Approve & send to CH*; a card
@@ -478,7 +480,7 @@ build from.
 npm install && npm test
 ```
 
-**712 assertions across 15 groups:**
+**723 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

@@ -1897,7 +1897,8 @@ function slabLabel(sl) {
 }
 
 function blankAdmin() {
-  return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"" };
+  return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"",
+           amStep:"infra" };   // the AM works the infra check, then the rate card
 }
 
 function apRole()  { return ADMIN_ROLES[S.admin.role] || ADMIN_ROLES.am; }
@@ -2518,14 +2519,25 @@ function amEffectiveVehicle(r) {
   return r.am.maxVehicle || r.am.declaredVehicle || "";
 }
 
+/* The infra check passes once every hard gate is Yes and the vehicle review is
+   settled. Only then does the rate card open. */
+function amInfraReady(r) {
+  return AM_GATES.every(function (x) { return r.am.gates[x.id] === true; }) &&
+         amVehicleSettled(r);
+}
+function amRateReady(r) {
+  return !!r.hubCategory && rateCardValid(r.rate);
+}
+
 function apAmDetail(r) {
-  var a = r.am, g = a.gates, a2 = r;
-  var gatesPass  = AM_GATES.every(function (x) { return g[x.id] === true; });
+  return S.admin.amStep === "rate" ? apAmRatePage(r) : apAmInfraPage(r);
+}
+
+/* Page 1 — the facility itself. */
+function apAmInfraPage(r) {
+  var a = r.am, g = r.am.gates;
   var gateFailed = AM_GATES.some(function (x) { return g[x.id] === false; });
-  var vehOk      = amVehicleSettled(r);
-  var rateOkAll  = !!r.hubCategory && rateCardValid(r.rate);
-  var overCeil   = rateOkAll && !apWithinThreshold(r);
-  var ready      = gatesPass && vehOk && rateOkAll;
+  var ready = amInfraReady(r);
 
   var gates = AM_GATES.map(function (x, i) {
     return '<div class="ap-gate"><div><b>' + (i + 1) + '. ' + x.label + '</b><span>Hard gate</span></div>' +
@@ -2535,12 +2547,9 @@ function apAmDetail(r) {
       '</div></div>';
   }).join("");
 
-  /* 10. Max vehicle size review — a pass/fail on what the captain declared,
-     with an update flow that reuses the vehicle picker. */
   var reviewSub = a.vehicleReview === false
-    ? (a.maxVehicle
-        ? "Corrected to " + a.maxVehicle
-        : "Marked incorrect — set the size the location can actually take")
+    ? (a.maxVehicle ? "Corrected to " + a.maxVehicle
+                    : "Marked incorrect — set the size the location can actually take")
     : "Captain declared: " + (a.declaredVehicle || "—");
 
   var vehicleRow =
@@ -2550,10 +2559,8 @@ function apAmDetail(r) {
         '<div><b>' + (AM_GATES.length + 1) + '. Max. vehicle size review</b>' +
           '<span>' + esc(reviewSub) + '</span></div>' +
         '<div class="yn">' +
-          '<button class="yes' + (a.vehicleReview === true ? ' on' : '') +
-            '" data-vehreview="yes">Pass</button>' +
-          '<button class="no' + (a.vehicleReview === false ? ' on' : '') +
-            '" data-vehreview="no">Fail</button>' +
+          '<button class="yes' + (a.vehicleReview === true ? ' on' : '') + '" data-vehreview="yes">Pass</button>' +
+          '<button class="no' + (a.vehicleReview === false ? ' on' : '') + '" data-vehreview="no">Fail</button>' +
         '</div>' +
       '</div>' +
       (a.vehicleEditing
@@ -2569,8 +2576,7 @@ function apAmDetail(r) {
     '<div class="ph"><div><b>Area Manager infra check</b>' +
       '<span>Any failed hard gate requires rejection. Floor area is AM-entered value.</span></div>' +
       (gateFailed ? '<span class="st red">Hard gate failed</span>'
-        : (ready ? (overCeil ? '<span class="st amber">Needs CH approval</span>'
-                             : '<span class="st green">Ready to approve</span>')
+        : (ready ? '<span class="st green">Infra check passed</span>'
                  : '<span class="st grey">In progress</span>')) + '</div>' +
     '<div class="ap-form">' +
       '<div class="grid2">' +
@@ -2588,23 +2594,6 @@ function apAmDetail(r) {
           '<input id="am-landmark" value="' + esc(a.landmark) + '"></div></div>' +
       '</div>' +
       gates + vehicleRow +
-      '<div class="grid2" style="margin-top:16px">' +
-        '<div class="fl"><label>Hub type</label><div class="box sel">' +
-          '<select id="am-category">' +
-            '<option value=""' + (a2.hubCategory ? '' : ' selected') + '>Select hub type</option>' +
-            CATEGORY_ORDER.map(function (c) {
-              return '<option value="' + c + '"' + (a2.hubCategory === c ? ' selected' : '') + '>' +
-                     esc(HUB_CATEGORIES[c].label) + '</option>'; }).join("") +
-          '</select></div>' +
-          '<div class="hint">Sets the ceiling the rate card is measured against.</div></div>' +
-        '<div class="fl"><label>Hub payout type</label><div class="box sel">' +
-          '<select id="am-payout">' +
-            '<option value="Combined"' + (a2.rate.payoutType === "Combined" ? " selected" : "") + '>Combined</option>' +
-            '<option value="Split" disabled>Split (not available yet)</option>' +
-          '</select></div>' +
-          '<div class="hint">Split payouts are not enabled yet.</div></div>' +
-      '</div>' +
-      slabEditor(a2) +
       '<div class="pnote" style="margin-top:14px"><span>ⓘ</span><span>Please ensure you have drawn ' +
         'the polygon on Atlas and that the central team has completed all mandatory checks.</span></div>' +
     '</div>' +
@@ -2614,12 +2603,53 @@ function apAmDetail(r) {
       (gateFailed
         ? '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
           'Reject infra check →</button>'
-        : '<button class="btn btn-primary" id="ap-approve"' + (ready ? '' : ' disabled') + '>' +
-          (overCeil ? 'Raise approval request to CH →' : 'Approve &amp; send to CH →') + '</button>') +
+        : '<button class="btn btn-primary" id="am-to-rate"' + (ready ? '' : ' disabled') +
+          '>Continue to rate card →</button>') +
     '</div></div>';
 
-  return '<h2>AM verification · approve</h2>' +
+  return '<h2>AM verification · step 1 of 2 · infra check</h2>' +
     '<p class="lede">Infra checklist is full-page and scoped only to facility verification.</p>' +
+    '<div class="ap-detail"><div class="dl">' + left + '</div>' +
+    '<div class="dr">' + apContext(r) + apSla(r, "AM SLA", "72h SLA from hub code creation") + '</div></div>';
+}
+
+/* Page 2 — hub type and the rate card it sets the ceiling for. */
+function apAmRatePage(r) {
+  var ready = amRateReady(r);
+  var over  = ready && !apWithinThreshold(r);
+
+  var left = '<div class="ap-panel">' +
+    '<div class="ph"><div><b>Hub type and rate card</b>' +
+      '<span>The hub type sets the ceiling each slab rate is measured against.</span></div>' +
+      '<span class="st green">Infra check passed</span></div>' +
+    '<div class="ap-form">' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Hub type</label><div class="box sel">' +
+          '<select id="am-category">' +
+            '<option value=""' + (r.hubCategory ? '' : ' selected') + '>Select hub type</option>' +
+            CATEGORY_ORDER.map(function (c) {
+              return '<option value="' + c + '"' + (r.hubCategory === c ? ' selected' : '') + '>' +
+                     esc(HUB_CATEGORIES[c].label) + '</option>'; }).join("") +
+          '</select></div>' +
+          '<div class="hint">Sets the ceiling the rate card is measured against.</div></div>' +
+        '<div class="fl"><label>Hub payout type</label><div class="box sel">' +
+          '<select id="am-payout">' +
+            '<option value="Combined"' + (r.rate.payoutType === "Combined" ? " selected" : "") + '>Combined</option>' +
+            '<option value="Split" disabled>Split (not available yet)</option>' +
+          '</select></div>' +
+          '<div class="hint">Split payouts are not enabled yet.</div></div>' +
+      '</div>' +
+      slabEditor(r) +
+    '</div>' +
+    '<div class="ap-foot">' +
+      '<button class="btn btn-ghost" id="am-to-infra">← Back to infra check</button>' +
+      '<button class="btn btn-ghost" id="ap-save">Save draft</button>' +
+      '<button class="btn btn-primary" id="ap-approve"' + (ready ? '' : ' disabled') + '>' +
+        (over ? 'Raise approval request to CH →' : 'Approve &amp; send to CH →') + '</button>' +
+    '</div></div>';
+
+  return '<h2>AM verification · step 2 of 2 · rate card</h2>' +
+    '<p class="lede">Set the hub type and the slab-wise rate card for this hub.</p>' +
     '<div class="ap-detail"><div class="dl">' + left + '</div>' +
     '<div class="dr">' + apContext(r) + apSla(r, "AM SLA", "72h SLA from hub code creation") + '</div></div>';
 }
@@ -4938,7 +4968,18 @@ var A = {
     S.admin.tab = tab; S.admin.selected = null; S.admin.toast = "";
     save(); render();
   },
-  adminOpen: function (id) { S.admin.selected = id; S.admin.toast = ""; save(); render(); },
+  adminOpen: function (id) {
+    S.admin.selected = id; S.admin.toast = ""; S.admin.amStep = "infra";
+    save(); render();
+  },
+  amStep: function (step) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    // the rate card only opens once the facility itself has passed
+    if (step === "rate" && !amInfraReady(r)) return;
+    S.admin.amStep = step; S.admin.toast = "";
+    save(); render();
+  },
   adminBack: function () { S.admin.selected = null; S.admin.toast = ""; save(); render(); },
   adminFilter: function (field, v) { S.admin[field] = v; save(); render(); },
 
@@ -5480,6 +5521,8 @@ function bindAdmin() {
   Array.prototype.forEach.call(document.querySelectorAll("[data-vehreview]"), function (el) {
     el.addEventListener("click", function () { A.amVehicleReview(el.getAttribute("data-vehreview")); });
   });
+  on("am-to-rate", "click", function () { A.amStep("rate"); });
+  on("am-to-infra", "click", function () { A.amStep("infra"); });
   on("am-veh-edit", "click", function () { A.amVehicleEdit(true); });
   on("am-veh-cancel", "click", function () { A.amVehicleEdit(false); });
   bindVehicleRows();
@@ -5864,7 +5907,7 @@ if (typeof window !== "undefined") {
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
       apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
       apCeiling: apCeiling, apWithinThreshold: apWithinThreshold, apHighestRate: apHighestRate,
-      slabOverCeiling: slabOverCeiling,
+      slabOverCeiling: slabOverCeiling, amInfraReady: amInfraReady, amRateReady: amRateReady,
       amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
       slabValid: slabValid, slabsValid: slabsValid, slabLabel: slabLabel,
       payoutAllowed: payoutAllowed, rateOk: rateOk, rateCardValid: rateCardValid,
