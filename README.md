@@ -13,8 +13,9 @@ open index.html
 
 **Design source:** Figma file
 [`Self-serve captain onboarding`](https://www.figma.com/design/T6DMr5qro6WZS908w41Qc9/Self-serve-captain-onboarding)
-— page *First time user flows* (`0:1`, 58 captain-facing onboarding frames) and page
-*Logged-in · Profile & Hubs* (`96:2`, 17 frames). Colours, spacing, typography and
+— page *First time user flows* (`0:1`, 58 captain-facing onboarding frames), page
+*Logged-in · Profile & Hubs* (`96:2`, 17 frames) and page *Admin Panels · Onboarding
+Approvals* (`109:2`). Colours, spacing, typography and
 component styling are taken from the frames themselves rather than approximated.
 
 ---
@@ -308,6 +309,40 @@ One note on that screen:
   has two, so the screen asks which role the new hub is for. FM hubs cannot choose Non-GST,
   since GST is mandatory for First Mile — the same rule the onboarding KYC enforces.
 
+## Admin panel
+
+Figma page `109:2`. The **Log in as** switch offers *Captain* or **Admin panel**; Admin opens
+the panel picker from `panel-select`, with four consoles:
+
+| Panel | |
+|---|---|
+| **Area Manager** | Infra hard-gate checklist and VLS field pre-check |
+| **Cluster Head** | Interview, hub type, rate card, approve / reject / escalate |
+| **Zonal Head** | Above-benchmark rate cards escalated by Cluster Heads |
+| **FM Central Admin** | National view of AM, CH and ZH requests, plus user mapping |
+
+Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
+SLA chip — over a request table with search and status filters, and stat tiles. Opening a
+request gives the full-page review: the AM infra checklist (five hard gates, where any
+failure forces rejection), the CH review (interview fields, 1–5 rating gating approval,
+hub type and rate card), and the ZH rate-card approval. Every review carries the read-only
+*Captain & hub context* card and an SLA card.
+
+Decisions route the request onward — AM approve sends it to the Cluster Head, CH approve
+sends it to agreements, CH escalate sends it to the Zonal Head.
+
+**Security deposit is removed throughout**, since FM hubs do not take one. That means the
+`zh-sd-detail` frame (*ZH adjust SD*) is not built at all, the *Model SD* and *Current SD*
+rows are absent from the context card, the CH form drops *Raise security deposit?* and
+*Final SD after CH*, its button reads *Approve & send to agreements* rather than *send to
+deposit*, and the Zonal Head's remit is rate-card approval instead. The Zonal Head card on
+the picker is described accordingly.
+
+**Not built, as scoped:** the `geo-bind-am` / `geo-bind-ch` / `geo-bind-zh` binding screens.
+
+The designs are LM's and are implemented as-is apart from the security-deposit removal and
+the FM naming — FM-specific changes come later.
+
 ## Why the dev panel exists
 
 There is a floating **⚙ Simulate backend** panel, bottom-right, collapsible.
@@ -360,7 +395,7 @@ build from.
 npm install && npm test
 ```
 
-**540 assertions across 14 groups:**
+**640 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

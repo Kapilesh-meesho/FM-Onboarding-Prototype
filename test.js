@@ -1565,8 +1565,9 @@ async function testCaptainHub() {
 
   /* --- the dev panel offers the login switch before signing in --- */
   check(devText(doc).indexOf("Log in as") >= 0, "login screen offers a 'Log in as' switch");
-  check(devText(doc).indexOf("New captain") >= 0, "'new captain' option offered");
-  check(devText(doc).indexOf("Existing captain") >= 0, "'existing captain' option offered");
+  check(devText(doc).indexOf("Captain · new") >= 0, "'new captain' option offered");
+  check(devText(doc).indexOf("Captain · existing") >= 0, "'existing captain' option offered");
+  check(devText(doc).indexOf("Admin panel") >= 0, "'admin panel' option offered");
 
   /* --- new captain goes to onboarding, as before --- */
   devClick(doc, "as:new");
@@ -1831,6 +1832,162 @@ async function testCaptainHub() {
   win.close();
 }
 
+/* =========================================================================
+   12. Admin panel — Figma page 109:2, built for FM
+   ====================================================================== */
+
+async function testAdminPanel() {
+  section("12. Admin panel — AM, CH, ZH and FM Central Admin");
+  const { win, doc, api } = await boot();
+
+  /* --- reached from the login switch --- */
+  devClick(doc, "as:admin");
+  login(doc);
+  eq(api.state.screen, "adminselect", "logging in as Admin opens the panel picker");
+  check(txt(doc).indexOf("Welcome to Valmo Admin Panel") >= 0, "panel-select heading present");
+  check(txt(doc).indexOf("admin.meeshosupply.com/valmo") >= 0, "console URL chip shown");
+
+  /* --- the four role cards --- */
+  const roles = [...doc.querySelectorAll("[data-aprole]")].map(b => b.getAttribute("data-aprole"));
+  eq(roles, ["am","ch","zh","central"], "four panels offered, in design order");
+  const cardTxt = txt(doc);
+  ["Area Manager","Cluster Head","Zonal Head","FM Central Admin"].forEach(r =>
+    check(cardTxt.indexOf(r) >= 0, "card offered: " + r));
+  check(cardTxt.indexOf("LM Central Admin") === -1,
+        "the LM label is replaced with FM Central Admin");
+
+  /* --- security deposit is gone everywhere --- */
+  const sdWords = ["security deposit","Security deposit","Model SD","Current SD",
+                   "Final SD","send to deposit","SD after CH"];
+  const noSd = (where) => sdWords.forEach(w =>
+    check(txt(doc).indexOf(w) === -1, where + " has no security-deposit reference: \"" + w + "\""));
+  noSd("the panel picker");
+
+  /* --- Area Manager --- */
+  clickSel(doc, '[data-aprole="am"]');
+  eq(api.state.screen, "admin", "choosing a panel opens the admin console");
+  eq(api.state.admin.role, "am", "as the Area Manager");
+  check(txt(doc).indexOf("FM Onboarding") >= 0, "the console is titled FM Onboarding");
+  check(txt(doc).indexOf("Meesho Admin Console") >= 0, "with the admin breadcrumb");
+  check(txt(doc).indexOf("Priya Sharma") >= 0, "and the signed-in Area Manager");
+  eq(api.config.ADMIN_TABS.am.map(t => t.id), ["mine"], "AM has only its own requests");
+
+  const amRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
+  check(amRows.length === 3, "three AM-stage requests listed");
+  check(txt(doc).indexOf("AM pending") >= 0, "with their statuses");
+  check(txt(doc).indexOf("VLS fields missing") >= 0, "including VLS fields missing");
+  check(txt(doc).indexOf("SLA breach") >= 0, "and an SLA breach");
+
+  /* search and status filters narrow the table */
+  api.actions.adminFilter("search", "Neha");
+  eq([...doc.querySelectorAll("[data-apopen]")].length, 1, "search narrows the list");
+  api.actions.adminFilter("search", "");
+  api.actions.adminFilter("status", "sla_breach");
+  eq([...doc.querySelectorAll("[data-apopen]")].length, 1, "status filter narrows the list");
+  api.actions.adminFilter("status", "all");
+
+  /* --- AM infra checklist --- */
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  check(txt(doc).indexOf("AM verification · approve") >= 0, "opens the infra check");
+  check(txt(doc).indexOf("Area Manager infra check") >= 0, "with the hard-gate card");
+  const gates = [...doc.querySelectorAll("[data-gate]")].map(b => b.getAttribute("data-gate"));
+  eq([...new Set(gates)], ["cctv","computer","printer","address","vehicle"],
+     "all five hard gates present");
+  check(disabled(doc, "ap-approve"), "approve is blocked until every gate is answered");
+  noSd("the AM detail");
+  check(txt(doc).indexOf("Captain & hub context") >= 0, "the read-only context card is shown");
+  check(txt(doc).indexOf("AM SLA") >= 0, "with the SLA card");
+
+  /* a failed hard gate forces rejection */
+  api.actions.amGate("cctv", "no");
+  check(exists(doc, "#ap-reject"), "a failed hard gate switches the action to reject");
+  check(!exists(doc, "#ap-approve"), "and approve is no longer offered");
+  check(txt(doc).indexOf("Hard gate failed") >= 0, "the card says a hard gate failed");
+
+  ["cctv","computer","printer","address","vehicle"].forEach(g => api.actions.amGate(g, "yes"));
+  check(txt(doc).indexOf("Ready to approve") >= 0, "all gates passing marks it ready");
+  check(!disabled(doc, "ap-approve"), "and approve opens");
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78222").stage, "ch", "approving routes the request to the Cluster Head");
+  eq(api.state.admin.selected, null, "and returns to the list");
+  check(txt(doc).indexOf("routed to Cluster Head") >= 0, "with a confirmation");
+
+  /* --- Cluster Head --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  eq(api.config.ADMIN_TABS.ch.map(t => t.id), ["mine","am","users"],
+     "CH sees its own requests, AM requests and user mapping");
+  check(txt(doc).indexOf("Rakesh Sharma") >= 0, "signed in as the Cluster Head");
+
+  clickSel(doc, '[data-apopen="OBD-78219"]');
+  check(txt(doc).indexOf("CH review · approve request") >= 0, "opens the CH review");
+  noSd("the CH review");
+  check(txt(doc).indexOf("Raise security deposit") === -1,
+        "the raise-deposit field from the LM design is absent");
+  check(exists(doc, "#ch-fwd") && exists(doc, "#ch-rev"), "forward and reverse rates are captured");
+  check(exists(doc, "#ch-type"), "hub type is captured");
+  eq([...doc.querySelectorAll("[data-rating]")].length, 5, "a 1–5 rating is offered");
+
+  /* rating gates the decision, per the design */
+  api.actions.chRate(2);
+  check(exists(doc, "#ap-reject"), "a rating of 2 offers rejection");
+  check(!exists(doc, "#ap-approve"), "and not approval");
+  api.actions.chRate(4);
+  check(exists(doc, "#ap-approve"), "a rating of 4 offers approval");
+  check(txt(doc).indexOf("send to agreements") >= 0,
+        "and sends the request to agreements, not to a deposit");
+
+  /* escalation to the Zonal Head */
+  click(doc, "ap-escalate");
+  eq(api.helpers.apById("OBD-78219").stage, "zh", "escalation routes the request to the Zonal Head");
+  check(txt(doc).indexOf("Escalated to Zonal Head") >= 0, "with a confirmation");
+
+  /* CH can see AM requests and user mapping */
+  api.actions.adminTab("am");
+  check([...doc.querySelectorAll("[data-apopen]")].length >= 1, "CH can view AM-stage requests");
+  api.actions.adminTab("users");
+  check(txt(doc).indexOf("User mapping") >= 0, "and the user mapping table");
+  check(txt(doc).indexOf("priya.sharma@meesho.com") >= 0, "listing mapped users");
+
+  /* --- Zonal Head --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="zh"]');
+  check(txt(doc).indexOf("Priya Nair") >= 0, "signed in as the Zonal Head");
+  const zhRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
+  check(zhRows.indexOf("OBD-78219") >= 0, "the escalated request is on the ZH desk");
+  clickSel(doc, '[data-apopen="OBD-78219"]');
+  check(txt(doc).indexOf("ZH review · rate card approval") >= 0, "opens the ZH approval");
+  noSd("the ZH review");
+  check(txt(doc).indexOf("Adjust security deposit") === -1,
+        "the LM design's deposit-adjustment screen is not built");
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78219").status, "approved", "the Zonal Head can approve the rate card");
+
+  /* --- FM Central Admin --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="central"]');
+  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["am","ch","zh","users"],
+     "Central sees AM, CH and ZH requests plus user mapping");
+  check(txt(doc).indexOf("National view") >= 0, "described as a national view");
+  api.actions.adminTab("zh");
+  check(txt(doc).indexOf("Request") >= 0, "ZH requests list renders");
+  noSd("the Central console");
+
+  /* --- binding screens are deliberately absent --- */
+  const allTabs = Object.keys(api.config.ADMIN_TABS)
+    .reduce((acc, k) => acc.concat(api.config.ADMIN_TABS[k].map(t => t.label)), []);
+  ["Area binding","Cluster binding","Zone binding","binding"].forEach(b =>
+    check(allTabs.join(" ").indexOf(b) === -1, "no binding screen: " + b));
+
+  /* --- switching back to the captain flow --- */
+  api.actions.adminSwitchRole();
+  click(doc, "ap-logout");
+  eq(api.state.screen, "login", "logging out returns to the login screen");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -1850,6 +2007,7 @@ async function testCaptainHub() {
     await testPhaseOrder();
     await testBackAndPhoto();
     await testCaptainHub();
+    await testAdminPanel();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

@@ -742,6 +742,173 @@ img{max-width:100%}
 }
 .photo-lb img{max-width:100%;max-height:100%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 
+
+/* =========================================================================
+   ADMIN PANEL — Figma page 109:2 ("Admin Panels · Onboarding Approvals")
+   Built for FM. Every security-deposit field and column from the LM designs
+   is deliberately absent: FM hubs do not take one.
+   ====================================================================== */
+.ap-select{min-height:100vh;background:var(--page-alt)}
+.ap-select .band{background:var(--navy);padding:44px 24px 96px;text-align:center}
+.ap-select .band img{width:150px;height:40px;object-fit:contain}
+.ap-card{
+  max-width:1120px;margin:-70px auto 0;background:#fff;border-radius:16px;
+  border:1px solid var(--line);box-shadow:0 18px 44px rgba(9,26,54,.10);padding:28px 30px 30px;
+}
+.ap-card > .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}
+.ap-card h1{margin:0 0 6px;font-size:24px;font-weight:700;color:var(--ink)}
+.ap-card .hd p{margin:0;font-size:13px;font-weight:500;color:var(--muted)}
+.ap-url{
+  display:inline-flex;align-items:center;gap:8px;background:var(--ok-bg);
+  border:1px solid var(--ok-br);border-radius:999px;padding:6px 12px;
+  font-size:12px;font-weight:700;color:var(--ok-ink);white-space:nowrap;
+}
+.ap-url .led{width:7px;height:7px;border-radius:4px;background:var(--ok-ink)}
+.ap-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.ap-role{
+  border:1px solid var(--line);border-radius:12px;padding:18px;text-align:left;
+  background:#fff;display:flex;flex-direction:column;gap:8px;
+}
+.ap-role:hover{border-color:var(--cyan-label);box-shadow:0 6px 18px rgba(15,23,41,.07)}
+.ap-role .ic{
+  width:38px;height:38px;border-radius:10px;background:var(--cyan-bg);
+  display:flex;align-items:center;justify-content:center;font-size:17px;margin-bottom:4px;
+}
+.ap-role b{font-size:16px;font-weight:700;color:var(--ink)}
+.ap-role p{margin:0;font-size:12px;font-weight:500;color:var(--muted);line-height:18px;flex:1}
+.ap-role .go{font-size:13px;font-weight:700;color:var(--navy)}
+
+/* shell */
+.ap-shell{display:flex;align-items:stretch;min-height:100vh;background:var(--page-alt)}
+.ap-side{
+  width:176px;flex:none;position:sticky;top:0;height:100vh;
+  background:linear-gradient(180deg,#0c2247,#0a1734);
+  display:flex;flex-direction:column;justify-content:space-between;
+}
+.ap-side .brand{display:flex;gap:10px;align-items:center;padding:14px 12px}
+.ap-side .brand .mk{width:82px;height:22px}
+.ap-side .brand .mk img{width:100%;height:100%;object-fit:contain}
+.ap-side .brand span{font-size:10px;font-weight:500;color:var(--rail-mute4);line-height:13px}
+.ap-who{
+  margin:0 10px 10px;padding:10px;border-radius:10px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+}
+.ap-who .k{display:block;font-size:10px;font-weight:500;color:#8ea0bd}
+.ap-who b{display:block;font-size:13px;font-weight:700;color:#fff;margin:2px 0}
+.ap-who .s{display:block;font-size:10px;font-weight:500;color:#8ea0bd;line-height:14px}
+.ap-nav{
+  display:flex;gap:9px;align-items:center;width:100%;padding:10px 12px;
+  color:#9aa7be;font-size:13px;font-weight:600;text-align:left;
+  border-left:3px solid transparent;
+}
+.ap-nav.on{background:#17325c;color:#fff;border-left-color:var(--cyan)}
+.ap-nav:hover{color:#cfdcef}
+.ap-user{display:flex;gap:9px;align-items:center;padding:12px;border-top:1px solid rgba(255,255,255,.08)}
+.ap-user .av{
+  width:30px;height:30px;border-radius:15px;flex:none;background:var(--avatar);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy-deep);
+}
+.ap-user .ux{flex:1;min-width:0}
+.ap-user .ux b{display:block;font-size:12px;font-weight:700;color:#fff}
+.ap-user .ux span{display:block;font-size:10px;color:#8ea0bd;overflow:hidden;text-overflow:ellipsis}
+.ap-switch{display:block;width:100%;text-align:left;padding:0 12px 12px;font-size:12px;font-weight:700;color:var(--logout)}
+
+.ap-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.ap-top{
+  background:#fff;border-bottom:1px solid var(--line-top);height:54px;
+  display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex:none;
+}
+.ap-top .crumb{font-size:12px;font-weight:500;color:var(--muted)}
+.ap-top .crumb b{color:var(--ink);font-weight:700;letter-spacing:.3px}
+.ap-top .chips{display:flex;gap:10px}
+.ap-body{padding:24px;flex:1}
+.ap-body h2{margin:0 0 4px;font-size:24px;font-weight:700;color:var(--ink)}
+.ap-body .lede{margin:0 0 18px;font-size:13px;font-weight:500;color:var(--muted)}
+.ap-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.ap-tabs button{
+  border:1px solid var(--line);border-radius:8px;background:#fff;
+  padding:8px 14px;font-size:13px;font-weight:600;color:var(--muted);
+}
+.ap-tabs button.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:700}
+
+.ap-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px}
+.ap-stat{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
+.ap-stat .k{display:block;font-size:12px;font-weight:500;color:var(--muted)}
+.ap-stat b{display:block;font-size:26px;font-weight:700;color:var(--ink);margin:4px 0 2px}
+.ap-stat .s{display:block;font-size:11px;font-weight:500;color:var(--muted)}
+.ap-stat.blue{background:#f2f8ff;border-color:#d8e8fb}
+.ap-stat.amber{background:#fff9ef;border-color:#f3e2c4}
+.ap-stat.red{background:#fff4f3;border-color:#f8d9d6}
+.ap-stat.green{background:#f1faf4;border-color:#cfe9d8}
+
+.ap-panel{background:#fff;border:1px solid var(--line);border-radius:12px}
+.ap-panel > .ph{
+  display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+  padding:16px 18px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap;
+}
+.ap-panel > .ph b{display:block;font-size:15px;font-weight:700;color:var(--ink)}
+.ap-panel > .ph span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+.ap-filters{display:flex;gap:10px}
+.ap-filters input,.ap-filters select{
+  height:34px;border:1px solid var(--line-field);border-radius:8px;padding:0 10px;
+  font-size:12px;color:var(--ink);background:#fff;outline:none;
+}
+.ap-filters input{width:220px}
+.ap-filters input:focus,.ap-filters select:focus{border-color:var(--cyan-label)}
+
+.ap-table{width:100%;border-collapse:collapse}
+.ap-table th{
+  text-align:left;font-size:11px;font-weight:700;color:var(--muted);
+  padding:10px 18px;background:var(--chip-bg);border-bottom:1px solid var(--line-soft);
+}
+.ap-table td{padding:13px 18px;font-size:13px;color:var(--ink);border-bottom:1px solid var(--line-soft)}
+.ap-table tr:last-child td{border-bottom:none}
+.ap-table td.id{font-weight:700}
+.ap-table .empty{text-align:center;color:var(--muted);padding:28px;font-size:13px}
+.st{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.st.blue{background:#e8f2fe;color:#1b62b5}
+.st.amber{background:var(--warn-bg);color:var(--warn-ink)}
+.st.red{background:var(--err-bg);color:var(--err)}
+.st.green{background:var(--ok-bg);color:var(--ok-ink)}
+.st.grey{background:#eef1f6;color:var(--muted)}
+
+/* detail */
+.ap-detail{display:flex;gap:18px;align-items:flex-start}
+.ap-detail .dl{flex:1;min-width:0}
+.ap-detail .dr{width:280px;flex:none;display:flex;flex-direction:column;gap:14px}
+.ap-form{padding:18px}
+.ap-gate{
+  display:flex;justify-content:space-between;align-items:center;gap:14px;
+  border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;
+}
+.ap-gate b{display:block;font-size:13px;font-weight:700;color:var(--ink)}
+.ap-gate span{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}
+.yn{display:flex;gap:8px;flex:none}
+.yn button{
+  border:1px solid var(--line-field);border-radius:999px;background:#fff;
+  padding:5px 14px;font-size:12px;font-weight:700;color:var(--muted);
+}
+.yn button.yes.on{border-color:var(--ok-ink);background:var(--ok-bg);color:var(--ok-ink)}
+.yn button.no.on{border-color:var(--err);background:var(--err-bg);color:var(--err)}
+.rating{display:flex;gap:8px}
+.rating button{
+  width:30px;height:30px;border-radius:8px;border:1px solid var(--line-field);
+  background:#fff;font-size:13px;font-weight:700;color:var(--muted);
+}
+.rating button.on{border-color:var(--warn-ink);background:var(--warn-bg);color:var(--warn-ink)}
+.ap-ctx b.nm{display:block;font-size:14px;font-weight:700;color:var(--ink)}
+.ap-sla{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
+.ap-sla .k{display:block;font-size:11px;font-weight:600;color:var(--muted)}
+.ap-sla b{display:block;font-size:22px;font-weight:700;color:var(--ink);margin:3px 0}
+.ap-sla .s{display:block;font-size:11px;color:var(--muted)}
+.ap-sla.warn{background:#fff9ef;border-color:#f3e2c4}
+.ap-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 18px;border-top:1px solid var(--line-soft)}
+.ap-toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:300;
+  background:var(--ink);color:#fff;border-radius:10px;padding:11px 18px;
+  font-size:13px;font-weight:600;box-shadow:0 12px 30px rgba(9,18,36,.3);
+}
+
 /* ------------------------------------------------------------- dev panel -- */
 #dev{
   position:fixed;right:18px;bottom:18px;z-index:9999;width:330px;
@@ -1046,7 +1213,9 @@ function blankState() {
     profile: blankProfile(),
     hubs: [],                  // hubs this captain owns
     activeHubId: null,
-    panel: blankPanel()
+    panel: blankPanel(),
+    admin: blankAdmin(),
+    adminRequests: []
   };
 }
 
@@ -1145,6 +1314,9 @@ function load() {
     next.profile = Object.assign(blankProfile(), parsed.profile || {});
     next.profile.bank = Object.assign(blankProfile().bank, (parsed.profile || {}).bank || {});
     next.hubs = Array.isArray(parsed.hubs) ? parsed.hubs.map(function (h) { return makeHub(h); }) : [];
+    next.admin = Object.assign(blankAdmin(), parsed.admin || {});
+    next.adminRequests = Array.isArray(parsed.adminRequests)
+      ? parsed.adminRequests.map(function (x) { return apReq(x); }) : [];
     next.panel = Object.assign(blankPanel(), parsed.panel || {});
     next.panel.bank = Object.assign(blankPanel().bank, (parsed.panel || {}).bank || {});
     next.panel.gst = Object.assign(blankPanel().gst, (parsed.panel || {}).gst || {});
@@ -1349,6 +1521,8 @@ function render() {
   else if (S.screen === "otp")   html = viewOtp();
   else if (S.screen === "roles") html = viewRoles();
   else if (S.screen === "panel") html = viewPanel();
+  else if (S.screen === "adminselect") html = viewAdminSelect();
+  else if (S.screen === "admin") html = viewAdmin();
   else                           html = viewFlow();
   app.innerHTML = html;
   bind();
@@ -1474,6 +1648,149 @@ function viewRoles() {
       inactiveHtml +
     '</div>' +
   '</div>';
+}
+
+
+/* =========================================================================
+   ADMIN PANEL — data model (Figma page 109:2)
+   ====================================================================== */
+
+var ADMIN_ROLES = {
+  am: {
+    id:"am", label:"Area Manager", short:"AM", icon:"📍",
+    desc:"Review physical infra, submit hard-gate checklist and run VLS field pre-check.",
+    cta:"Continue as AM →",
+    person:{ name:"Priya Sharma", email:"priya.sharma@meesho.com", scope:"Area: Indiranagar, Bengaluru" },
+    title:"FM Onboarding",
+    lede:"Your infra verification requests for Indiranagar, Bengaluru."
+  },
+  ch: {
+    id:"ch", label:"Cluster Head", short:"CH", icon:"👥",
+    desc:"Interview captain, set hub type and rate card, and approve or reject the request.",
+    cta:"Continue as CH →",
+    person:{ name:"Rakesh Sharma", email:"rakesh.sharma@meesho.com", scope:"Cluster: Bengaluru Urban East" },
+    title:"FM Onboarding",
+    lede:"Requests routed to Bengaluru Urban East."
+  },
+  zh: {
+    id:"zh", label:"Zonal Head", short:"ZH", icon:"₹",
+    // the LM design describes adjusting a security deposit; FM has none, so the
+    // Zonal Head's job here is above-benchmark rate approval
+    desc:"Approve or reject above-benchmark rate cards escalated by Cluster Heads.",
+    cta:"Continue as ZH →",
+    person:{ name:"Priya Nair", email:"priya.nair@meesho.com", scope:"Zone: South" },
+    title:"FM Onboarding",
+    lede:"Escalations and requests across South zone."
+  },
+  central: {
+    id:"central", label:"FM Central Admin", short:"CA", icon:"🛡",
+    desc:"National view of AM, CH and ZH requests, plus user mapping.",
+    cta:"Continue as Central Admin →",
+    person:{ name:"Central Ops", email:"fm.central@meesho.com", scope:"National" },
+    title:"FM Onboarding",
+    lede:"National view across all areas, clusters and zones."
+  }
+};
+var ADMIN_ROLE_ORDER = ["am","ch","zh","central"];
+
+/* Tabs per role. No area/cluster/zone binding screens — out of scope. */
+var ADMIN_TABS = {
+  am:      [{ id:"mine", label:"My requests" }],
+  ch:      [{ id:"mine", label:"My requests" },
+            { id:"am",   label:"AM requests" },
+            { id:"users",label:"User mapping" }],
+  zh:      [{ id:"mine", label:"My requests" },
+            { id:"am",   label:"AM requests" },
+            { id:"users",label:"User mapping" }],
+  central: [{ id:"am",   label:"AM requests" },
+            { id:"ch",   label:"CH requests" },
+            { id:"zh",   label:"ZH requests" },
+            { id:"users",label:"User mapping" }]
+};
+
+var AP_STATUS = {
+  am_pending:   { label:"AM pending",         tone:"blue"  },
+  vls_missing:  { label:"VLS fields missing",  tone:"amber" },
+  sla_breach:   { label:"SLA breach",          tone:"red"   },
+  ch_pending:   { label:"CH pending",          tone:"blue"  },
+  zh_pending:   { label:"ZH pending",          tone:"amber" },
+  approved:     { label:"Approved",            tone:"green" },
+  rejected:     { label:"Rejected",            tone:"red"   }
+};
+
+function apReq(o) {
+  return Object.assign({
+    id:"", captain:"", phone:"+91 7004301290", hubAppId:"", address:"", pincode:"",
+    stage:"am", status:"am_pending", sla:"41h left", slaTone:"",
+    kyc:true, bgv:true,
+    am:{ visitDate:"03 Jul 2026", by:"Self", floor:"750", landmark:"Near Metro Pillar 128",
+         gates:{ cctv:null, computer:null, printer:null, address:null, vehicle:null },
+         notes:"", done:false },
+    ch:{ mode:"Phone", date:"03 Jul 2026", experience:"Relevant business",
+         ownership:"Leased formal", pilots:"Ready", capacity:"Adequate",
+         rating:0, hubType:"Combined", forward:"14.50", reverse:"8.00",
+         reason:"", notes:"", done:false },
+    zh:{ decision:null, reason:"" }
+  }, o || {});
+}
+
+function seedAdminRequests() {
+  return [
+    apReq({ id:"OBD-78222", captain:"Mahesh Kumar", hubAppId:"HUB-APP-90222",
+            address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560038",
+            stage:"am", status:"am_pending", sla:"41h left" }),
+    apReq({ id:"OBD-78231", captain:"Amit Bansal", hubAppId:"HUB-APP-90231",
+            address:"No. 8, Service Road, Hebbal, Bengaluru", pincode:"560071",
+            stage:"am", status:"vls_missing", sla:"2h left", slaTone:"warn" }),
+    apReq({ id:"OBD-78240", captain:"Neha S", hubAppId:"HUB-APP-90240",
+            address:"Unit 3, HSR Layout, Bengaluru", pincode:"560102",
+            stage:"am", status:"sla_breach", sla:"5h overdue", slaTone:"warn" }),
+    apReq({ id:"OBD-78219", captain:"Karan Verma", hubAppId:"HUB-APP-90218",
+            address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560076",
+            stage:"ch", status:"ch_pending", sla:"6h left", slaTone:"warn" }),
+    apReq({ id:"OBD-78255", captain:"Rajesh Gupta", hubAppId:"HUB-APP-90255",
+            address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
+            stage:"zh", status:"zh_pending", sla:"22h left",
+            ch:{ mode:"In person", date:"01 Jul 2026", experience:"Relevant business",
+                 ownership:"Owned", pilots:"Ready", capacity:"Adequate", rating:4,
+                 hubType:"Split", forward:"18.00", reverse:"9.00",
+                 reason:"Above benchmark for this hub type", notes:"", done:true } })
+  ];
+}
+
+var AP_USERS = [
+  { name:"Priya Sharma",  email:"priya.sharma@meesho.com",  role:"Area Manager",  scope:"Indiranagar, Bengaluru", status:"Active" },
+  { name:"Rakesh Sharma", email:"rakesh.sharma@meesho.com", role:"Cluster Head",  scope:"Bengaluru Urban East",   status:"Active" },
+  { name:"Priya Nair",    email:"priya.nair@meesho.com",    role:"Zonal Head",    scope:"South",                  status:"Active" },
+  { name:"Arun Kumar",    email:"arun.kumar@meesho.com",    role:"Area Manager",  scope:"Whitefield, Bengaluru",  status:"Pending" }
+];
+
+function blankAdmin() {
+  return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"" };
+}
+
+function apRole()  { return ADMIN_ROLES[S.admin.role] || ADMIN_ROLES.am; }
+function apById(id){ for (var i=0;i<S.adminRequests.length;i++) if (S.adminRequests[i].id===id) return S.adminRequests[i]; return null; }
+
+/* Which requests a tab shows. "mine" is the stage this role owns. */
+function apRowsFor(tab) {
+  var role = S.admin.role, list = S.adminRequests;
+  if (tab === "mine") {
+    var stage = role === "central" ? null : role;
+    return list.filter(function (r) { return !stage || r.stage === stage; });
+  }
+  if (tab === "am") return list.filter(function (r) { return r.stage === "am"; });
+  if (tab === "ch") return list.filter(function (r) { return r.stage === "ch"; });
+  if (tab === "zh") return list.filter(function (r) { return r.stage === "zh"; });
+  return list;
+}
+function apVisibleRows() {
+  var a = S.admin, q = a.search.trim().toLowerCase();
+  return apRowsFor(a.tab).filter(function (r) {
+    if (a.status !== "all" && r.status !== a.status) return false;
+    if (!q) return true;
+    return (r.id + " " + r.captain + " " + r.pincode).toLowerCase().indexOf(q) >= 0;
+  });
 }
 
 /* =========================================================================
@@ -1842,6 +2159,375 @@ function panelPlaceholder(section) {
       '<div style="margin-top:18px"><button class="btn btn-primary" data-nav="hubs">' +
         'Go to My Hubs</button></div>' +
     '</div></div>';
+}
+
+
+/* =========================================================================
+   ADMIN PANEL — views
+   ====================================================================== */
+
+function viewAdminSelect() {
+  var cards = ADMIN_ROLE_ORDER.map(function (id) {
+    var m = ADMIN_ROLES[id];
+    return '<button class="ap-role" data-aprole="' + id + '">' +
+      '<span class="ic">' + m.icon + '</span>' +
+      '<b>' + esc(m.label) + '</b>' +
+      '<p>' + esc(m.desc) + '</p>' +
+      '<span class="go">' + esc(m.cta) + '</span>' +
+    '</button>';
+  }).join("");
+
+  return '<div class="ap-select">' +
+    '<div class="band"><img alt="VALMO" src="' + LOGO + '"></div>' +
+    '<div class="ap-card">' +
+      '<div class="hd"><div><h1>Welcome to Valmo Admin Panel</h1>' +
+        '<p>Select the panel you want to open. Access is based on your role in the ' +
+        'Meesho Admin Console.</p></div>' +
+        '<span class="ap-url"><span class="led"></span>admin.meeshosupply.com/valmo</span></div>' +
+      '<div class="ap-grid">' + cards + '</div>' +
+    '</div>' +
+    '<div style="text-align:center;padding:26px"><button class="btn-link" id="ap-logout">' +
+      '↩ Back to login</button></div>' +
+  '</div>';
+}
+
+function apShell(body) {
+  var m = apRole(), a = S.admin;
+  var tabs = ADMIN_TABS[a.role] || [];
+  var nav = '<button class="ap-nav on"><span>🚚</span><span>' + esc(m.title) + '</span></button>';
+
+  return '<div class="ap-shell">' +
+    '<div class="ap-side">' +
+      '<div>' +
+        '<div class="brand"><span class="mk"><img alt="VALMO" src="' + LOGO + '"></span>' +
+          '<span>Admin<br>Panel</span></div>' +
+        '<div class="ap-who"><span class="k">Signed in as</span><b>' + esc(m.label) + '</b>' +
+          '<span class="s">' + esc(m.person.scope) + '</span></div>' +
+        nav +
+      '</div>' +
+      '<div>' +
+        '<div class="ap-user"><span class="av">' + esc(m.short) + '</span>' +
+          '<span class="ux"><b>' + esc(m.person.name) + '</b>' +
+          '<span>' + esc(m.person.email) + '</span></span></div>' +
+        '<button class="ap-switch" id="ap-switch">↩ Switch role</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="ap-main">' +
+      '<div class="ap-top">' +
+        '<span class="crumb">Meesho Admin Console&nbsp; / &nbsp;<b>VALMO</b></span>' +
+        '<span class="chips"><span class="pill"><span class="led"></span>SLA tracking on</span>' +
+          '<span class="chip">' + esc(m.label) + '</span></span>' +
+      '</div>' +
+      '<div class="ap-body">' + body + '</div>' +
+    '</div>' +
+    (a.toast ? '<div class="ap-toast">' + esc(a.toast) + '</div>' : '') +
+  '</div>';
+}
+
+function apTabs() {
+  var a = S.admin, tabs = ADMIN_TABS[a.role] || [];
+  return '<div class="ap-tabs">' + tabs.map(function (t) {
+    return '<button data-aptab="' + t.id + '"' + (a.tab === t.id ? ' class="on"' : '') + '>' +
+           esc(t.label) + '</button>';
+  }).join("") + '</div>';
+}
+
+function apStats() {
+  var rows = apRowsFor(S.admin.tab);
+  var pending  = rows.filter(function (r) { return r.status === "am_pending" || r.status === "ch_pending" || r.status === "zh_pending"; }).length;
+  var breaches = rows.filter(function (r) { return r.status === "sla_breach"; }).length;
+  var approved = S.adminRequests.filter(function (r) { return r.status === "approved"; }).length;
+  var stat = function (cls, k, v, sub) {
+    return '<div class="ap-stat ' + cls + '"><span class="k">' + k + '</span><b>' + v +
+           '</b><span class="s">' + sub + '</span></div>';
+  };
+  return '<div class="ap-stats">' +
+    stat("blue",  "Assigned to me", rows.length, "All routed to you") +
+    stat("amber", "Pending", pending, "Awaiting action") +
+    stat("red",   "SLA breaches", breaches, breaches ? "Action overdue" : "None overdue") +
+    stat("green", "Approved (30d)", approved + 22, "96% on time") +
+  '</div>';
+}
+
+function apStatusChip(r) {
+  var m = AP_STATUS[r.status] || { label:r.status, tone:"grey" };
+  return '<span class="st ' + m.tone + '">' + esc(m.label) + '</span>';
+}
+
+function apList() {
+  var a = S.admin, rows = apVisibleRows();
+  var tabLabel = (ADMIN_TABS[a.role].filter(function (t) { return t.id === a.tab; })[0] || {}).label || "Requests";
+
+  var body = rows.length
+    ? rows.map(function (r) {
+        return '<tr><td class="id">' + esc(r.id) + '</td>' +
+          '<td>' + esc(r.captain) + '</td>' +
+          '<td>' + esc(r.pincode) + '</td>' +
+          '<td>' + apStatusChip(r) + '</td>' +
+          '<td>' + esc(r.sla) + '</td>' +
+          '<td style="text-align:right"><button class="btn btn-ghost" data-apopen="' + esc(r.id) +
+            '">Open</button></td></tr>';
+      }).join("")
+    : '<tr><td class="empty" colspan="6">No requests match this filter.</td></tr>';
+
+  var opts = ["all"].concat(Object.keys(AP_STATUS)).map(function (k) {
+    return '<option value="' + k + '"' + (a.status === k ? ' selected' : '') + '>' +
+           (k === "all" ? "All status" : AP_STATUS[k].label) + '</option>';
+  }).join("");
+
+  return apStats() +
+    '<div class="ap-panel">' +
+      '<div class="ph"><div><b>' + esc(tabLabel) + '</b>' +
+        '<span>Open a request to review it and record a decision.</span></div>' +
+        '<div class="ap-filters">' +
+          '<input id="ap-search" placeholder="Search request, captain, pincode" ' +
+            'value="' + esc(a.search) + '">' +
+          '<select id="ap-status">' + opts + '</select>' +
+        '</div></div>' +
+      '<table class="ap-table"><thead><tr>' +
+        '<th>Request</th><th>Captain</th><th>Pincode</th><th>Status</th><th>SLA</th>' +
+        '<th style="text-align:right">Action</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table>' +
+    '</div>';
+}
+
+function apUsers() {
+  var rows = AP_USERS.map(function (u) {
+    return '<tr><td class="id">' + esc(u.name) + '</td><td>' + esc(u.email) + '</td>' +
+      '<td>' + esc(u.role) + '</td><td>' + esc(u.scope) + '</td>' +
+      '<td><span class="st ' + (u.status === "Active" ? "green" : "amber") + '">' +
+        esc(u.status) + '</span></td></tr>';
+  }).join("");
+  return '<div class="ap-panel">' +
+    '<div class="ph"><div><b>User mapping</b>' +
+      '<span>Who is mapped to which area, cluster or zone.</span></div></div>' +
+    '<table class="ap-table"><thead><tr>' +
+      '<th>Name</th><th>Email</th><th>Role</th><th>Scope</th><th>Status</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+/* Read-only captain & hub context, shown beside every review form.
+   The LM design carries Model SD and Current SD rows here; FM has no security
+   deposit, so they are absent. */
+function apContext(r) {
+  return '<div class="ap-panel ap-ctx"><div style="padding:16px 18px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
+        '<div><b style="font-size:15px;font-weight:700;color:var(--ink)">Captain &amp; hub context</b>' +
+        '<span style="display:block;font-size:12px;color:var(--muted);margin-top:3px">' +
+          'Read-only values from onboarding state.</span></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
+          '<span class="st green">KYC verified</span><span class="st green">BGV pass</span></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:14px;' +
+        'background:var(--sum-bg);border:1px solid var(--line);border-radius:10px;padding:12px">' +
+        '<span style="flex:1;min-width:0"><b class="nm">' + esc(r.captain) + '</b>' +
+        '<span style="display:block;font-size:11px;color:var(--muted)">Full phone visible on detail page</span></span>' +
+        '<a class="btn btn-primary" style="padding:8px 12px;font-size:12px;text-decoration:none" ' +
+          'href="tel:' + esc(r.phone) + '">Call ' + esc(r.phone) + '</a>' +
+      '</div>' +
+      '<div class="kv" style="margin-top:14px">' +
+        '<div class="row"><span class="k">Request ID</span><span class="v">' + esc(r.id) + '</span></div>' +
+        '<div class="row"><span class="k">Hub application ID</span><span class="v">' + esc(r.hubAppId) + '</span></div>' +
+        '<div class="row"><span class="k">Hub address</span>' +
+          '<span class="v" style="max-width:62%;white-space:normal">' + esc(r.address) + '</span></div>' +
+        '<div class="row"><span class="k">Pincode</span><span class="v">' + esc(r.pincode) + '</span></div>' +
+        '<div class="row"><span class="k">Map link</span>' +
+          '<span class="v"><a href="#" style="color:var(--cyan-ink);text-decoration:none">' +
+          'Open map location →</a></span></div>' +
+      '</div>' +
+    '</div></div>';
+}
+
+function apSla(r, label, sub) {
+  return '<div class="ap-sla' + (r.slaTone ? ' warn' : '') + '">' +
+    '<span class="k">' + esc(label) + '</span><b>' + esc(r.sla) + '</b>' +
+    '<span class="s">' + esc(sub) + '</span></div>';
+}
+
+/* ---------------------------------------------------- AM · infra checklist */
+
+var AM_GATES = [
+  { id:"cctv",     label:"CCTV installed &amp; operational" },
+  { id:"computer", label:"Computer / laptop + internet" },
+  { id:"printer",  label:"Printer available &amp; working" },
+  { id:"address",  label:"Address matches submitted" },
+  { id:"vehicle",  label:"Vehicle access possible" }
+];
+
+function apAmDetail(r) {
+  var g = r.am.gates;
+  var allYes = AM_GATES.every(function (x) { return g[x.id] === true; });
+  var anyNo  = AM_GATES.some(function (x) { return g[x.id] === false; });
+
+  var gates = AM_GATES.map(function (x) {
+    return '<div class="ap-gate"><div><b>' + x.label + '</b><span>Hard gate</span></div>' +
+      '<div class="yn">' +
+        '<button class="yes' + (g[x.id] === true ? ' on' : '') + '" data-gate="' + x.id + '" data-val="yes">Yes</button>' +
+        '<button class="no' + (g[x.id] === false ? ' on' : '') + '" data-gate="' + x.id + '" data-val="no">No</button>' +
+      '</div></div>';
+  }).join("");
+
+  var left = '<div class="ap-panel">' +
+    '<div class="ph"><div><b>Area Manager infra check</b>' +
+      '<span>Any failed hard gate requires rejection. Floor area is AM-entered value.</span></div>' +
+      (allYes ? '<span class="st green">Ready to approve</span>'
+              : (anyNo ? '<span class="st red">Hard gate failed</span>'
+                       : '<span class="st grey">In progress</span>')) + '</div>' +
+    '<div class="ap-form">' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Visit date</label><div class="box">' +
+          '<input id="am-date" value="' + esc(r.am.visitDate) + '"></div></div>' +
+        '<div class="fl"><label>Visit performed by</label><div class="box sel">' +
+          '<select id="am-by">' + ["Self","Field executive","Third-party agency"].map(function (o) {
+            return '<option' + (r.am.by === o ? ' selected' : '') + '>' + o + '</option>'; }).join("") +
+          '</select></div></div>' +
+      '</div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Floor area (sq ft)</label><div class="box">' +
+          '<input id="am-floor" inputmode="numeric" value="' + esc(r.am.floor) + '"></div></div>' +
+        '<div class="fl"><label>Landmark</label><div class="box">' +
+          '<input id="am-landmark" value="' + esc(r.am.landmark) + '"></div></div>' +
+      '</div>' +
+      gates +
+      '<div class="pnote" style="margin-top:14px"><span>ⓘ</span><span>Please ensure you have drawn ' +
+        'the polygon on Atlas and that the central team has completed all mandatory checks.</span></div>' +
+    '</div>' +
+    '<div class="ap-foot">' +
+      '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
+      '<button class="btn btn-ghost" id="ap-save">Save draft</button>' +
+      (anyNo
+        ? '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
+          'Reject infra check →</button>'
+        : '<button class="btn btn-primary" id="ap-approve"' + (allYes ? '' : ' disabled') +
+          '>Approve infra check →</button>') +
+    '</div></div>';
+
+  return '<h2>AM verification · approve</h2>' +
+    '<p class="lede">Infra checklist is full-page and scoped only to facility verification.</p>' +
+    '<div class="ap-detail"><div class="dl">' + left + '</div>' +
+    '<div class="dr">' + apContext(r) + apSla(r, "AM SLA", "72h SLA from hub code creation") + '</div></div>';
+}
+
+/* ------------------------------------------------------ CH · review form */
+
+function apChDetail(r) {
+  var c = r.ch;
+  var sel2 = function (id, val, opts) {
+    return '<div class="box sel"><select id="' + id + '">' + opts.map(function (o) {
+      return '<option' + (val === o ? ' selected' : '') + '>' + o + '</option>'; }).join("") + '</select></div>';
+  };
+  var stars = [1,2,3,4,5].map(function (n) {
+    return '<button data-rating="' + n + '"' + (c.rating === n ? ' class="on"' : '') + '>' + n + '</button>';
+  }).join("");
+  var canApprove = c.rating >= 4;
+
+  var left = '<div class="ap-panel">' +
+    '<div class="ph"><div><b>Cluster Head review</b>' +
+      '<span>Approve only when rating is 4 or 5. Rating 1–3 requires rejection reason.</span></div>' +
+      (c.rating ? '<span class="st ' + (canApprove ? "green" : "amber") + '">Rating ' + c.rating + '</span>'
+                : '<span class="st grey">Not rated</span>') + '</div>' +
+    '<div class="ap-form">' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Interview mode</label>' + sel2("ch-mode", c.mode, ["Phone","In person","Video"]) + '</div>' +
+        '<div class="fl"><label>Interview date</label><div class="box">' +
+          '<input id="ch-date" value="' + esc(c.date) + '"></div></div>' +
+      '</div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Prior logistics experience</label>' +
+          sel2("ch-exp", c.experience, ["Relevant business","Some exposure","None"]) + '</div>' +
+        '<div class="fl"><label>Facility ownership</label>' +
+          sel2("ch-own", c.ownership, ["Leased formal","Owned","Leased informal"]) + '</div>' +
+      '</div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Ability to arrange pilots</label>' +
+          sel2("ch-pilots", c.pilots, ["Ready","Partial","Not ready"]) + '</div>' +
+        '<div class="fl"><label>Capacity fit</label>' +
+          sel2("ch-cap", c.capacity, ["Adequate","Tight","Insufficient"]) + '</div>' +
+      '</div>' +
+      '<div style="margin:4px 0 18px"><span style="display:block;font-size:11px;font-weight:700;' +
+        'color:var(--cyan-label);margin-bottom:8px">Overall rating</span>' +
+        '<div class="rating">' + stars + '</div></div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Hub type</label>' + sel2("ch-type", c.hubType, ["Combined","Split"]) + '</div>' +
+        '<div class="fl"><label>Forward rate</label><div class="box">' +
+          '<input id="ch-fwd" value="' + esc(c.forward) + '"></div>' +
+          '<div class="hint">Per shipment.</div></div>' +
+      '</div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>Reverse rate</label><div class="box">' +
+          '<input id="ch-rev" value="' + esc(c.reverse) + '"></div>' +
+          '<div class="hint">Per shipment.</div></div>' +
+        '<div class="fl"><label>Reason</label><div class="box">' +
+          '<input id="ch-reason" placeholder="Required for rating 1–3" value="' + esc(c.reason) + '"></div></div>' +
+      '</div>' +
+      '<div class="fl"><label>Interview notes</label>' +
+        '<div class="box" style="height:auto;padding:10px 14px">' +
+        '<textarea id="ch-notes" rows="3" style="width:100%;border:none;outline:none;resize:vertical;' +
+          'font-family:inherit;font-size:14px;color:var(--ink);background:none">' + esc(c.notes) + '</textarea>' +
+        '</div></div>' +
+    '</div>' +
+    '<div class="ap-foot">' +
+      '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
+      '<button class="btn btn-ghost" id="ap-save">Save draft</button>' +
+      '<button class="btn btn-ghost" id="ap-escalate">Escalate to ZH →</button>' +
+      (canApprove
+        ? '<button class="btn btn-primary" id="ap-approve">Approve &amp; send to agreements →</button>'
+        : '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
+          'Reject request →</button>') +
+    '</div></div>';
+
+  return '<h2>CH review · approve request</h2>' +
+    '<p class="lede">Rate card and hub type captured here become the source of truth for agreements.</p>' +
+    '<div class="ap-detail"><div class="dl">' + left + '</div>' +
+    '<div class="dr">' + apContext(r) + apSla(r, "CH SLA", "48h SLA from request routing") + '</div></div>';
+}
+
+/* ------------------------------------------- ZH · above-benchmark approval */
+
+function apZhDetail(r) {
+  var c = r.ch;
+  var left = '<div class="ap-panel">' +
+    '<div class="ph"><div><b>Zonal Head approval</b>' +
+      '<span>Rate cards escalated above the benchmark for this hub type.</span></div>' +
+      '<span class="st amber">Escalated</span></div>' +
+    '<div class="ap-form">' +
+      '<div class="kv" style="margin-bottom:16px">' +
+        '<div class="row"><span class="k">Hub type</span><span class="v">' + esc(c.hubType) + '</span></div>' +
+        '<div class="row"><span class="k">Forward rate</span><span class="v">₹' + esc(c.forward) + ' / shipment</span></div>' +
+        '<div class="row"><span class="k">Reverse rate</span><span class="v">₹' + esc(c.reverse) + ' / shipment</span></div>' +
+        '<div class="row"><span class="k">Cluster Head rating</span><span class="v">' + esc(c.rating || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Reason for escalation</span>' +
+          '<span class="v" style="max-width:60%;white-space:normal">' + esc(c.reason || "—") + '</span></div>' +
+      '</div>' +
+      '<div class="fl"><label>Zonal Head note</label><div class="box">' +
+        '<input id="zh-reason" placeholder="Recorded against the decision" ' +
+        'value="' + esc(r.zh.reason) + '"></div></div>' +
+    '</div>' +
+    '<div class="ap-foot">' +
+      '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
+      '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
+        'Reject rate card</button>' +
+      '<button class="btn btn-primary" id="ap-approve">Approve rate card →</button>' +
+    '</div></div>';
+
+  return '<h2>ZH review · rate card approval</h2>' +
+    '<p class="lede">Approve or reject rate cards escalated by Cluster Heads.</p>' +
+    '<div class="ap-detail"><div class="dl">' + left + '</div>' +
+    '<div class="dr">' + apContext(r) + apSla(r, "ZH SLA", "48h SLA from escalation") + '</div></div>';
+}
+
+function viewAdmin() {
+  var a = S.admin, m = apRole();
+  if (a.selected) {
+    var r = apById(a.selected);
+    if (r) {
+      var d = r.stage === "ch" ? apChDetail(r) : (r.stage === "zh" ? apZhDetail(r) : apAmDetail(r));
+      return apShell(d);
+    }
+  }
+  var body = '<h2>' + esc(m.title) + '</h2><p class="lede">' + esc(m.lede) + '</p>' +
+             apTabs() + (a.tab === "users" ? apUsers() : apList());
+  return apShell(body);
 }
 
 /* ------------------------------------------------------------------- flow */
@@ -3087,6 +3773,11 @@ var A = {
     var code = S.otp.join("");
     if (code === "000000") {
       S.otpError = ""; stopOtpTimer();
+      if (S.loginAs === "admin") {
+        if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+        S.screen = "adminselect";
+        save(); render(); return;
+      }
       // An existing captain lands in the Captain Hub; a new one starts onboarding.
       S.screen = S.hubs.length ? "panel" : "roles";
       if (S.screen === "panel") { S.panel.section = "hubs"; S.panel.tab = "hubs"; }
@@ -3831,6 +4522,69 @@ var A = {
     save(); render();
   },
 
+  /* ---- admin panel ---- */
+  openAdminRole: function (role) {
+    if (!ADMIN_ROLES[role]) return;
+    if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+    S.admin = Object.assign(blankAdmin(), {
+      role: role,
+      tab: (ADMIN_TABS[role][0] || {}).id || "mine"
+    });
+    S.screen = "admin";
+    save(); render();
+  },
+  adminSwitchRole: function () {
+    S.admin = blankAdmin();
+    S.screen = "adminselect";
+    save(); render();
+  },
+  adminTab: function (tab) {
+    S.admin.tab = tab; S.admin.selected = null; S.admin.toast = "";
+    save(); render();
+  },
+  adminOpen: function (id) { S.admin.selected = id; S.admin.toast = ""; save(); render(); },
+  adminBack: function () { S.admin.selected = null; S.admin.toast = ""; save(); render(); },
+  adminFilter: function (field, v) { S.admin[field] = v; save(); render(); },
+
+  amGate: function (gate, val) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    r.am.gates[gate] = (val === "yes");
+    save(); render();
+  },
+  chRate: function (n) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    r.ch.rating = n;
+    save(); render();
+  },
+  adminSaveDraft: function () {
+    S.admin.toast = "Draft saved.";
+    save(); render();
+  },
+  /* A decision moves the request to the next desk, mirroring the captain flow. */
+  adminDecide: function (decision) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    if (decision === "approve") {
+      if (r.stage === "am")      { r.stage = "ch"; r.status = "ch_pending"; r.am.done = true;
+                                   S.admin.toast = "Infra check approved · routed to Cluster Head."; }
+      else if (r.stage === "ch") { r.stage = "done"; r.status = "approved"; r.ch.done = true;
+                                   S.admin.toast = "Request approved · sent to agreements."; }
+      else                       { r.stage = "done"; r.status = "approved"; r.zh.decision = "approved";
+                                   S.admin.toast = "Rate card approved."; }
+    } else if (decision === "escalate") {
+      r.stage = "zh"; r.status = "zh_pending";
+      S.admin.toast = "Escalated to Zonal Head.";
+    } else {
+      r.status = "rejected";
+      if (r.stage === "zh") r.zh.decision = "rejected";
+      S.admin.toast = "Request rejected · sent back to the captain.";
+    }
+    S.admin.selected = null;
+    save(); render();
+  },
+
   resetAll: resetAll
 };
 
@@ -3993,6 +4747,7 @@ function bind() {
     if (S.hubs.length) A.openPanel("hubs", "hubs"); else A.switchRole();
   });
 
+  if (S.screen === "adminselect" || S.screen === "admin") { bindAdmin(); return; }
   if (S.screen === "panel") { bindPanel(); return; }
   if (S.screen !== "flow") return;
   var r = R();
@@ -4175,6 +4930,42 @@ function readHubPhoto(file) {
   reader.readAsDataURL(file);
 }
 
+/* ----------------------------------------------------- Admin panel bind */
+
+function bindAdmin() {
+  Array.prototype.forEach.call(document.querySelectorAll("[data-aprole]"), function (el) {
+    el.addEventListener("click", function () { A.openAdminRole(el.getAttribute("data-aprole")); });
+  });
+  on("ap-logout", "click", A.logout);
+  on("ap-switch", "click", A.adminSwitchRole);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-aptab]"), function (el) {
+    el.addEventListener("click", function () { A.adminTab(el.getAttribute("data-aptab")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-apopen]"), function (el) {
+    el.addEventListener("click", function () { A.adminOpen(el.getAttribute("data-apopen")); });
+  });
+  on("ap-search", "input", function (e) {
+    var pos = e.target.selectionStart;
+    A.adminFilter("search", e.target.value);
+    var again = document.getElementById("ap-search");
+    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (err) {} }
+  });
+  on("ap-status", "change", function (e) { A.adminFilter("status", e.target.value); });
+  on("ap-back", "click", A.adminBack);
+  on("ap-save", "click", A.adminSaveDraft);
+  on("ap-approve", "click", function () { A.adminDecide("approve"); });
+  on("ap-reject", "click", function () { A.adminDecide("reject"); });
+  on("ap-escalate", "click", function () { A.adminDecide("escalate"); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-gate]"), function (el) {
+    el.addEventListener("click", function () {
+      A.amGate(el.getAttribute("data-gate"), el.getAttribute("data-val"));
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rating]"), function (el) {
+    el.addEventListener("click", function () { A.chRate(+el.getAttribute("data-rating")); });
+  });
+}
+
 /* ------------------------------------------------------- Captain Hub bind */
 
 function bindPanel() {
@@ -4261,16 +5052,32 @@ function devActions() {
   /* Login / OTP: choose who is signing in. This is the only place the prototype
      decides between a first-time captain and one who already operates hubs. */
   if (S.screen === "login" || S.screen === "otp") {
+    var whoLabel = S.loginAs === "admin" ? "admin" :
+                   (S.loginAs === "existing" ? "existing captain" : "new captain");
     return {
-      ctx: "Signing in · <b>" + (S.loginAs === "existing" ? "existing captain" : "new captain") + "</b>",
+      ctx: "Signing in · <b>" + whoLabel + "</b>",
       groups: [{
         title: "Log in as",
         html:
-          devBtn("New captain · no hubs yet", "as:new", S.loginAs === "new" ? "ok" : "") +
-          devBtn("Existing captain · 3 hubs", "as:existing", S.loginAs === "existing" ? "ok" : "") +
-          '<p class="dnone">A new captain lands on role selection and onboards. ' +
-          'An existing captain lands in the Captain Hub with hubs already active.</p>'
+          devBtn("Captain · new, no hubs yet", "as:new", S.loginAs === "new" ? "ok" : "") +
+          devBtn("Captain · existing, 3 hubs", "as:existing", S.loginAs === "existing" ? "ok" : "") +
+          devBtn("Admin panel", "as:admin", S.loginAs === "admin" ? "ok" : "") +
+          '<p class="dnone">Captain opens the onboarding flow — new starts at role selection, ' +
+          'existing lands in the Captain Hub. Admin opens the panel picker: FM Area Manager, ' +
+          'FM Cluster Head, FM Zonal Head or FM Central Admin.</p>'
       }]
+    };
+  }
+
+  if (S.screen === "adminselect") {
+    return { ctx: "Admin · choosing a panel.", groups: [] };
+  }
+  if (S.screen === "admin") {
+    return {
+      ctx: "<b>" + esc(apRole().label) + "</b> · " + esc(S.admin.selected || S.admin.tab),
+      groups: [{ title: "Admin panel", html:
+        '<p class="dnone">You are the backend here — decisions are made in the panel itself, ' +
+        'not simulated from this box.</p>' }]
     };
   }
 
@@ -4423,6 +5230,7 @@ function devDo(cmd) {
     case "as":
       S.loginAs = arg;
       if (arg === "existing") { seedExistingCaptain(); }
+      else if (arg === "admin") { S.adminRequests = seedAdminRequests(); S.admin = blankAdmin(); }
       else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null;
              S.roles = { LM: blankRole("LM"), FM: blankRole("FM") }; }
       save(); render();
@@ -4481,6 +5289,7 @@ if (typeof window !== "undefined") {
     validate: V,
     errors: ERR,
     config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT,
+              ADMIN_ROLES: ADMIN_ROLES, ADMIN_TABS: ADMIN_TABS, ADMIN_ROLE_ORDER: ADMIN_ROLE_ORDER,
               SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
               VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
     helpers: {
@@ -4492,6 +5301,7 @@ if (typeof window !== "undefined") {
       canGoBack: canGoBack, backLabel: backLabel, kycStep: kycStep,
       vehUI: function () { return vehUI; },
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
+      apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
       seedExistingCaptain: seedExistingCaptain
     },
     render: render,
