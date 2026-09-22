@@ -1993,9 +1993,70 @@ async function testAdminPanel() {
   noSd("the CH review");
   check(txt(doc).indexOf("Raise security deposit") === -1,
         "the raise-deposit field from the LM design is absent");
-  check(exists(doc, "#ch-fwd") && exists(doc, "#ch-rev"), "forward and reverse rates are captured");
-  check(exists(doc, "#ch-type"), "hub type is captured");
   eq([...doc.querySelectorAll("[data-rating]")].length, 5, "a 1–5 rating is offered");
+
+  /* --- Hub Payout Type, with Split not yet available --- */
+  check(exists(doc, "#ch-payout"), "hub payout type is captured");
+  check(txt(doc).indexOf("Hub Payout Type") >= 0, "labelled Hub Payout Type");
+  check(txt(doc).indexOf("Hub type") === -1, "the old 'Hub type' label is gone");
+  const payout = [...doc.querySelectorAll("#ch-payout option")];
+  eq(payout.map(o => o.value), ["Combined","Split"], "both payout types are listed");
+  check(!payout[0].disabled, "Combined is selectable");
+  check(payout[1].disabled, "Split is disabled for now");
+  eq(api.helpers.apById("OBD-78219").ch.payoutType, "Combined", "Combined is the value in play");
+  check(api.helpers.payoutAllowed("Combined"), "Combined is an allowed payout type");
+  check(!api.helpers.payoutAllowed("Split"), "Split is not");
+  /* the rule holds even if the value arrives some other way than the select */
+  api.actions.chField("payoutType", "Split");
+  eq(api.helpers.apById("OBD-78219").ch.payoutType, "Combined",
+     "Split is refused in state, not merely disabled in the dropdown");
+
+  /* --- one rate per slab: no forward/reverse split --- */
+  check(!exists(doc, "#ch-fwd") && !exists(doc, "#ch-rev"),
+        "there is no separate forward and reverse rate");
+  ["Forward rate","Reverse rate"].forEach(l =>
+    check(txt(doc).indexOf(l) === -1, "the CH form no longer shows: " + l));
+
+  /* --- slab rate card --- */
+  check(exists(doc, '[data-testid="ch-slabs"]'), "the rate card is captured as slabs");
+  check(txt(doc).indexOf("Rate card slabs") >= 0, "with a slab heading");
+  const slabRows = () => [...doc.querySelectorAll("[data-slabrow]")];
+  eq(slabRows().length, 1, "one slab to begin with");
+  const fields = [...doc.querySelectorAll('[data-slab="0"]')].map(i => i.getAttribute("data-field"));
+  eq(fields, ["from","to","rate"], "each slab takes an order-volume range and a rate");
+  check(disabled(doc, '[data-slabdel="0"]') || sel(doc, '[data-slabdel="0"]').disabled,
+        "the only slab cannot be removed");
+
+  /* the CH can add multiple slabs */
+  click(doc, "ch-slab-add");
+  eq(slabRows().length, 2, "a second slab can be added");
+  click(doc, "ch-slab-add");
+  eq(slabRows().length, 3, "and a third");
+  const chReq = api.helpers.apById("OBD-78219");
+  eq(chReq.ch.slabs[1].from, "501", "a new slab starts where the previous band ended");
+  check(!sel(doc, '[data-slabdel="0"]').disabled, "slabs can be removed once there are several");
+  api.actions.chSlabRemove(2);
+  eq(slabRows().length, 2, "a slab can be removed");
+
+  /* an incomplete slab blocks approval */
+  api.actions.chRate(4);
+  check(!api.helpers.slabsValid(chReq.ch.slabs), "the new slab has no rate yet");
+  check(disabled(doc, "ap-approve"), "so approval is blocked even at rating 4");
+  api.actions.chSlabField(1, "to", "1000");
+  api.actions.chSlabField(1, "rate", "12.75");
+  check(api.helpers.slabsValid(chReq.ch.slabs), "completing the slab makes the card valid");
+  api.actions.chRate(4);
+  check(!disabled(doc, "ap-approve"), "and approval opens");
+
+  /* slab validation */
+  check(!api.helpers.slabValid({ from:"", to:"100", rate:"10" }), "a slab needs a start volume");
+  check(!api.helpers.slabValid({ from:"0", to:"100", rate:"" }), "a slab needs a rate");
+  check(!api.helpers.slabValid({ from:"500", to:"100", rate:"10" }),
+        "the upper bound must be above the start");
+  check(api.helpers.slabValid({ from:"501", to:"", rate:"9.50" }),
+        "a blank upper bound means the band is open-ended");
+  eq(api.helpers.slabLabel({ from:"0", to:"500", rate:"1" }), "0–500 orders", "bands read as a range");
+  eq(api.helpers.slabLabel({ from:"501", to:"", rate:"1" }), "501+ orders", "open bands read as N+");
 
   /* rating gates the decision, per the design */
   api.actions.chRate(2);

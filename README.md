@@ -326,9 +326,24 @@ SLA chip — over a request table with search and status filters, and stat tiles
 carries the captain's phone under their name, and the search matches it however it is typed
 — spaced as displayed, unspaced, with `+91`, or as a bare `91`-prefixed number — alongside
 request ID, captain name and pincode. Opening a
-request gives the full-page review: the AM infra checklist, the CH review (interview fields,
-1–5 rating gating approval, hub type and rate card), and the ZH rate-card approval. Every
-review carries the read-only *Captain & hub context* card and an SLA card.
+request gives the full-page review: the AM infra checklist, the CH review, and the ZH
+rate-card approval. Every review carries the read-only *Captain & hub context* card and an
+SLA card.
+
+### The CH review
+
+Interview fields, a 1–5 overall rating that gates the decision (4–5 approve, 1–3 reject),
+**Hub Payout Type**, and a slab rate card.
+
+*Hub Payout Type* offers **Combined** and **Split**, with Split disabled — it is not
+supported yet. The value is refused in state as well as disabled in the dropdown, so the
+rule does not depend on the select to enforce it.
+
+The rate card is **slab-based**: each slab takes an order-volume band and a single rate for
+it — there is no separate forward and reverse rate. The Cluster Head can add as many slabs
+as needed; a new one starts where the previous band ended, and the top band's upper bound
+is left blank to mean *and above*. Approval needs a rating of 4 or 5 **and** a complete rate
+card: every slab needs a starting volume, a rate, and an upper bound above its start.
 
 ### The AM infra checklist
 
@@ -413,7 +428,7 @@ build from.
 npm install && npm test
 ```
 
-**673 assertions across 15 groups:**
+**704 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

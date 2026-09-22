@@ -903,6 +903,33 @@ img{max-width:100%}
 .ap-sla .s{display:block;font-size:11px;color:var(--muted)}
 .ap-sla.warn{background:#fff9ef;border-color:#f3e2c4}
 .ap-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 18px;border-top:1px solid var(--line-soft)}
+/* slab rate card */
+.slabs{
+  border:1px solid var(--line);border-radius:10px;padding:14px;margin:4px 0 18px;
+  background:var(--sum-bg);
+}
+.slabs > .sh{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}
+.slabs > .sh b{display:block;font-size:13px;font-weight:700;color:var(--ink)}
+.slabs > .sh span{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px;line-height:16px}
+.slab-row{
+  display:flex;gap:10px;align-items:flex-end;background:#fff;
+  border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;
+}
+.slab-row.bad{border-color:var(--err-br);background:var(--err-bg)}
+.slab-row .sf{flex:1;min-width:0}
+.slab-row .sl{display:block;font-size:10px;font-weight:700;color:var(--cyan-label);margin-bottom:4px}
+.slab-row input{
+  width:100%;height:36px;padding:0 10px;border:1px solid var(--line-field);
+  border-radius:7px;font-size:13px;font-weight:500;color:var(--ink);outline:none;background:#fff;
+}
+.slab-row input:focus{border-color:var(--cyan-label);box-shadow:0 0 0 3px rgba(7,142,185,.12)}
+.slab-row .srm{
+  flex:none;width:32px;height:36px;border:1px solid var(--line);border-radius:7px;
+  background:#fff;color:var(--err);font-size:13px;font-weight:700;
+}
+.slab-row .srm:disabled{opacity:.35;cursor:not-allowed;color:var(--muted)}
+.slab-row .srm:hover:not(:disabled){background:var(--err-bg);border-color:var(--err-br)}
+
 .ap-toast{
   position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:300;
   background:var(--ink);color:#fff;border-radius:10px;padding:11px 18px;
@@ -1731,7 +1758,9 @@ function apReq(o) {
          notes:"", done:false },
     ch:{ mode:"Phone", date:"03 Jul 2026", experience:"Relevant business",
          ownership:"Leased formal", pilots:"Ready", capacity:"Adequate",
-         rating:0, hubType:"Combined", forward:"14.50", reverse:"8.00",
+         rating:0, payoutType:"Combined",
+         // rate card is slab-based: an order-volume band and a rate per band
+         slabs:[ { from:"0", to:"500", rate:"14.50" } ],
          reason:"", notes:"", done:false },
     zh:{ decision:null, reason:"" }
   }, o || {});
@@ -1756,8 +1785,10 @@ function seedAdminRequests() {
             stage:"zh", status:"zh_pending", sla:"22h left",
             ch:{ mode:"In person", date:"01 Jul 2026", experience:"Relevant business",
                  ownership:"Owned", pilots:"Ready", capacity:"Adequate", rating:4,
-                 hubType:"Split", forward:"18.00", reverse:"9.00",
-                 reason:"Above benchmark for this hub type", notes:"", done:true } })
+                 payoutType:"Combined",
+                 slabs:[ { from:"0", to:"500", rate:"18.00" },
+                         { from:"501", to:"", rate:"16.50" } ],
+                 reason:"Above benchmark for this volume band", notes:"", done:true } })
   ];
 }
 
@@ -1767,6 +1798,30 @@ var AP_USERS = [
   { name:"Priya Nair",    email:"priya.nair@meesho.com",    role:"Zonal Head",    scope:"South",                  status:"Active" },
   { name:"Arun Kumar",    email:"arun.kumar@meesho.com",    role:"Area Manager",  scope:"Whitefield, Bengaluru",  status:"Pending" }
 ];
+
+/* Split payouts are not supported yet — the option is shown disabled, and the
+   value is refused here too rather than relying on the select to police it. */
+var PAYOUT_TYPES = { Combined:{ enabled:true }, Split:{ enabled:false } };
+function payoutAllowed(v) { return !!(PAYOUT_TYPES[v] && PAYOUT_TYPES[v].enabled); }
+
+function blankSlab() { return { from:"", to:"", rate:"" }; }
+
+/* A slab is usable once it has a starting volume and a rate. An empty "to"
+   means the band is open-ended — the top slab usually is. */
+function slabValid(sl) {
+  if (!/^\d+$/.test(String(sl.from).trim())) return false;
+  if (!/^\d+(\.\d{1,2})?$/.test(String(sl.rate).trim())) return false;
+  if (String(sl.to).trim() === "") return true;
+  if (!/^\d+$/.test(String(sl.to).trim())) return false;
+  return +sl.to > +sl.from;
+}
+function slabsValid(list) {
+  return Array.isArray(list) && list.length > 0 && list.every(slabValid);
+}
+function slabLabel(sl) {
+  var to = String(sl.to).trim();
+  return sl.from + (to ? "–" + to : "+") + " orders";
+}
 
 function blankAdmin() {
   return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"" };
@@ -2478,6 +2533,40 @@ function apAmDetail(r) {
 
 /* ------------------------------------------------------ CH · review form */
 
+/* Slab rate card: an order-volume band and its rate, as many as the Cluster
+   Head needs. The top band is left open-ended by clearing its upper bound. */
+function slabEditor(c) {
+  var rows = (c.slabs || []).map(function (sl, i) {
+    var bad = !slabValid(sl);
+    return '<div class="slab-row' + (bad ? ' bad' : '') + '" data-slabrow="' + i + '">' +
+      '<div class="sf"><span class="sl">Orders from</span>' +
+        '<input data-slab="' + i + '" data-field="from" inputmode="numeric" ' +
+          'placeholder="0" value="' + esc(sl.from) + '"></div>' +
+      '<div class="sf"><span class="sl">Orders to</span>' +
+        '<input data-slab="' + i + '" data-field="to" inputmode="numeric" ' +
+          'placeholder="blank = and above" value="' + esc(sl.to) + '"></div>' +
+      '<div class="sf"><span class="sl">Slab rate (₹ / shipment)</span>' +
+        '<input data-slab="' + i + '" data-field="rate" inputmode="decimal" ' +
+          'placeholder="14.50" value="' + esc(sl.rate) + '"></div>' +
+      '<button class="srm" data-slabdel="' + i + '" title="Remove slab"' +
+        ((c.slabs || []).length < 2 ? ' disabled' : '') + '>✕</button>' +
+    '</div>';
+  }).join("");
+
+  var complete = slabsValid(c.slabs);
+  return '<div class="slabs" data-testid="ch-slabs">' +
+    '<div class="sh"><div><b>Rate card slabs</b>' +
+      '<span>Set a rate per order-volume band. Leave the top band&rsquo;s upper bound blank ' +
+        'for &ldquo;and above&rdquo;.</span></div>' +
+      '<span class="st ' + (complete ? "green" : "grey") + '">' +
+        (c.slabs || []).length + ' slab' + ((c.slabs || []).length === 1 ? '' : 's') + '</span></div>' +
+    rows +
+    '<button class="btn btn-ghost" id="ch-slab-add" style="margin-top:4px">＋ Add slab</button>' +
+    (complete ? '' : '<div class="hint err" style="padding-top:8px">' +
+      'Every slab needs a starting volume and a rate, and an upper bound above its start.</div>') +
+  '</div>';
+}
+
 function apChDetail(r) {
   var c = r.ch;
   var sel2 = function (id, val, opts) {
@@ -2487,7 +2576,7 @@ function apChDetail(r) {
   var stars = [1,2,3,4,5].map(function (n) {
     return '<button data-rating="' + n + '"' + (c.rating === n ? ' class="on"' : '') + '>' + n + '</button>';
   }).join("");
-  var canApprove = c.rating >= 4;
+  var canApprove = c.rating >= 4 && slabsValid(c.slabs);
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Cluster Head review</b>' +
@@ -2516,18 +2605,17 @@ function apChDetail(r) {
         'color:var(--cyan-label);margin-bottom:8px">Overall rating</span>' +
         '<div class="rating">' + stars + '</div></div>' +
       '<div class="grid2">' +
-        '<div class="fl"><label>Hub type</label>' + sel2("ch-type", c.hubType, ["Combined","Split"]) + '</div>' +
-        '<div class="fl"><label>Forward rate</label><div class="box">' +
-          '<input id="ch-fwd" value="' + esc(c.forward) + '"></div>' +
-          '<div class="hint">Per shipment.</div></div>' +
-      '</div>' +
-      '<div class="grid2">' +
-        '<div class="fl"><label>Reverse rate</label><div class="box">' +
-          '<input id="ch-rev" value="' + esc(c.reverse) + '"></div>' +
-          '<div class="hint">Per shipment.</div></div>' +
+        '<div class="fl"><label>Hub Payout Type</label>' +
+          '<div class="box sel"><select id="ch-payout">' +
+            '<option value="Combined"' + (c.payoutType === "Combined" ? " selected" : "") + '>Combined</option>' +
+            // Split is not supported yet — shown so the option is visible, disabled
+            '<option value="Split" disabled>Split (not available yet)</option>' +
+          '</select></div>' +
+          '<div class="hint">Split payouts are not enabled yet.</div></div>' +
         '<div class="fl"><label>Reason</label><div class="box">' +
           '<input id="ch-reason" placeholder="Required for rating 1–3" value="' + esc(c.reason) + '"></div></div>' +
       '</div>' +
+      slabEditor(c) +
       '<div class="fl"><label>Interview notes</label>' +
         '<div class="box" style="height:auto;padding:10px 14px">' +
         '<textarea id="ch-notes" rows="3" style="width:100%;border:none;outline:none;resize:vertical;' +
@@ -2560,9 +2648,12 @@ function apZhDetail(r) {
       '<span class="st amber">Escalated</span></div>' +
     '<div class="ap-form">' +
       '<div class="kv" style="margin-bottom:16px">' +
-        '<div class="row"><span class="k">Hub type</span><span class="v">' + esc(c.hubType) + '</span></div>' +
-        '<div class="row"><span class="k">Forward rate</span><span class="v">₹' + esc(c.forward) + ' / shipment</span></div>' +
-        '<div class="row"><span class="k">Reverse rate</span><span class="v">₹' + esc(c.reverse) + ' / shipment</span></div>' +
+        '<div class="row"><span class="k">Hub payout type</span><span class="v">' +
+          esc(c.payoutType || "Combined") + '</span></div>' +
+        (c.slabs || []).map(function (sl) {
+          return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
+                 '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
+        }).join("") +
         '<div class="row"><span class="k">Cluster Head rating</span><span class="v">' + esc(c.rating || "—") + '</span></div>' +
         '<div class="row"><span class="k">Reason for escalation</span>' +
           '<span class="v" style="max-width:60%;white-space:normal">' + esc(c.reason || "—") + '</span></div>' +
@@ -4652,6 +4743,43 @@ var A = {
     r.am.gates[gate] = (val === "yes");
     save(); render();
   },
+  /* Slab edits patch state without a re-render, so the field keeps focus. */
+  chSlabField: function (i, field, v) {
+    var r = apById(S.admin.selected);
+    if (!r || !r.ch.slabs[i]) return;
+    r.ch.slabs[i][field] = v;
+    save();
+    paintSlabState();
+  },
+  chSlabAdd: function () {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    var last = r.ch.slabs[r.ch.slabs.length - 1];
+    var next = blankSlab();
+    // start the new band where the previous one ended
+    if (last && String(last.to).trim() !== "") next.from = String(+last.to + 1);
+    r.ch.slabs.push(next);
+    save(); render();
+  },
+  chSlabRemove: function (i) {
+    var r = apById(S.admin.selected);
+    if (!r || r.ch.slabs.length < 2) return;
+    r.ch.slabs.splice(i, 1);
+    save(); render();
+  },
+  chField: function (field, v) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    if (field === "payoutType" && !payoutAllowed(v)) { render(); return; }
+    r.ch[field] = v;
+    save();
+  },
+  amField: function (field, v) {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    r.am[field] = v;
+    save();
+  },
   chRate: function (n) {
     var r = apById(S.admin.selected);
     if (!r) return;
@@ -5030,6 +5158,19 @@ function readHubPhoto(file) {
   reader.readAsDataURL(file);
 }
 
+/* Reflect slab validity without re-rendering the row being typed into. */
+function paintSlabState() {
+  var r = apById(S.admin.selected);
+  if (!r || !r.ch) return;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-slabrow]"), function (row) {
+    var sl = r.ch.slabs[+row.getAttribute("data-slabrow")];
+    if (sl) row.classList.toggle("bad", !slabValid(sl));
+  });
+  var ok = slabsValid(r.ch.slabs) && r.ch.rating >= 4;
+  var approve = document.getElementById("ap-approve");
+  if (approve) approve.disabled = !ok;
+}
+
 /* ----------------------------------------------------- Admin panel bind */
 
 function bindAdmin() {
@@ -5075,6 +5216,36 @@ function bindAdmin() {
   Array.prototype.forEach.call(document.querySelectorAll("[data-rating]"), function (el) {
     el.addEventListener("click", function () { A.chRate(+el.getAttribute("data-rating")); });
   });
+
+  /* slab rate card */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-slab]"), function (el) {
+    el.addEventListener("input", function () {
+      A.chSlabField(+el.getAttribute("data-slab"), el.getAttribute("data-field"), el.value);
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-slabdel]"), function (el) {
+    el.addEventListener("click", function () { A.chSlabRemove(+el.getAttribute("data-slabdel")); });
+  });
+  on("ch-slab-add", "click", A.chSlabAdd);
+
+  /* the review forms now actually capture — Save draft had nothing to save */
+  [["ch-mode","mode"],["ch-date","date"],["ch-exp","experience"],["ch-own","ownership"],
+   ["ch-pilots","pilots"],["ch-cap","capacity"],["ch-payout","payoutType"],
+   ["ch-reason","reason"],["ch-notes","notes"]].forEach(function (pair) {
+    var el = document.getElementById(pair[0]);
+    if (!el) return;
+    el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () {
+      A.chField(pair[1], el.value);
+    });
+  });
+  [["am-date","visitDate"],["am-by","by"],["am-floor","floor"],["am-landmark","landmark"]]
+    .forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (!el) return;
+      el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () {
+        A.amField(pair[1], el.value);
+      });
+    });
 }
 
 /* ------------------------------------------------------- Captain Hub bind */
@@ -5415,6 +5586,8 @@ if (typeof window !== "undefined") {
       activeHub: activeHub, hubById: hubById, knownGstins: knownGstins,
       apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
       amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
+      slabValid: slabValid, slabsValid: slabsValid, slabLabel: slabLabel,
+      payoutAllowed: payoutAllowed,
       seedExistingCaptain: seedExistingCaptain
     },
     render: render,
