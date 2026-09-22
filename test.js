@@ -2068,7 +2068,7 @@ async function testAdminPanel() {
   check(!api.helpers.slabsValid(chReq.ch.slabs), "the new slab has no rate yet");
   check(disabled(doc, "ap-approve"), "so approval is blocked even at rating 4");
   api.actions.chSlabField(1, "to", "1000");
-  api.actions.chSlabField(1, "rate", "12.75");
+  api.actions.chSlabField(1, "rate", "4.00");   // inside the Standalone ceiling of 5
   check(api.helpers.slabsValid(chReq.ch.slabs), "completing the slab makes the card valid");
   api.actions.chRate(4);
   check(!disabled(doc, "ap-approve"), "and approval opens");
@@ -2104,13 +2104,15 @@ async function testAdminPanel() {
   check(!exists(doc, "#ap-approve"), "and not approval");
   api.actions.chRate(4);
   check(exists(doc, "#ap-approve"), "a rating of 4 offers approval");
-  check(txt(doc).indexOf("send to agreements") >= 0,
-        "and sends the request to agreements, not to a deposit");
+  check(txt(doc).indexOf("send to ZH") >= 0,
+        "and sends the rate card to the Zonal Head for sign-off");
+  check(txt(doc).indexOf("send to deposit") === -1, "not to a deposit");
 
-  /* escalation to the Zonal Head */
-  click(doc, "ap-escalate");
-  eq(api.helpers.apById("OBD-78219").stage, "zh", "escalation routes the request to the Zonal Head");
-  check(txt(doc).indexOf("Escalated to Zonal Head") >= 0, "with a confirmation");
+  /* --- CH approve → ZH --- */
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78219").stage, "zh",
+     "the Cluster Head's approval sends the rate card to the Zonal Head");
+  check(txt(doc).indexOf("sent to Zonal Head") >= 0, "with a confirmation");
 
   /* CH can see AM requests and user mapping */
   api.actions.adminTab("am");
@@ -2130,15 +2132,52 @@ async function testAdminPanel() {
   noSd("the ZH review");
   check(txt(doc).indexOf("Adjust security deposit") === -1,
         "the LM design's deposit-adjustment screen is not built");
+
+  /* within threshold → the Zonal Head signs it off */
+  const zhReq = api.helpers.apById("OBD-78219");
+  check(api.helpers.apWithinThreshold(zhReq), "this card is within its hub category ceiling");
+  eq(api.helpers.apCeiling(zhReq), 5, "a Standalone hub's threshold is 5");
+  check(txt(doc).indexOf("Within threshold") >= 0, "the screen says so");
+  check(exists(doc, "#ap-approve"), "so the Zonal Head can approve it");
+  check(!exists(doc, "#ap-central"), "and does not need Central Admin");
   click(doc, "ap-approve");
-  eq(api.helpers.apById("OBD-78219").status, "approved", "the Zonal Head can approve the rate card");
+  eq(api.helpers.apById("OBD-78219").status, "approved", "the Zonal Head approves the rate card");
+
+  /* above threshold → the Zonal Head sends it to Central Admin */
+  const overReq = api.helpers.apById("OBD-78255");
+  check(!api.helpers.apWithinThreshold(overReq), "a mall hub at ₹3.00 is above its ₹2.00 ceiling");
+  api.actions.adminOpen("OBD-78255");
+  check(txt(doc).indexOf("Above threshold") >= 0, "the screen flags it as above threshold");
+  check(exists(doc, '[data-testid="zh-above-threshold"]'), "and explains why");
+  check(!exists(doc, "#ap-approve"), "the Zonal Head cannot sign it off");
+  check(exists(doc, "#ap-central"), "but can send it to Central Admin");
+  click(doc, "ap-central");
+  eq(api.helpers.apById("OBD-78255").stage, "central", "which routes it to Central Admin");
+  eq(api.helpers.apById("OBD-78255").status, "central_pending", "and marks it pending there");
+  check(txt(doc).indexOf("Sent to Central Admin") >= 0, "with a confirmation");
 
   /* --- FM Central Admin --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="central"]');
-  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["am","ch","zh","users"],
-     "Central sees AM, CH and ZH requests plus user mapping");
+  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["mine","am","ch","zh","users"],
+     "Central has its own approval queue plus the AM, CH and ZH views");
   check(txt(doc).indexOf("National view") >= 0, "described as a national view");
+
+  /* --- Central Admin approves the above-threshold card --- */
+  eq(api.state.admin.tab, "mine", "Central opens on its own queue");
+  const centralRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
+  eq(centralRows, ["OBD-78255"], "which holds the request the Zonal Head sent up");
+  clickSel(doc, '[data-apopen="OBD-78255"]');
+  check(txt(doc).indexOf("Central Admin · rate card approval") >= 0, "opens the Central approval");
+  check(exists(doc, '[data-testid="central-above-threshold"]'),
+        "stating what was over threshold and by how much");
+  check(txt(doc).indexOf("Mall hub") >= 0, "naming the hub category");
+  check(exists(doc, "#ap-approve"), "Central Admin can approve it");
+  click(doc, "ap-approve");
+  eq(api.helpers.apById("OBD-78255").status, "approved", "and does");
+  eq(api.helpers.apById("OBD-78255").stage, "done", "which settles the request");
+  check(txt(doc).indexOf("approved by Central Admin") >= 0, "with a confirmation");
+
   api.actions.adminTab("zh");
   check(txt(doc).indexOf("Request") >= 0, "ZH requests list renders");
   noSd("the Central console");

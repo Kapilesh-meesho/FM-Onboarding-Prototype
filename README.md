@@ -367,8 +367,25 @@ The captain's declared size and the AM's correction are stored separately, so it
 visible that a correction happened — the context card shows the effective size with an
 *AM updated* flag.
 
-Decisions route the request onward — AM approve sends it to the Cluster Head, CH approve
-sends it to agreements, CH escalate sends it to the Zonal Head.
+### The approval chain
+
+```
+AM infra check → CH rate card → ZH sign-off → (Central Admin, if above threshold) → agreements
+```
+
+The Area Manager's approval routes the request to the Cluster Head, who sets the rate card
+and approves it onward to the **Zonal Head**. What the Zonal Head can do then depends on the
+rate card itself.
+
+Every request carries a **hub category** — an Area Manager input — and that category's
+benchmark ceiling is the **threshold**. If every slab rate sits at or below it, the Zonal
+Head signs the card off and it goes to agreements. If any slab is above it, the Zonal Head
+**cannot** sign it off: the approve action is replaced by *Send to Central Admin*, with the
+overage stated (*"the highest slab rate is ₹3.00 against a ₹2.00 ceiling for a Mall hub"*),
+and each offending slab flagged in the table. **Central Admin** then has the last word, with
+its own queue and the escalation reason carried through.
+
+Any desk can reject, which sends the request back to the captain.
 
 **Security deposit is removed throughout**, since FM hubs do not take one. That means the
 `zh-sd-detail` frame (*ZH adjust SD*) is not built at all, the *Model SD* and *Current SD*
@@ -434,7 +451,7 @@ build from.
 npm install && npm test
 ```
 
-**731 assertions across 15 groups:**
+**754 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
