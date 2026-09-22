@@ -1739,19 +1739,19 @@ function apReq(o) {
 
 function seedAdminRequests() {
   return [
-    apReq({ id:"OBD-78222", captain:"Mahesh Kumar", hubAppId:"HUB-APP-90222",
+    apReq({ id:"OBD-78222", captain:"Mahesh Kumar", phone:"+91 98450 22119", hubAppId:"HUB-APP-90222",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560038",
             stage:"am", status:"am_pending", sla:"41h left" }),
-    apReq({ id:"OBD-78231", captain:"Amit Bansal", hubAppId:"HUB-APP-90231",
+    apReq({ id:"OBD-78231", captain:"Amit Bansal", phone:"+91 99012 31447", hubAppId:"HUB-APP-90231",
             address:"No. 8, Service Road, Hebbal, Bengaluru", pincode:"560071",
             stage:"am", status:"vls_missing", sla:"2h left", slaTone:"warn" }),
-    apReq({ id:"OBD-78240", captain:"Neha S", hubAppId:"HUB-APP-90240",
+    apReq({ id:"OBD-78240", captain:"Neha S", phone:"+91 91088 40233", hubAppId:"HUB-APP-90240",
             address:"Unit 3, HSR Layout, Bengaluru", pincode:"560102",
             stage:"am", status:"sla_breach", sla:"5h overdue", slaTone:"warn" }),
-    apReq({ id:"OBD-78219", captain:"Karan Verma", hubAppId:"HUB-APP-90218",
+    apReq({ id:"OBD-78219", captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560076",
             stage:"ch", status:"ch_pending", sla:"6h left", slaTone:"warn" }),
-    apReq({ id:"OBD-78255", captain:"Rajesh Gupta", hubAppId:"HUB-APP-90255",
+    apReq({ id:"OBD-78255", captain:"Rajesh Gupta", phone:"+91 88617 55092", hubAppId:"HUB-APP-90255",
             address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
             stage:"zh", status:"zh_pending", sla:"22h left",
             ch:{ mode:"In person", date:"01 Jul 2026", experience:"Relevant business",
@@ -1789,10 +1789,19 @@ function apRowsFor(tab) {
 }
 function apVisibleRows() {
   var a = S.admin, q = a.search.trim().toLowerCase();
+  /* A phone may be typed with or without spaces, +91 or leading zero, so match
+     on digits alone as well as on the literal text. */
+  var qDigits = q.replace(/\D/g, "").replace(/^(?:91|0)/, "");
   return apRowsFor(a.tab).filter(function (r) {
     if (a.status !== "all" && r.status !== a.status) return false;
     if (!q) return true;
-    return (r.id + " " + r.captain + " " + r.pincode).toLowerCase().indexOf(q) >= 0;
+    var hay = (r.id + " " + r.captain + " " + r.pincode + " " + r.phone).toLowerCase();
+    if (hay.indexOf(q) >= 0) return true;
+    if (qDigits.length >= 3) {
+      var phone = String(r.phone || "").replace(/\D/g, "").replace(/^91/, "");
+      if (phone.indexOf(qDigits) >= 0) return true;
+    }
+    return false;
   });
 }
 
@@ -2264,7 +2273,9 @@ function apList() {
   var body = rows.length
     ? rows.map(function (r) {
         return '<tr><td class="id">' + esc(r.id) + '</td>' +
-          '<td>' + esc(r.captain) + '</td>' +
+          '<td>' + esc(r.captain) +
+            '<span style="display:block;font-size:11px;font-weight:500;color:var(--muted);' +
+            'margin-top:3px">' + esc(r.phone) + '</span></td>' +
           '<td>' + esc(r.pincode) + '</td>' +
           '<td>' + apStatusChip(r) + '</td>' +
           '<td>' + esc(r.sla) + '</td>' +
@@ -2283,7 +2294,7 @@ function apList() {
       '<div class="ph"><div><b>' + esc(tabLabel) + '</b>' +
         '<span>Open a request to review it and record a decision.</span></div>' +
         '<div class="ap-filters">' +
-          '<input id="ap-search" placeholder="Search request, captain, pincode" ' +
+          '<input id="ap-search" placeholder="Search request, captain, phone, pincode" ' +
             'value="' + esc(a.search) + '">' +
           '<select id="ap-status">' + opts + '</select>' +
         '</div></div>' +

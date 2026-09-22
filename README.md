@@ -322,7 +322,10 @@ the panel picker from `panel-select`, with four consoles:
 | **FM Central Admin** | National view of AM, CH and ZH requests, plus user mapping |
 
 Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
-SLA chip — over a request table with search and status filters, and stat tiles. Opening a
+SLA chip — over a request table with search and status filters, and stat tiles. Each row
+carries the captain's phone under their name, and the search matches it however it is typed
+— spaced as displayed, unspaced, with `+91`, or as a bare `91`-prefixed number — alongside
+request ID, captain name and pincode. Opening a
 request gives the full-page review: the AM infra checklist, the CH review (interview fields,
 1–5 rating gating approval, hub type and rate card), and the ZH rate-card approval. Every
 review carries the read-only *Captain & hub context* card and an SLA card.
@@ -410,7 +413,7 @@ build from.
 npm install && npm test
 ```
 
-**664 assertions across 15 groups:**
+**673 assertions across 15 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM

@@ -1878,9 +1878,30 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("VLS fields missing") >= 0, "including VLS fields missing");
   check(txt(doc).indexOf("SLA breach") >= 0, "and an SLA breach");
 
+  /* the captain's phone sits under their name in the table */
+  check(txt(doc).indexOf("+91 98450 22119") >= 0, "the captain's phone is shown in the row");
+  check(txt(doc).indexOf("+91 99012 31447") >= 0, "each request shows its own captain's phone");
+
   /* search and status filters narrow the table */
+  const found = () => [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
   api.actions.adminFilter("search", "Neha");
-  eq([...doc.querySelectorAll("[data-apopen]")].length, 1, "search narrows the list");
+  eq(found().length, 1, "search narrows the list by captain name");
+
+  /* the phone is searchable, in whatever shape it is typed */
+  api.actions.adminFilter("search", "99012 31447");
+  eq(found(), ["OBD-78231"], "searching the phone as displayed finds the request");
+  api.actions.adminFilter("search", "9901231447");
+  eq(found(), ["OBD-78231"], "and without the space");
+  api.actions.adminFilter("search", "+91 99012 31447");
+  eq(found(), ["OBD-78231"], "and with the country code");
+  api.actions.adminFilter("search", "919901231447");
+  eq(found(), ["OBD-78231"], "and as a bare 91-prefixed number");
+  api.actions.adminFilter("search", "31447");
+  eq(found(), ["OBD-78231"], "a partial phone match works too");
+  api.actions.adminFilter("search", "560038");
+  eq(found(), ["OBD-78222"], "pincode search still works alongside it");
+  api.actions.adminFilter("search", "OBD-78240");
+  eq(found(), ["OBD-78240"], "and request ID search");
   api.actions.adminFilter("search", "");
   api.actions.adminFilter("status", "sla_breach");
   eq([...doc.querySelectorAll("[data-apopen]")].length, 1, "status filter narrows the list");
