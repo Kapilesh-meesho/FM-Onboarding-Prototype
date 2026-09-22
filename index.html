@@ -941,8 +941,14 @@ img{max-width:100%}
 .slab-row .srm:hover:not(:disabled){background:var(--err-bg);border-color:var(--err-br)}
 .slab-tp{
   display:flex;gap:12px;align-items:flex-end;margin-top:12px;padding-top:12px;
-  border-top:1px solid var(--line-soft);
+  border-top:1px solid var(--line-soft);border-radius:0 0 10px 10px;
 }
+.slab-tp.over{border-color:#f3e2c4;background:#fff9ef;padding:12px;margin-top:12px}
+.slab-tp .ceil{flex:none;width:96px}
+.slab-tp .cv{
+  display:block;font-size:12px;font-weight:700;color:var(--muted);padding-bottom:10px;
+}
+.slab-tp .cv.over{color:var(--warn-ink)}
 .slab-tp .sf{flex:none}
 .slab-tp .sl{display:block;font-size:10px;font-weight:700;color:var(--cyan-label);margin-bottom:4px}
 .slab-tp input{
@@ -1017,12 +1023,15 @@ var LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAtkAAADECAYAAABKmj3yAA
 
 /* ------------------------------------------------------------------ config */
 
+/* `ceiling` caps every slab rate; `tpCeiling` caps the touchpoint rate, which is
+   benchmarked separately because it is paid per touchpoint rather than per slab.
+   `tp` stays the indicative touchpoint figure shown on the captain's own screens. */
 var HUB_CATEGORIES = {
-  standalone_mini: { label:"Standalone (mini-hub)", ceiling:3.2, tp:6,   note:"Independent facility under 2,500 daily shipments." },
-  standalone:      { label:"Standalone",            ceiling:5,   tp:5,   note:"Standard independent facility above 2,500 shipments." },
-  lm_as_fm:        { label:"LM-as-FM",              ceiling:6,   tp:6,   note:"Existing Last Mile partner extending into First Mile." },
-  mall:            { label:"Mall hub",              ceiling:2,   tp:2,   note:"Consolidated facility inside a single mall premise." },
-  sah:             { label:"SAH (seller as hub)",   ceiling:1.5, tp:1.5, note:"Seller-operated node injecting direct to the sort centre." }
+  standalone_mini: { label:"Standalone (mini-hub)", ceiling:3.2, tp:6,   tpCeiling:6,   note:"Independent facility under 2,500 daily shipments." },
+  standalone:      { label:"Standalone",            ceiling:5,   tp:5,   tpCeiling:5,   note:"Standard independent facility above 2,500 shipments." },
+  lm_as_fm:        { label:"LM-as-FM",              ceiling:6,   tp:6,   tpCeiling:6,   note:"Existing Last Mile partner extending into First Mile." },
+  mall:            { label:"Mall hub",              ceiling:2,   tp:2,   tpCeiling:2,   note:"Consolidated facility inside a single mall premise." },
+  sah:             { label:"SAH (seller as hub)",   ceiling:1.5, tp:1.5, tpCeiling:1.5, note:"Seller-operated node injecting direct to the sort centre." }
 };
 var CATEGORY_ORDER = ["standalone_mini","standalone","lm_as_fm","mall","sah"];
 
@@ -1882,9 +1891,38 @@ function apCeiling(r) {
   var c = HUB_CATEGORIES[r.hubCategory];
   return c ? c.ceiling : null;
 }
+function apTpCeiling(r) {
+  var c = HUB_CATEGORIES[r.hubCategory];
+  return c ? c.tpCeiling : null;
+}
+function tpOverCeiling(r) {
+  var ceil = apTpCeiling(r), v = parseFloat(r.rate.touchpoint);
+  return ceil != null && !isNaN(v) && v > ceil;
+}
+function slabsOverCeiling(r) {
+  return (r.rate.slabs || []).some(function (sl) { return slabOverCeiling(r, sl); });
+}
+
+/* One sentence naming whichever part of the card is over, so the AM's live
+   notice, the Cluster Head's banner and Central Admin's all read the same. */
+function apOverageText(r) {
+  var ceil = apCeiling(r), tpCeil = apTpCeiling(r), parts = [];
+  if (slabsOverCeiling(r)) {
+    parts.push("the highest slab rate is \u20b9" + apHighestRate(r).toFixed(2) +
+               " against a \u20b9" + ceil.toFixed(2) + " ceiling");
+  }
+  if (tpOverCeiling(r)) {
+    parts.push("the touchpoint rate is \u20b9" + parseFloat(r.rate.touchpoint).toFixed(2) +
+               " against a \u20b9" + tpCeil.toFixed(2) + " ceiling");
+  }
+  if (!parts.length) return "";
+  var t = parts.join(", and ");
+  return t.charAt(0).toUpperCase() + t.slice(1) + ".";
+}
 function apWithinThreshold(r) {
   var ceil = apCeiling(r);
   if (ceil == null) return true;
+  if (tpOverCeiling(r)) return false;
   return (r.rate.slabs || []).every(function (sl) {
     var v = parseFloat(sl.rate);
     return isNaN(v) ? true : v <= ceil;
@@ -2678,6 +2716,7 @@ function apAmRatePage(r) {
    Head needs. The top band is left open-ended by clearing its upper bound. */
 function slabEditor(r) {
   var rc = r.rate, ceil = apCeiling(r);
+  var tpCeil = apTpCeiling(r), tpOver = tpOverCeiling(r);
   var rows = (rc.slabs || []).map(function (sl, i) {
     var bad = !slabValid(sl), over = slabOverCeiling(r, sl);
     return '<div class="slab-row' + (bad ? ' bad' : (over ? ' over' : '')) + '" data-slabrow="' + i + '">' +
@@ -2704,33 +2743,38 @@ function slabEditor(r) {
   var over = !apWithinThreshold(r);
   return '<div class="slabs" data-testid="am-slabs">' +
     '<div class="sh"><div><b>Rate card</b>' +
-      '<span>Set a rate per order-volume band, plus the touchpoint rate. The ceiling ' +
-        'comes from the hub type.</span></div>' +
+      '<span>Set a rate per order-volume band, plus the touchpoint rate. Both ceilings ' +
+        'come from the hub type.</span></div>' +
       '<span class="st ' + (!complete ? "grey" : (over ? "amber" : "green")) + '" ' +
         'id="am-rate-status">' +
         (!complete ? "Incomplete" : (over ? "Above ceiling" : "Within ceiling")) + '</span></div>' +
     (ceil == null
       ? '<div class="hint err" style="padding-bottom:8px">Select a hub type first — it sets ' +
-        'the ceiling each slab is measured against.</div>'
+        'the ceilings the slab and touchpoint rates are measured against.</div>'
       : '') +
     rows +
     '<button class="btn btn-ghost" id="ch-slab-add" style="margin-top:4px">＋ Add slab</button>' +
-    '<div class="slab-tp"><div class="sf" style="max-width:230px">' +
-      '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
-      '<input id="am-touchpoint" inputmode="decimal" placeholder="5.00" ' +
-        'value="' + esc(rc.touchpoint || "") + '"></div>' +
-      '<span class="tph">Paid per touchpoint, on top of the slab rate.</span></div>' +
-    (complete ? '' : '<div class="hint err" style="padding-top:8px">' +
+    '<div class="slab-tp' + (tpOver ? ' over' : '') + '" data-testid="am-tp">' +
+      '<div class="sf" style="max-width:230px">' +
+        '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
+        '<input id="am-touchpoint" inputmode="decimal" placeholder="' +
+          (tpCeil == null ? "0.00" : tpCeil.toFixed(2)) + '" ' +
+          'value="' + esc(rc.touchpoint || "") + '"></div>' +
+      '<div class="sf ceil"><span class="sl">Ceiling</span>' +
+        '<span class="cv' + (tpOver ? ' over' : '') + '" id="am-tp-ceiling">' +
+          (tpCeil == null ? "—" : "₹" + tpCeil.toFixed(2)) +
+          (tpOver ? ' · over' : '') + '</span></div>' +
+      '<span class="tph">Paid per touchpoint, on top of the slab rate. It has its own ' +
+        'ceiling, separate from the slab rates.</span></div>' +
+    '<div class="hint err" style="padding-top:8px" id="am-rate-incomplete"' +
+      (complete ? ' hidden' : '') + '>' +
       'Every slab needs a starting volume, a rate and an upper bound above its start, ' +
-      'and the hub needs a touchpoint rate.</div>') +
+      'and the hub needs a touchpoint rate.</div>' +
     '<div class="notice warn" style="margin:12px 0 0" data-testid="am-over-ceiling" ' +
       'id="am-over-ceiling"' + (complete && over ? '' : ' hidden') + '>' +
       '<b>Above the ceiling for this hub type</b>' +
-      '<span id="am-over-ceiling-text">' +
-        (ceil == null ? '' :
-          'The highest slab rate is ₹' + esc(apHighestRate(r).toFixed(2)) + ' against a ₹' +
-          esc(ceil.toFixed(2)) + ' ceiling.') +
-      '</span> You can still submit it, but it goes to the Cluster Head as an ' +
+      '<span id="am-over-ceiling-text">' + esc(apOverageText(r)) + '</span>' +
+      ' You can still submit it, but it goes to the Cluster Head as an ' +
       'approval request rather than straight through.</div>' +
   '</div>';
 }
@@ -2744,11 +2788,18 @@ function apRateCardRows(r) {
       '<span class="v' + (over ? '' : ' ok') + '">₹' + esc(sl.rate) + ' / shipment' +
       (over ? ' · above ceiling' : '') + '</span></div>';
   }).join("") +
-  '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
-    esc(r.rate.touchpoint || "—") + ' / shipment</span></div>' +
-  '<div class="row"><span class="k">Ceiling (' +
-    esc((HUB_CATEGORIES[r.hubCategory] || {}).label || "—") + ')</span>' +
-    '<span class="v">' + (ceil == null ? "—" : "₹" + ceil.toFixed(2) + " / shipment") + '</span></div>';
+  (function () {
+    var tpOver = tpOverCeiling(r), tpCeil = apTpCeiling(r), cat =
+      esc((HUB_CATEGORIES[r.hubCategory] || {}).label || "—");
+    return '<div class="row"><span class="k">Touchpoint rate</span>' +
+      '<span class="v' + (tpOver || !r.rate.touchpoint ? '' : ' ok') + '">₹' +
+      esc(r.rate.touchpoint || "—") + ' / shipment' + (tpOver ? ' · above ceiling' : '') +
+      '</span></div>' +
+    '<div class="row"><span class="k">Slab ceiling (' + cat + ')</span>' +
+      '<span class="v">' + (ceil == null ? "—" : "₹" + ceil.toFixed(2) + " / shipment") + '</span></div>' +
+    '<div class="row"><span class="k">Touchpoint ceiling (' + cat + ')</span>' +
+      '<span class="v">' + (tpCeil == null ? "—" : "₹" + tpCeil.toFixed(2) + " / shipment") + '</span></div>';
+  })();
 }
 
 function apChDetail(r) {
@@ -2795,8 +2846,9 @@ function apChDetail(r) {
         '<div class="kv" data-testid="ch-rate-readonly">' + apRateCardRows(r) + '</div></div>' +
       (r.rateEscalated
         ? '<div class="notice warn" data-testid="ch-rate-escalated">' +
-          '<b>Raised by the Area Manager</b>The rate card is above the ceiling for this hub ' +
-          'type, so it cannot be settled here — raise it to Central Admin.</div>'
+          '<b>Raised by the Area Manager</b>' + esc(apOverageText(r)) +
+          ' It cannot be settled here — raise it to Central Admin, or reject it so the ' +
+          'Area Manager can revise it.</div>'
         : '') +
       '<div class="fl"><label>Interview notes</label>' +
         '<div class="box" style="height:auto;padding:10px 14px">' +
@@ -2868,24 +2920,26 @@ function apZhDetail(r, role) {
 }
 
 /* Central Admin — the last word on a rate card above its hub category ceiling. */
+/* Lower-cases only the first letter, so a sentence can be spliced mid-clause
+   without flattening a proper noun further along it. */
+function lcFirst(t) { return t ? t.charAt(0).toLowerCase() + t.slice(1) : t; }
+
 function apCentralDetail(r) {
-  var c = r.ch, ceil = apCeiling(r);
+  var c = r.ch;
   var catLabel = (HUB_CATEGORIES[r.hubCategory] || {}).label || "—";
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Central Admin approval</b>' +
-      '<span>Rate cards above the benchmark ceiling for their hub category.</span></div>' +
+      '<span>Rate cards above a benchmark ceiling for their hub category — slab or ' +
+        'touchpoint.</span></div>' +
       '<span class="st amber">Above threshold</span></div>' +
     '<div class="ap-form">' +
       '<div class="notice warn" data-testid="central-above-threshold">' +
         '<b>Raised by the Cluster Head</b>' +
-        'The highest slab rate is ₹' + esc(apHighestRate(r).toFixed(2)) + ' against a ₹' +
-        esc(ceil == null ? "—" : ceil.toFixed(2)) + ' ceiling for a ' + esc(catLabel) + '.' +
-        (r.zh.reason ? ' Zonal Head note: ' + esc(r.zh.reason) : '') + '</div>' +
+        'For a ' + esc(catLabel) + ', ' + esc(lcFirst(apOverageText(r))) +
+        (r.ch.reason ? ' Cluster Head note: ' + esc(r.ch.reason) : '') + '</div>' +
       '<div class="kv" style="margin-bottom:16px">' +
         '<div class="row"><span class="k">Hub category</span><span class="v">' + esc(catLabel) + '</span></div>' +
-        '<div class="row"><span class="k">Threshold</span><span class="v">₹' +
-          esc(ceil == null ? "—" : ceil.toFixed(2)) + ' / shipment</span></div>' +
         apRateCardRows(r) +
       '</div>' +
       '<div class="fl"><label>Central Admin note</label><div class="box">' +
@@ -2900,7 +2954,7 @@ function apCentralDetail(r) {
     '</div></div>';
 
   return '<h2>Central Admin · rate card approval</h2>' +
-    '<p class="lede">Above-threshold rate cards escalated by Zonal Heads.</p>' +
+    '<p class="lede">Above-threshold rate cards raised by Cluster Heads.</p>' +
     '<div class="ap-detail"><div class="dl">' + left + '</div>' +
     '<div class="dr">' + apContext(r) + apSla(r, "Central SLA", "72h SLA from escalation") + '</div></div>';
 }
@@ -5506,19 +5560,28 @@ function paintSlabState() {
     cv.classList.toggle("over", o);
   });
 
+  var tpCeil = apTpCeiling(r), tpOver = tpOverCeiling(r);
+  var tpRow = document.querySelector('[data-testid="am-tp"]');
+  if (tpRow) tpRow.classList.toggle("over", tpOver);
+  var tpCv = document.getElementById("am-tp-ceiling");
+  if (tpCv) {
+    tpCv.textContent = (tpCeil == null ? "—" : "₹" + tpCeil.toFixed(2)) + (tpOver ? " · over" : "");
+    tpCv.classList.toggle("over", tpOver);
+  }
+
   var chip = document.getElementById("am-rate-status");
   if (chip) {
     chip.textContent = !complete ? "Incomplete" : (over ? "Above ceiling" : "Within ceiling");
     chip.className = "st " + (!complete ? "grey" : (over ? "amber" : "green"));
   }
+  var incomplete = document.getElementById("am-rate-incomplete");
+  if (incomplete) incomplete.hidden = complete;
+
   var note = document.getElementById("am-over-ceiling");
   if (note) {
     note.hidden = !over;
     var nt = document.getElementById("am-over-ceiling-text");
-    if (nt && ceil != null) {
-      nt.textContent = "The highest slab rate is ₹" + apHighestRate(r).toFixed(2) +
-                       " against a ₹" + ceil.toFixed(2) + " ceiling.";
-    }
+    if (nt) nt.textContent = apOverageText(r);
   }
 
   var gatesPass = AM_GATES.every(function (x) { return r.am.gates[x.id] === true; });
@@ -5951,6 +6014,7 @@ if (typeof window !== "undefined") {
       apById: apById, apRowsFor: apRowsFor, apVisibleRows: apVisibleRows,
       apCeiling: apCeiling, apWithinThreshold: apWithinThreshold, apHighestRate: apHighestRate,
       slabOverCeiling: slabOverCeiling, amInfraReady: amInfraReady, amRateReady: amRateReady,
+      apTpCeiling: apTpCeiling, tpOverCeiling: tpOverCeiling, apOverageText: apOverageText,
       amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
       slabValid: slabValid, slabsValid: slabsValid, slabLabel: slabLabel,
       payoutAllowed: payoutAllowed, rateOk: rateOk, rateCardValid: rateCardValid,

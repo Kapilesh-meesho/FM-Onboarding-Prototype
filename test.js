@@ -2275,6 +2275,85 @@ async function testCeilingEscalation() {
   eq(api.helpers.apById("OBD-78255").settled, "approved", "Central Admin approves the rate card");
   eq(api.helpers.apById("OBD-78255").stage, "done", "which settles the request");
 
+  /* --- the touchpoint rate is benchmarked against its own ceiling --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  api.config.AM_GATES.forEach(g => api.actions.amGate(g.id, "yes"));
+  clickSel(doc, '[data-vehreview="yes"]');
+  click(doc, "am-to-rate");
+  api.actions.amCategory("mall");
+  api.actions.chSlabField(0, "rate", "1.80");
+  api.actions.amRateField("touchpoint", "2.00");
+
+  const req = () => api.helpers.apById("OBD-78222");
+  eq(api.helpers.apCeiling(req()), 2, "a mall hub caps slab rates at 2");
+  eq(api.helpers.apTpCeiling(req()), 2, "and the touchpoint at 2 as well");
+  check(api.helpers.apWithinThreshold(req()), "a card on both ceilings is within threshold");
+  check(!exists(doc, '[data-testid="am-tp"].over'), "the touchpoint row is not flagged");
+
+  /* the slab rates stay put; only the touchpoint goes over */
+  type(doc, "am-touchpoint", "2.60");
+  check(api.helpers.tpOverCeiling(req()), "raising only the touchpoint breaches its ceiling");
+  check(!api.helpers.slabOverCeiling(req(), req().rate.slabs[0]),
+        "while the slab rate is still inside its own");
+  check(!api.helpers.apWithinThreshold(req()),
+        "so the card as a whole is above threshold");
+  check(exists(doc, '[data-testid="am-tp"].over'), "the touchpoint row is flagged in place");
+  eq($(doc, "am-tp-ceiling").textContent.trim(), "₹2.00 · over", "with its ceiling marked over");
+  eq($(doc, "am-rate-status").textContent.trim(), "Above ceiling", "and the card chip follows");
+  check(txt(doc).indexOf("The touchpoint rate is ₹2.60 against a ₹2.00 ceiling.") >= 0,
+        "the notice names the touchpoint, not a slab");
+  check(txt(doc).indexOf("highest slab rate") === -1,
+        "and does not claim a slab rate is over when none is");
+  eq($(doc, "ap-approve").textContent.indexOf("Raise approval request") >= 0, true,
+     "so it submits as an approval request");
+
+  /* both over at once reads as one sentence */
+  api.actions.chSlabField(0, "rate", "3.00");
+  check(txt(doc).indexOf("The highest slab rate is ₹3.00 against a ₹2.00 ceiling, and " +
+                         "the touchpoint rate is ₹2.60 against a ₹2.00 ceiling.") >= 0,
+        "with both breaches stated together when both are over");
+
+  /* back within the touchpoint ceiling and only the slab is named */
+  type(doc, "am-touchpoint", "1.90");
+  check(!api.helpers.tpOverCeiling(req()), "lowering it clears the touchpoint breach");
+  check(txt(doc).indexOf("touchpoint rate is") === -1, "and the notice drops it");
+  check(!apiTpFlagged(doc), "and the row is no longer flagged");
+
+  /* the "what's still missing" hint must not survive the card being completed */
+  check($(doc, "am-rate-incomplete").hidden,
+        "the incomplete-card hint is gone once every field is filled");
+  api.actions.amRateField("touchpoint", "");
+  check(!$(doc, "am-rate-incomplete").hidden, "and comes back when one is cleared");
+  api.actions.amRateField("touchpoint", "2.60");
+  check($(doc, "am-rate-incomplete").hidden, "without needing a full re-render");
+
+  /* it carries downstream: the CH sees the touchpoint ceiling and the breach */
+  type(doc, "am-touchpoint", "2.60");
+  api.actions.chSlabField(0, "rate", "1.80");
+  click(doc, "ap-approve");
+  eq(req().stage, "ch", "an over-touchpoint card still routes to the Cluster Head");
+  eq(req().rateEscalated, true, "as an approval request");
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  check(txt(doc).indexOf("Touchpoint ceiling (Mall hub)") >= 0,
+        "the CH's read-only card names the touchpoint ceiling");
+  check(txt(doc).indexOf("₹2.60 / shipment · above ceiling") >= 0,
+        "and flags the touchpoint as above it");
+  check(txt(doc).indexOf("The touchpoint rate is ₹2.60 against a ₹2.00 ceiling.") >= 0,
+        "with the banner naming the touchpoint breach");
+  check(!exists(doc, "#ap-approve"), "the CH cannot settle it");
+  api.actions.chRate(4);
+  check(exists(doc, "#ap-central"), "and once their own review is done, must raise it");
+  click(doc, "ap-central");
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="central"]');
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  check(txt(doc).indexOf("For a Mall hub, the touchpoint rate is ₹2.60") >= 0,
+        "and Central Admin is told which ceiling was breached");
+
   /* --- a desk looking at someone else's request gets read-only, not ZH copy --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="ch"]');
@@ -2301,6 +2380,8 @@ async function testCeilingEscalation() {
   api.stopTimers();
   win.close();
 }
+
+const apiTpFlagged = (doc) => !!doc.querySelector('[data-testid="am-tp"].over');
 
 /* ------------------------------------------------------------------ run --- */
 

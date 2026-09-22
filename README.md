@@ -139,13 +139,18 @@ request tells the captain the rate *needs sign-off*, not why.
 **5. The rate card is approved against a benchmark ceiling** determined by that hub
 category:
 
-| Category | Ceiling (₹/shipment) | Touchpoint rate |
+| Category | Slab ceiling (₹/shipment) | Touchpoint ceiling (₹/shipment) |
 |---|---|---|
-| Standalone (mini-hub) | 3.2 | ₹6 |
-| Standalone | 5 | ₹5 |
-| LM-as-FM | 6 | ₹6 |
-| Mall hub | 2 | ₹2 |
-| SAH (seller as hub) | 1.5 | ₹1.5 |
+| Standalone (mini-hub) | 3.2 | 6 |
+| Standalone | 5 | 5 |
+| LM-as-FM | 6 | 6 |
+| Mall hub | 2 | 2 |
+| SAH (seller as hub) | 1.5 | 1.5 |
+
+**The touchpoint rate is benchmarked separately**, against a ceiling of its own, because it
+is paid per touchpoint rather than per slab. A card is above threshold if *any* slab rate
+exceeds the slab ceiling **or** the touchpoint rate exceeds the touchpoint ceiling — either
+one alone is enough to turn the submission into an approval request.
 
 A rate **within** the ceiling clears at Cluster Head. A rate **above** it the Cluster Head
 cannot settle at all — it goes to **Central Admin**. Neither case is annotated on the
@@ -343,7 +348,8 @@ hub, paid on top of the slab rate. The Area Manager can add as many slabs as nee
 one starts where the previous band ended, and the top band's upper bound is left blank to
 mean *and above*. Submission needs a hub type **and** a complete rate card: every slab needs
 a starting volume, a rate and an upper bound above its start, and the hub needs a touchpoint
-rate. Each slab shows its ceiling as it is typed and flags the row if it goes over.
+rate. Each slab shows its ceiling as it is typed and flags the row if it goes over, and so
+does the touchpoint rate against its own ceiling.
 
 The approved card is what the **captain** then sees — the same bands and the same touchpoint
 rate, on the Cluster Head screen and again on agreements. The hub category and the benchmark
@@ -379,10 +385,16 @@ and the max vehicle size review. It has to pass before **step 2** opens: the **h
 per slab, plus one touchpoint rate. The two pages navigate both ways, so a reviewer can go
 back and correct the checklist without losing the rate card.
 
-The hub type sets the **ceiling**, which is shown against every slab as it is typed and
-flags any row that exceeds it. A card within ceiling goes *Approve & send to CH*; a card
-above it goes *Raise approval request to CH* instead — it can still be submitted, it just
-travels as an approval request.
+The hub type sets two **ceilings** — one for slab rates and one for the touchpoint rate.
+Both are shown inline as the figures are typed, and the offending row is flagged the moment
+it goes over, whether that is a slab or the touchpoint. A card within both ceilings goes
+*Approve & send to CH*; a card over either one goes *Raise approval request to CH* instead —
+it can still be submitted, it just travels as an approval request.
+
+The over-ceiling notice names whichever part is actually over, and both when both are:
+*"The highest slab rate is ₹3.00 against a ₹2.00 ceiling, and the touchpoint rate is ₹2.60
+against a ₹2.00 ceiling."* The same sentence is reused on the Cluster Head's banner and on
+Central Admin's, so the three desks cannot end up describing the breach differently.
 
 The **Cluster Head** does the interview and rating. The rate card is read-only here,
 attributed to the Area Manager. A within-ceiling request the CH settles themselves; an
@@ -479,7 +491,7 @@ build from.
 npm install && npm test
 ```
 
-**783 assertions across 16 groups:**
+**811 assertions across 16 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -529,7 +541,12 @@ npm install && npm test
    with per-slab ceilings; the CH's read-only view of that card; role-aware dispatch, so a
    desk never gets a working screen for a request at someone else's stage; and statuses
    limited to *Pending* and *SLA breach*
-13. **Above-ceiling rate card** — `OBD-78255` reaching the CH flagged over its mall-hub
+13. **Above-ceiling rate card** — the touchpoint rate's own ceiling: a card sitting on both
+   ceilings passing, the touchpoint alone breaching, the row and chip flipping live without
+   a re-render, the notice naming only what is over (and both when both are), the breach
+   travelling to the CH and Central Admin with the ceiling named, and the
+   "what's still missing" hint clearing when the card completes; plus `OBD-78255` reaching
+   the CH flagged over its mall-hub
    ceiling with both *Raise to Central Admin* and *Reject · send back to AM* offered; a
    rejection at either desk returning the request to the Area Manager with a `revision`
    record rather than closing it; the AM opening straight onto the rate page with the
