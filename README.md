@@ -374,16 +374,31 @@ visible that a correction happened — the context card shows the effective size
 ### The approval chain
 
 ```
-AM: infra + hub type + rate card → CH: interview + rating → agreements
+AM: infra → carting design → hub type + rate card → CH: interview + rating → agreements
+                  ↘ design sent to Central Admin for alignment, in parallel
                                  ↘ (above ceiling) CH raises → Central Admin → agreements
                                  ↙ (rejected at either desk) back to AM to revise
 ```
 
-The **Area Manager** works in two pages. **Step 1** is the infra check — the nine hard gates
-and the max vehicle size review. It has to pass before **step 2** opens: the **hub type**
-(Standalone, Mall hub, LM-as-FM, SAH…) and the **rate card** — an order-volume band and rate
-per slab, plus one touchpoint rate. The two pages navigate both ways, so a reviewer can go
-back and correct the checklist without losing the rate card.
+The **Area Manager** works in three pages, and a **hub code** — three random letters — is
+assigned the moment they open a request. It shows at the top of every step and sticks for
+the life of the request.
+
+**Step 1** is the infra check — the nine hard gates and the max vehicle size review. It has
+to pass before **step 2** opens.
+
+**Step 2 is the FM Carting Design Input**: how the hub maps onto the sorting network. The
+**FMSC** is one hub code and is required; the **FMCDs** are comma-separated cross-dock codes
+and may be left empty. An **Onboarding Type** picks between *Split from existing*, *New
+expansion* and *Multitouch*. **Validate** checks every code against the ones the network
+knows, and names any that do not exist rather than accepting a typo. Only a clean run turns
+the button into **Send Design for Approval**; editing a field afterwards withdraws it and
+the codes have to pass again. Sending the design opens step 3 — the request itself stays
+with the Area Manager, and the design is reviewed by Central Admin in parallel.
+
+**Step 3** is the **hub type** (Standalone, Mall hub, LM-as-FM, SAH…) and the **rate card**
+— an order-volume band and rate per slab, plus one touchpoint rate. The three pages navigate
+both ways, so a reviewer can go back and correct the checklist without losing the rate card.
 
 The hub type sets two **ceilings** — one for slab rates and one for the touchpoint rate.
 Both are shown inline as the figures are typed, and the offending row is flagged the moment
@@ -395,6 +410,23 @@ The over-ceiling notice names whichever part is actually over, and both when bot
 *"The highest slab rate is ₹3.00 against a ₹2.00 ceiling, and the touchpoint rate is ₹2.60
 against a ₹2.00 ceiling."* The same sentence is reused on the Cluster Head's banner and on
 Central Admin's, so the three desks cannot end up describing the breach differently.
+
+### Design alignment
+
+Central Admin has a second queue beside the rate-card one: **Design approvals**, holding
+every design an Area Manager has sent and nobody has aligned yet. It is filtered on the
+design, not on the request's stage, because the two run in parallel.
+
+Opening one shows **Design alignment** — city, hub code, lat-long and map link, pincodes
+served, max vehicle size, hub type, hub address, hub pincode, state, whether it is a split
+or a new expansion, and whether it is multitouch. All of it is read-only except the **FM →
+FMSC mapping**, which Central Admin may re-point before approving; a code they mistype is
+refused the same way the Area Manager's was. **Approve Design** settles it, and the Area
+Manager sees the approval — and any corrected mapping — on their step 2.
+
+**Hub type reads "Not set yet" on most designs**, because the Area Manager sets it on step 3
+and the design goes out at the end of step 2. The screen says so rather than showing a blank.
+If hub type needs to be aligned alongside the rest of the design, it belongs on step 2.
 
 The **Cluster Head** does the interview and rating. The rate card is read-only here,
 attributed to the Area Manager. A within-ceiling request the CH settles themselves; an
@@ -491,7 +523,7 @@ build from.
 npm install && npm test
 ```
 
-**811 assertions across 16 groups:**
+**876 assertions across 17 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
@@ -537,7 +569,7 @@ npm install && npm test
 12. **Admin panel** — the Captain/Admin login switch and the four role cards; each desk's
    own queue and tabs; search by request ID, captain name **and phone**; the nine AM hard
    gates with any failure forcing rejection; the max-vehicle review and its correction flow;
-   the AM's two pages and the gate between them; hub type and slab-wise rate card capture
+   the AM's three pages and the gates between them; hub type and slab-wise rate card capture
    with per-slab ceilings; the CH's read-only view of that card; role-aware dispatch, so a
    desk never gets a working screen for a request at someone else's stage; and statuses
    limited to *Pending* and *SLA breach*
@@ -554,6 +586,13 @@ npm install && npm test
    approving and rejecting; the read-only status view being worded for whoever opens it
    rather than always for a Zonal Head; and no request left stranded at a desk with no
    actions
+
+14. **FM Carting Design Input** — the hub code assigned on first open and sticking across
+   reopens; the design page sitting between the infra check and the rate card; FMSC required
+   and FMCDs optional; validation naming codes the network does not know; Validate becoming
+   Send Design for Approval, and an edit withdrawing it; the rate card staying closed until
+   the design is sent; Central Admin's design queue, all eleven design-alignment fields,
+   a mapping correction and *Approve Design*; and the Area Manager seeing the result
 
 Three notes on how the tests drive the app:
 

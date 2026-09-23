@@ -880,6 +880,12 @@ img{max-width:100%}
    context card moves under the form instead of squeezing it. */
 @media (max-width:1100px){.ap-detail{flex-direction:column}.ap-detail .dr{width:100%}}
 .ap-form{padding:18px}
+.ph .hubcode{
+  display:inline-block;font-size:11px;font-weight:700;letter-spacing:.4px;
+  color:var(--cyan-ink);background:var(--cyan-bg);border:1px solid var(--cyan-br);
+  border-radius:6px;padding:3px 8px;margin-bottom:6px;
+}
+.kv .v .mute{color:var(--muted);font-weight:500}
 .ap-gate{
   display:flex;justify-content:space-between;align-items:center;gap:14px;
   border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;
@@ -1776,6 +1782,7 @@ var ADMIN_TABS = {
             { id:"ch",   label:"CH pendency" },
             { id:"users",label:"User mapping" }],
   central: [{ id:"mine", label:"Pending my approval" },
+            { id:"design",label:"Design approvals" },
             { id:"am",   label:"AM requests" },
             { id:"ch",   label:"CH requests" },
             { id:"zh",   label:"ZH requests" },
@@ -1798,6 +1805,14 @@ function apReq(o) {
     // threshold a rate card has to stay within
     // hub category and the rate card are both Area Manager inputs
     hubCategory:"", rateEscalated:false, settled:null, revision:null,
+    // the 3-letter code the Area Manager is assigned when they open the infra check
+    hubCode:"",
+    city:"Bengaluru", state:"Karnataka", latLng:"12.9352, 77.6245",
+    pincodesServing:["560076","560034","560102"],
+    /* FM carting design — the hub's mapping onto the sorting network. Sent to
+       Central Admin for alignment while the AM carries on to the rate card. */
+    design:{ fmsc:"", fmcds:"", onboarding:"", validated:false, sent:false,
+             error:"", approved:false, note:"", centralEdited:false },
     rate:{ payoutType:"Combined",
            slabs:[ { from:"0", to:"500", rate:"" } ],
            touchpoint:"" },
@@ -1946,9 +1961,50 @@ function slabLabel(sl) {
   return sl.from + (to ? "–" + to : "+") + " orders";
 }
 
+/* The codes the network already knows. Validate checks the FMSC and every FMCD
+   against this list, so a typo is caught before the design leaves the AM. */
+var KNOWN_HUB_CODES = ["AQT","BEU","JYP","SSY","KRM","HSR","IND","WHF","ELC",
+                       "MYS","TUM","HBL","MRT","PNY","BOM","NGR","JPN","KDG"];
+
+var ONBOARDING_TYPES = [
+  { id:"split",      label:"Split from existing" },
+  { id:"expansion",  label:"New expansion" },
+  { id:"multitouch", label:"Multitouch" }
+];
+function onboardingLabel(id) {
+  for (var i = 0; i < ONBOARDING_TYPES.length; i++)
+    if (ONBOARDING_TYPES[i].id === id) return ONBOARDING_TYPES[i].label;
+  return "";
+}
+
+/* Splits "ABC, DEF" into codes. Empty is allowed — FMCDs are optional. */
+function parseCodes(raw) {
+  return String(raw || "").split(/[,;/\s]+/)
+    .map(function (c) { return c.trim().toUpperCase(); })
+    .filter(Boolean);
+}
+function unknownCodes(list) {
+  return list.filter(function (c) { return KNOWN_HUB_CODES.indexOf(c) === -1; });
+}
+/* Every design field the AM has to give before Validate can run. */
+function designFilled(d) { return !!parseCodes(d.fmsc).length && !!d.onboarding; }
+function designReady(r) { return r.design.sent; }
+
+/* A 3-letter code, avoiding any already assigned or already in the network. */
+function mintHubCode() {
+  var taken = KNOWN_HUB_CODES.concat(S.adminRequests.map(function (r) { return r.hubCode; }));
+  var A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (var tries = 0; tries < 200; tries++) {
+    var c = "";
+    for (var i = 0; i < 3; i++) c += A.charAt(Math.floor(Math.random() * 26));
+    if (taken.indexOf(c) === -1) return c;
+  }
+  return "FM" + Math.floor(Math.random() * 10);
+}
+
 function blankAdmin() {
   return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"",
-           amStep:"infra" };   // the AM works the infra check, then the rate card
+           amStep:"infra" };   // infra check, then carting design, then rate card
 }
 
 function apRole()  { return ADMIN_ROLES[S.admin.role] || ADMIN_ROLES.am; }
@@ -1961,6 +2017,9 @@ function apRowsFor(tab) {
     var stage = role === "central" ? "central" : role;
     return list.filter(function (r) { return r.stage === stage; });
   }
+  /* A design sits with Central Admin regardless of which desk holds the
+     request — the AM carries on to the rate card while it is reviewed. */
+  if (tab === "design") return list.filter(function (r) { return r.design.sent && !r.design.approved; });
   if (tab === "am") return list.filter(function (r) { return r.stage === "am"; });
   if (tab === "ch") return list.filter(function (r) { return r.stage === "ch"; });
   if (tab === "zh") return list.filter(function (r) { return r.stage === "zh"; });
@@ -2580,7 +2639,9 @@ function amRateReady(r) {
 }
 
 function apAmDetail(r) {
-  return S.admin.amStep === "rate" ? apAmRatePage(r) : apAmInfraPage(r);
+  if (S.admin.amStep === "rate")   return apAmRatePage(r);
+  if (S.admin.amStep === "design") return apAmDesignPage(r);
+  return apAmInfraPage(r);
 }
 
 /* Page 1 — the facility itself. */
@@ -2623,7 +2684,10 @@ function apAmInfraPage(r) {
     '</div>';
 
   var left = '<div class="ap-panel">' +
-    '<div class="ph"><div><b>Area Manager infra check</b>' +
+    '<div class="ph"><div>' +
+      '<span class="hubcode" data-testid="am-hubcode">Hub code ' +
+        esc(r.hubCode || "—") + '</span>' +
+      '<b>Area Manager infra check</b>' +
       '<span>Any failed hard gate requires rejection. Floor area is AM-entered value.</span></div>' +
       (gateFailed ? '<span class="st red">Hard gate failed</span>'
         : (ready ? '<span class="st green">Infra check passed</span>'
@@ -2653,17 +2717,96 @@ function apAmInfraPage(r) {
       (gateFailed
         ? '<button class="btn btn-primary" id="ap-reject" style="background:var(--err);box-shadow:none">' +
           'Reject infra check →</button>'
-        : '<button class="btn btn-primary" id="am-to-rate"' + (ready ? '' : ' disabled') +
-          '>Continue to rate card →</button>') +
+        : '<button class="btn btn-primary" id="am-to-design"' + (ready ? '' : ' disabled') +
+          '>Continue to carting design →</button>') +
     '</div></div>';
 
-  return '<h2>AM verification · step 1 of 2 · infra check</h2>' +
+  return '<h2>AM verification · step 1 of 3 · infra check</h2>' +
     '<p class="lede">Infra checklist is full-page and scoped only to facility verification.</p>' +
     '<div class="ap-detail"><div class="dl">' + left + '</div>' +
     '<div class="dr">' + apContext(r) + apSla(r, "AM SLA", "72h SLA from hub code creation") + '</div></div>';
 }
 
-/* Page 2 — hub type and the rate card it sets the ceiling for. */
+/* Page 2 — how the hub maps onto the sorting network. Validate checks every
+   code against the network before the design can be sent for alignment. */
+function apAmDesignPage(r) {
+  var d = r.design;
+  var filled = designFilled(d);
+  var fmcds = parseCodes(d.fmcds);
+
+  var status = d.approved
+    ? '<span class="st green">Design approved</span>'
+    : (d.sent ? '<span class="st amber">Awaiting Central Admin</span>'
+              : (d.validated ? '<span class="st green">Codes validated</span>'
+                             : '<span class="st grey">In progress</span>'));
+
+  /* Validate first; only a clean run turns the button into the send action. */
+  var cta = d.sent
+    ? '<button class="btn btn-primary" id="am-to-rate">Continue to rate card →</button>'
+    : (d.validated
+        ? '<button class="btn btn-primary" id="am-design-send" data-testid="am-design-send">' +
+          'Send Design for Approval →</button>'
+        : '<button class="btn btn-primary" id="am-design-validate"' +
+          (filled ? '' : ' disabled') + '>Validate</button>');
+
+  var left = '<div class="ap-panel">' +
+    '<div class="ph"><div>' +
+      '<span class="hubcode">Hub code ' + esc(r.hubCode || "—") + '</span>' +
+      '<b>FM Carting Design Input</b>' +
+      '<span>Map this hub onto its sorting centre and cross-docks.</span></div>' +
+      status + '</div>' +
+    '<div class="ap-form">' +
+      (d.error
+        ? '<div class="notice bad" data-testid="am-design-error"><b>Unknown hub codes</b>' +
+          esc(d.error) + '</div>'
+        : '') +
+      (d.approved
+        ? '<div class="notice ok" data-testid="am-design-approved"><b>Design approved by Central Admin</b>' +
+          (d.note ? esc(d.note) : "The mapping below is aligned.") + '</div>'
+        : (d.sent
+            ? '<div class="notice info" data-testid="am-design-sent"><b>Sent for alignment</b>' +
+              'Central Admin reviews the mapping while you carry on to the rate card.</div>'
+            : '')) +
+      '<div class="grid2">' +
+        '<div class="fl"><label>FMSC</label><div class="box">' +
+          '<input id="am-fmsc" placeholder="e.g. SSY" value="' + esc(d.fmsc) + '"' +
+          (d.sent ? ' disabled' : '') + '></div>' +
+          '<div class="hint">Required. The sorting centre this hub carts to.</div></div>' +
+        '<div class="fl"><label>FMCDs</label><div class="box">' +
+          '<input id="am-fmcds" placeholder="e.g. KRM, HSR" value="' + esc(d.fmcds) + '"' +
+          (d.sent ? ' disabled' : '') + '></div>' +
+          '<div class="hint">Optional. Comma-separated cross-dock hub codes.</div></div>' +
+      '</div>' +
+      '<div class="fl" style="max-width:320px"><label>Onboarding Type</label>' +
+        '<div class="box sel"><select id="am-onboarding"' + (d.sent ? ' disabled' : '') + '>' +
+          '<option value=""' + (d.onboarding ? '' : ' selected') + '>Select onboarding type</option>' +
+          ONBOARDING_TYPES.map(function (o) {
+            return '<option value="' + o.id + '"' + (d.onboarding === o.id ? ' selected' : '') + '>' +
+                   esc(o.label) + '</option>'; }).join("") +
+        '</select></div></div>' +
+      '<div class="kv" style="margin-top:16px" data-testid="am-design-summary">' +
+        '<div class="row"><span class="k">Assigned hub code</span>' +
+          '<span class="v">' + esc(r.hubCode || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Carts to</span>' +
+          '<span class="v">' + esc(parseCodes(d.fmsc)[0] || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Cross-docks</span>' +
+          '<span class="v">' + (fmcds.length ? esc(fmcds.join(", ")) : "None") + '</span></div>' +
+      '</div>' +
+      '<div class="pnote" style="margin-top:14px"><span>ⓘ</span><span>Codes known to the ' +
+        'network: ' + KNOWN_HUB_CODES.slice(0, 8).join(", ") + '…</span></div>' +
+    '</div>' +
+    '<div class="ap-foot">' +
+      '<button class="btn btn-ghost" id="am-to-infra">← Back to infra check</button>' +
+      '<button class="btn btn-ghost" id="ap-save">Save draft</button>' + cta +
+    '</div></div>';
+
+  return '<h2>AM verification · step 2 of 3 · FM Carting Design Input</h2>' +
+    '<p class="lede">Give the hub its FMSC mapping and cross-docks, then send the design for alignment.</p>' +
+    '<div class="ap-detail"><div class="dl">' + left + '</div>' +
+    '<div class="dr">' + apContext(r) + apSla(r, "AM SLA", "72h SLA from hub code creation") + '</div></div>';
+}
+
+/* Page 3 — hub type and the rate card it sets the ceiling for. */
 function apAmRatePage(r) {
   var ready = amRateReady(r);
   var over  = ready && !apWithinThreshold(r);
@@ -2698,13 +2841,13 @@ function apAmRatePage(r) {
       slabEditor(r) +
     '</div>' +
     '<div class="ap-foot">' +
-      '<button class="btn btn-ghost" id="am-to-infra">← Back to infra check</button>' +
+      '<button class="btn btn-ghost" id="am-to-design">← Back to carting design</button>' +
       '<button class="btn btn-ghost" id="ap-save">Save draft</button>' +
       '<button class="btn btn-primary" id="ap-approve"' + (ready ? '' : ' disabled') + '>' +
         (over ? 'Raise approval request to CH →' : 'Approve &amp; send to CH →') + '</button>' +
     '</div></div>';
 
-  return '<h2>AM verification · step 2 of 2 · rate card</h2>' +
+  return '<h2>AM verification · step 3 of 3 · rate card</h2>' +
     '<p class="lede">Set the hub type and the slab-wise rate card for this hub.</p>' +
     '<div class="ap-detail"><div class="dl">' + left + '</div>' +
     '<div class="dr">' + apContext(r) + apSla(r, "AM SLA", "72h SLA from hub code creation") + '</div></div>';
@@ -2920,6 +3063,76 @@ function apZhDetail(r, role) {
 }
 
 /* Central Admin — the last word on a rate card above its hub category ceiling. */
+/* Central Admin aligns the carting design. Everything the hub was onboarded
+   with is shown read-only; only the FM -> FMSC mapping is theirs to change. */
+function apCentralDesignDetail(r) {
+  var d = r.design, cat = (HUB_CATEGORIES[r.hubCategory] || {}).label;
+  var fmcds = parseCodes(d.fmcds);
+  var row = function (k, v) {
+    return '<div class="row"><span class="k">' + k + '</span>' +
+      '<span class="v" style="max-width:62%;white-space:normal">' + v + '</span></div>';
+  };
+
+  var left = '<div class="ap-panel">' +
+    '<div class="ph"><div>' +
+      '<span class="hubcode">Hub code ' + esc(r.hubCode || "—") + '</span>' +
+      '<b>Design alignment</b>' +
+      '<span>Approve the carting design, or correct the FM → FMSC mapping first.</span></div>' +
+      (d.approved ? '<span class="st green">Approved</span>'
+                  : '<span class="st amber">Awaiting alignment</span>') + '</div>' +
+    '<div class="ap-form">' +
+      '<div class="kv" style="margin-bottom:18px" data-testid="central-design-inputs">' +
+        row("City", esc(r.city || "—")) +
+        row("Hub code", esc(r.hubCode || "—")) +
+        row("Lat-Long / Map link", esc(r.latLng || "—") +
+          ' · <a href="#" style="color:var(--cyan-ink);text-decoration:none">Open map →</a>') +
+        row("Pincodes serving", esc((r.pincodesServing || []).join(", ") || "—")) +
+        row("Max vehicle size", esc(amEffectiveVehicle(r) || "—")) +
+        row("Hub type", cat ? esc(cat) : '<span class="mute">Not set yet — AM sets it on the rate card</span>') +
+        row("Hub address", esc(r.address || "—")) +
+        row("Hub pincode", esc(r.pincode || "—")) +
+        row("State", esc(r.state || "—")) +
+        row("Split from / New expansion",
+            d.onboarding === "split" ? "Split from existing"
+          : d.onboarding === "expansion" ? "New expansion" : "—") +
+        row("Multitouch", d.onboarding === "multitouch" ? "Yes" : "No") +
+      '</div>' +
+      '<div style="margin:4px 0 10px"><span style="display:block;font-size:11px;font-weight:700;' +
+        'color:var(--cyan-label);margin-bottom:8px">FM → FMSC mapping</span></div>' +
+      '<div class="grid2">' +
+        '<div class="fl"><label>FMSC</label><div class="box">' +
+          '<input id="cad-fmsc" value="' + esc(d.fmsc) + '"></div>' +
+          '<div class="hint">Change this to re-point the hub at another sorting centre.</div></div>' +
+        '<div class="fl"><label>FMCDs</label><div class="box">' +
+          '<input id="cad-fmcds" value="' + esc(d.fmcds) + '"></div>' +
+          '<div class="hint">' + (fmcds.length ? esc(fmcds.length + " cross-dock(s) mapped")
+                                               : "No cross-docks mapped") + '</div></div>' +
+      '</div>' +
+      (d.centralEdited
+        ? '<div class="notice info" data-testid="central-design-edited"><b>Mapping changed</b>' +
+          'The Area Manager sees the corrected mapping on their carting design step.</div>'
+        : '') +
+      (d.error
+        ? '<div class="notice bad" data-testid="central-design-error"><b>Unknown hub codes</b>' +
+          esc(d.error) + '</div>'
+        : '') +
+      '<div class="fl" style="margin-top:4px"><label>Central Admin note</label><div class="box">' +
+        '<input id="cad-note" placeholder="Recorded against the design" value="' + esc(d.note) + '">' +
+      '</div></div>' +
+    '</div>' +
+    '<div class="ap-foot">' +
+      '<button class="btn btn-ghost" id="ap-back">Back to list</button>' +
+      '<button class="btn btn-ghost" id="cad-save">Save mapping</button>' +
+      '<button class="btn btn-primary" id="cad-approve" data-testid="central-approve-design">' +
+        'Approve Design →</button>' +
+    '</div></div>';
+
+  return '<h2>Central Admin · design alignment</h2>' +
+    '<p class="lede">Carting designs sent by Area Managers for network alignment.</p>' +
+    '<div class="ap-detail"><div class="dl">' + left + '</div>' +
+    '<div class="dr">' + apContext(r) + apSla(r, "Design SLA", "48h SLA from design submission") + '</div></div>';
+}
+
 /* Lower-cases only the first letter, so a sentence can be spliced mid-clause
    without flattening a proper noun further along it. */
 function lcFirst(t) { return t ? t.charAt(0).toLowerCase() + t.slice(1) : t; }
@@ -2968,7 +3181,8 @@ function viewAdmin() {
          it. Everyone else — the Zonal Head always — gets the read-only status
          view, so nobody can act outside their own stage. */
       var role = S.admin.role;
-      var d = (role === "am"      && r.stage === "am")      ? apAmDetail(r)
+      var d = (role === "central" && S.admin.tab === "design") ? apCentralDesignDetail(r)
+            : (role === "am"      && r.stage === "am")      ? apAmDetail(r)
             : (role === "ch"      && r.stage === "ch")      ? apChDetail(r)
             : (role === "central" && r.stage === "central") ? apCentralDetail(r)
             : apZhDetail(r, role);
@@ -5056,16 +5270,84 @@ var A = {
   },
   adminOpen: function (id) {
     var r = apById(id);
+    /* The hub code is assigned the moment an Area Manager picks the request up,
+       and sticks for the life of it. */
+    if (r && S.admin.role === "am" && !r.hubCode) r.hubCode = mintHubCode();
     S.admin.selected = id; S.admin.toast = "";
     // a request sent back for repricing opens on the rate card, not the checklist
     S.admin.amStep = (r && r.revision && amInfraReady(r)) ? "rate" : "infra";
+    save(); render();
+  },
+  designField: function (k, v) {
+    var r = apById(S.admin.selected); if (!r || r.design.sent) return;
+    r.design[k] = v;
+    /* any edit invalidates the previous run, so Validate has to pass again */
+    r.design.validated = false; r.design.error = "";
+    save(); render();
+  },
+  designValidate: function () {
+    var r = apById(S.admin.selected); if (!r) return;
+    var d = r.design;
+    var codes = parseCodes(d.fmsc).concat(parseCodes(d.fmcds));
+    var bad = unknownCodes(codes);
+    if (bad.length) {
+      d.validated = false;
+      d.error = (bad.length === 1 ? "Hub code " : "Hub codes ") + bad.join(", ") +
+                (bad.length === 1 ? " does not exist" : " do not exist") +
+                " in the system. Correct it and validate again.";
+      S.admin.toast = "";
+    } else {
+      d.validated = true; d.error = "";
+      S.admin.toast = "All hub codes validated.";
+    }
+    save(); render();
+  },
+  designSend: function () {
+    var r = apById(S.admin.selected); if (!r || !r.design.validated) return;
+    r.design.sent = true;
+    S.admin.amStep = "rate";
+    S.admin.toast = "Design sent to Central Admin · continue with the rate card.";
+    save(); render();
+  },
+  /* Central Admin may re-point the mapping before approving it. */
+  centralDesignField: function (k, v) {
+    var r = apById(S.admin.selected); if (!r) return;
+    r.design[k] = v; r.design.error = "";
+    save(); render();
+  },
+  centralDesignSave: function () {
+    var r = apById(S.admin.selected); if (!r) return;
+    var d = r.design;
+    var bad = unknownCodes(parseCodes(d.fmsc).concat(parseCodes(d.fmcds)));
+    if (bad.length) {
+      d.error = (bad.length === 1 ? "Hub code " : "Hub codes ") + bad.join(", ") +
+                (bad.length === 1 ? " does not exist" : " do not exist") + " in the system.";
+      save(); render(); return;
+    }
+    d.error = ""; d.centralEdited = true;
+    S.admin.toast = "Mapping saved.";
+    save(); render();
+  },
+  centralDesignApprove: function () {
+    var r = apById(S.admin.selected); if (!r) return;
+    var d = r.design;
+    var bad = unknownCodes(parseCodes(d.fmsc).concat(parseCodes(d.fmcds)));
+    if (bad.length) {
+      d.error = (bad.length === 1 ? "Hub code " : "Hub codes ") + bad.join(", ") +
+                (bad.length === 1 ? " does not exist" : " do not exist") + " in the system.";
+      save(); render(); return;
+    }
+    d.approved = true; d.error = "";
+    S.admin.selected = null;
+    S.admin.toast = "Design approved for " + (r.hubCode || r.id) + ".";
     save(); render();
   },
   amStep: function (step) {
     var r = apById(S.admin.selected);
     if (!r) return;
     // the rate card only opens once the facility itself has passed
-    if (step === "rate" && !amInfraReady(r)) return;
+    if (step !== "infra" && !amInfraReady(r)) return;
+    if (step === "rate" && !designReady(r)) return;
     S.admin.amStep = step; S.admin.toast = "";
     save(); render();
   },
@@ -5629,6 +5911,17 @@ function bindAdmin() {
   });
   on("am-to-rate", "click", function () { A.amStep("rate"); });
   on("am-to-infra", "click", function () { A.amStep("infra"); });
+  on("am-to-design", "click", function () { A.amStep("design"); });
+  on("am-fmsc", "input", function (e) { A.designField("fmsc", e.target.value); });
+  on("am-fmcds", "input", function (e) { A.designField("fmcds", e.target.value); });
+  on("am-onboarding", "change", function (e) { A.designField("onboarding", e.target.value); });
+  on("am-design-validate", "click", A.designValidate);
+  on("am-design-send", "click", A.designSend);
+  on("cad-fmsc", "input", function (e) { A.centralDesignField("fmsc", e.target.value); });
+  on("cad-fmcds", "input", function (e) { A.centralDesignField("fmcds", e.target.value); });
+  on("cad-note", "input", function (e) { A.centralDesignField("note", e.target.value); });
+  on("cad-save", "click", A.centralDesignSave);
+  on("cad-approve", "click", A.centralDesignApprove);
   on("am-veh-edit", "click", function () { A.amVehicleEdit(true); });
   on("am-veh-cancel", "click", function () { A.amVehicleEdit(false); });
   bindVehicleRows();
@@ -6000,6 +6293,7 @@ if (typeof window !== "undefined") {
     config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT,
               ADMIN_ROLES: ADMIN_ROLES, ADMIN_TABS: ADMIN_TABS, ADMIN_ROLE_ORDER: ADMIN_ROLE_ORDER,
               AM_GATES: AM_GATES, AP_STATUS: AP_STATUS,
+              KNOWN_HUB_CODES: KNOWN_HUB_CODES, ONBOARDING_TYPES: ONBOARDING_TYPES,
               SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
               VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
     helpers: {
@@ -6015,6 +6309,8 @@ if (typeof window !== "undefined") {
       apCeiling: apCeiling, apWithinThreshold: apWithinThreshold, apHighestRate: apHighestRate,
       slabOverCeiling: slabOverCeiling, amInfraReady: amInfraReady, amRateReady: amRateReady,
       apTpCeiling: apTpCeiling, tpOverCeiling: tpOverCeiling, apOverageText: apOverageText,
+      parseCodes: parseCodes, unknownCodes: unknownCodes, designFilled: designFilled,
+      designReady: designReady, onboardingLabel: onboardingLabel,
       amVehicleSettled: amVehicleSettled, amEffectiveVehicle: amEffectiveVehicle,
       slabValid: slabValid, slabsValid: slabsValid, slabLabel: slabLabel,
       payoutAllowed: payoutAllowed, rateOk: rateOk, rateCardValid: rateCardValid,

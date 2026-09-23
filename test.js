@@ -1948,8 +1948,8 @@ async function testAdminPanel() {
 
   /* --- AM infra checklist --- */
   clickSel(doc, '[data-apopen="OBD-78222"]');
-  check(txt(doc).indexOf("step 1 of 2 · infra check") >= 0,
-        "opens on the infra check, step 1 of 2");
+  check(txt(doc).indexOf("step 1 of 3 · infra check") >= 0,
+        "opens on the infra check, step 1 of 3");
   check(txt(doc).indexOf("Area Manager infra check") >= 0, "with the hard-gate card");
   const gates = [...doc.querySelectorAll("[data-gate]")].map(b => b.getAttribute("data-gate"));
   eq([...new Set(gates)],
@@ -1995,19 +1995,27 @@ async function testAdminPanel() {
   eq(amReq.am.declaredVehicle, "7MT_20FT", "the captain's declared size is kept separately");
   check(api.helpers.amVehicleSettled(amReq), "and the review is settled");
 
-  /* --- the rate card is a second page, after the infra check --- */
+  /* --- the carting design is a second page, the rate card a third --- */
   check(!exists(doc, "#am-category"), "hub type is not on the infra page");
   check(!exists(doc, '[data-testid="am-slabs"]'), "nor the rate card");
   check(!exists(doc, "#ch-touchpoint"), "the rate card no longer sits with the Cluster Head");
-  check(exists(doc, "#am-to-rate"), "the infra page continues to the rate card");
-  check(!disabled(doc, "am-to-rate"), "which opens once the infra check passes");
+  check(exists(doc, "#am-to-design"), "the infra page continues to the carting design");
+  check(!disabled(doc, "am-to-design"), "which opens once the infra check passes");
   check(txt(doc).indexOf("Infra check passed") >= 0, "and says the infra check passed");
   check(!api.helpers.amInfraReady(api.helpers.apById("OBD-78231")),
         "a request with unanswered gates is not infra-ready");
 
-  click(doc, "am-to-rate");
-  eq(api.state.admin.amStep, "rate", "the AM moves to the rate card page");
-  check(txt(doc).indexOf("step 2 of 2 · rate card") >= 0, "which is step 2 of 2");
+  click(doc, "am-to-design");
+  eq(api.state.admin.amStep, "design", "the AM moves to the carting design page");
+  check(txt(doc).indexOf("step 2 of 3 · FM Carting Design Input") >= 0, "which is step 2 of 3");
+  check(disabled(doc, "am-design-validate"), "Validate is closed until the design is filled in");
+  type(doc, "am-fmsc", "SSY");
+  api.actions.designField("onboarding", "expansion");
+  check(!disabled(doc, "am-design-validate"), "and opens once FMSC and the type are given");
+  click(doc, "am-design-validate");
+  click(doc, "am-design-send");
+  eq(api.state.admin.amStep, "rate", "sending the design moves on to the rate card");
+  check(txt(doc).indexOf("step 3 of 3 · rate card") >= 0, "which is step 3 of 3");
   check(!exists(doc, "[data-gate]"), "the checklist is not on the rate card page");
   check(exists(doc, "#am-category"), "the AM selects the hub type here");
   check(exists(doc, '[data-testid="am-slabs"]'), "and fills in the rate card");
@@ -2016,11 +2024,13 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("Select a hub type first") >= 0,
         "with no hub type there is no ceiling to measure against");
 
-  /* the two pages navigate both ways */
+  /* the three pages navigate both ways */
+  click(doc, "am-to-design");
+  eq(api.state.admin.amStep, "design", "and can step back to the carting design");
   click(doc, "am-to-infra");
-  eq(api.state.admin.amStep, "infra", "and can step back to the infra check");
+  eq(api.state.admin.amStep, "infra", "and back again to the infra check");
   check(exists(doc, "[data-gate]"), "with the checklist intact");
-  click(doc, "am-to-rate");
+  click(doc, "am-to-design"); click(doc, "am-to-rate");
 
   api.actions.amCategory("standalone");
   eq(api.helpers.apCeiling(amReq), 5, "a Standalone hub sets a ceiling of 5");
@@ -2119,7 +2129,7 @@ async function testAdminPanel() {
   /* --- FM Central Admin --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="central"]');
-  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["mine","am","ch","zh","users"],
+  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["mine","design","am","ch","zh","users"],
      "Central has its own approval queue plus the AM, CH and ZH views");
   check(txt(doc).indexOf("National view") >= 0, "described as a national view");
 
@@ -2281,7 +2291,11 @@ async function testCeilingEscalation() {
   clickSel(doc, '[data-apopen="OBD-78222"]');
   api.config.AM_GATES.forEach(g => api.actions.amGate(g.id, "yes"));
   clickSel(doc, '[data-vehreview="yes"]');
-  click(doc, "am-to-rate");
+  click(doc, "am-to-design");
+  api.actions.designField("fmsc", "SSY");
+  api.actions.designField("onboarding", "expansion");
+  api.actions.designValidate();
+  api.actions.designSend();
   api.actions.amCategory("mall");
   api.actions.chSlabField(0, "rate", "1.80");
   api.actions.amRateField("touchpoint", "2.00");
@@ -2383,6 +2397,141 @@ async function testCeilingEscalation() {
 
 const apiTpFlagged = (doc) => !!doc.querySelector('[data-testid="am-tp"].over');
 
+/* =========================================================================
+   14. FM Carting Design Input — hub code, validation, and design alignment
+   ====================================================================== */
+
+async function testCartingDesign() {
+  section("14. FM Carting Design Input and design alignment");
+  const { win, doc, api } = await boot();
+
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+
+  /* --- a hub code is assigned the moment the AM picks the request up --- */
+  const before = api.helpers.apById("OBD-78222").hubCode;
+  eq(before, "", "a request carries no hub code until an Area Manager opens it");
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  const code = api.helpers.apById("OBD-78222").hubCode;
+  eq(code.length, 3, "opening it assigns a 3-letter hub code");
+  check(/^[A-Z]{3}$/.test(code), "made only of capital letters");
+  check(api.config.KNOWN_HUB_CODES.indexOf(code) === -1,
+        "and not one the network already uses");
+  check(txt(doc).indexOf("Hub code " + code) >= 0, "shown at the top of the infra check");
+  api.actions.adminOpen("OBD-78222");
+  eq(api.helpers.apById("OBD-78222").hubCode, code, "the code sticks across reopens");
+
+  /* --- the design page sits between the infra check and the rate card --- */
+  api.config.AM_GATES.forEach(g => api.actions.amGate(g.id, "yes"));
+  clickSel(doc, '[data-vehreview="yes"]');
+  check(txt(doc).indexOf("Continue to carting design") >= 0,
+        "the infra check continues to the carting design, not the rate card");
+  click(doc, "am-to-design");
+  check(txt(doc).indexOf("step 2 of 3 · FM Carting Design Input") >= 0, "which is step 2 of 3");
+  check(exists(doc, "#am-fmsc"), "with an FMSC box");
+  check(exists(doc, "#am-fmcds"), "an FMCDs box");
+  check(exists(doc, "#am-onboarding"), "and an onboarding type");
+  eq([...$(doc, "am-onboarding").options].slice(1).map(o => o.textContent),
+     ["Split from existing", "New expansion", "Multitouch"],
+     "offering the three onboarding types");
+
+  /* --- FMSC is mandatory, FMCDs are not --- */
+  check(disabled(doc, "am-design-validate"), "Validate is closed with nothing filled in");
+  api.actions.designField("onboarding", "split");
+  check(disabled(doc, "am-design-validate"), "and stays closed without an FMSC");
+  type(doc, "am-fmsc", "SSY");
+  check(!disabled(doc, "am-design-validate"), "FMSC plus a type is enough — FMCDs are optional");
+
+  /* --- validation rejects codes the network does not know --- */
+  type(doc, "am-fmcds", "KRM, ZZZ");
+  click(doc, "am-design-validate");
+  check(exists(doc, '[data-testid="am-design-error"]'), "an unknown code fails validation");
+  check(txt(doc).indexOf("ZZZ") >= 0, "naming the code that does not exist");
+  check(txt(doc).indexOf("does not exist in the system") >= 0, "and why it failed");
+  check(!exists(doc, '[data-testid="am-design-send"]'), "so the design cannot be sent");
+  eq(api.helpers.apById("OBD-78222").design.validated, false, "and nothing is marked validated");
+
+  type(doc, "am-fmcds", "KRM, HSR");
+  click(doc, "am-design-validate");
+  check(!exists(doc, '[data-testid="am-design-error"]'), "correcting it clears the error");
+  eq(api.helpers.apById("OBD-78222").design.validated, true, "the codes are validated");
+  check(exists(doc, '[data-testid="am-design-send"]'),
+        "and Validate becomes Send Design for Approval");
+  check(txt(doc).indexOf("Send Design for Approval") >= 0, "with that label");
+
+  /* editing after a pass sends you back through Validate */
+  type(doc, "am-fmsc", "SS");
+  eq(api.helpers.apById("OBD-78222").design.validated, false,
+     "editing a field invalidates the previous run");
+  check(!exists(doc, '[data-testid="am-design-send"]'), "so Send is withdrawn");
+  type(doc, "am-fmsc", "SSY");
+  click(doc, "am-design-validate");
+
+  /* --- sending the design moves the AM on to the rate card --- */
+  check(!api.helpers.designReady(api.helpers.apById("OBD-78222")),
+        "the rate card is closed until the design is sent");
+  api.actions.amStep("rate");
+  eq(api.state.admin.amStep, "design", "so stepping to it is refused");
+  click(doc, "am-design-send");
+  eq(api.state.admin.amStep, "rate", "sending it opens the rate card");
+  const sent = api.helpers.apById("OBD-78222");
+  eq(sent.design.sent, true, "the design is marked sent");
+  eq(sent.design.fmsc, "SSY", "with the FMSC recorded");
+  eq(api.helpers.parseCodes(sent.design.fmcds), ["KRM", "HSR"], "and the cross-docks parsed");
+  eq(sent.stage, "am", "the request itself stays with the Area Manager");
+
+  click(doc, "am-to-design");
+  check(exists(doc, '[data-testid="am-design-sent"]'), "the design page says it is with Central");
+  check($(doc, "am-fmsc").disabled, "and is locked against further edits");
+
+  /* --- Central Admin aligns the design --- */
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="central"]');
+  clickSel(doc, '[data-aptab="design"]');
+  check(apVisible(doc).indexOf("OBD-78222") >= 0, "it appears in Central Admin's design queue");
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  check(txt(doc).indexOf("Design alignment") >= 0, "opening it shows the design alignment");
+
+  const shown = txt(doc);
+  ["City", "Hub code", "Lat-Long / Map link", "Pincodes serving", "Max vehicle size",
+   "Hub type", "Hub address", "Hub pincode", "State",
+   "Split from / New expansion", "Multitouch"].forEach(f =>
+    check(shown.indexOf(f) >= 0, "the design inputs include " + f));
+  check(shown.indexOf("Split from existing") >= 0, "the onboarding type is resolved");
+  check(shown.indexOf("Not set yet") >= 0,
+        "hub type is honestly blank — the AM sets it later, on the rate card");
+
+  /* the mapping is the only thing Central may change */
+  check(exists(doc, "#cad-fmsc"), "the FMSC is editable here");
+  check(exists(doc, "#cad-fmcds"), "and so are the cross-docks");
+  type(doc, "cad-fmsc", "QQQ");
+  click(doc, "cad-save");
+  check(exists(doc, '[data-testid="central-design-error"]'),
+        "a mapping Central mistypes is refused too");
+  eq(api.helpers.apById("OBD-78222").design.approved, false, "and nothing is approved");
+  type(doc, "cad-fmsc", "IND");
+  click(doc, "cad-save");
+  check(exists(doc, '[data-testid="central-design-edited"]'), "a valid change is recorded");
+
+  click(doc, "cad-approve");
+  const done = api.helpers.apById("OBD-78222");
+  eq(done.design.approved, true, "Approve Design settles the alignment");
+  eq(done.design.fmsc, "IND", "with Central's corrected mapping");
+  check(apVisible(doc).indexOf("OBD-78222") === -1, "and it leaves the design queue");
+
+  api.actions.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  api.actions.adminOpen("OBD-78222");
+  api.actions.amStep("design");
+  check(exists(doc, '[data-testid="am-design-approved"]'),
+        "the Area Manager sees the design approved");
+  check(txt(doc).indexOf("IND") >= 0, "with the mapping Central corrected it to");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -2404,6 +2553,7 @@ const apiTpFlagged = (doc) => !!doc.querySelector('[data-testid="am-tp"].over');
     await testCaptainHub();
     await testAdminPanel();
     await testCeilingEscalation();
+    await testCartingDesign();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }
