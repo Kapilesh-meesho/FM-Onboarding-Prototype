@@ -1,4 +1,4 @@
-# Figma export — page 3 being rebuilt
+# Figma export — complete
 
 **Figma file:** https://www.figma.com/design/fMILzWywpzbmqBTKIJwnXc
 (Valmo — FM Captain Self-Serve Onboarding (Prototype Mirror), Meesho org, in Drafts)
@@ -7,14 +7,14 @@
 |---|---|---|
 | `1 · New Captain onboarding` | 27 | complete (1.01 – 1.27) |
 | `2 · Existing Captain, new hub` | 16 | complete (2.01 – 2.16) |
-| `3 · Admin login flows` | 22 | **rebuilding** — the AM's new carting-design step |
+| `3 · Admin login flows` | 22 | complete (3.01 – 3.22) |
 
-Pages 1 and 2 are untouched by the carting-design change and stay as built.
-Page 3 grew from 16 screens to 22 and is being rebuilt from scratch: `gen.js`
-skips pages 1 and 2, and the first page-3 call clears the page before appending.
+65 screens, logo applied on every one.
 
-After the last page-3 call, re-apply the logo to page 3 only — upload is not
-needed again, the hash is `869781bd37fe5d40d1fd1b7a7f1815c54a28d3f0`.
+Page 3 carries the AM's carting-design step: 3.06 – 3.09 are the new step 2
+(FMSC, FMCDs, onboarding type, validate, send), 3.13 – 3.14 are Central
+Admin's design queue and the eleven-field design alignment view, and the rate
+card moved to step 3 at 3.10 – 3.12.
 
 ## What the file is
 
@@ -35,6 +35,8 @@ Known limitations, all inherent to capturing a running page:
   `<span>` with loose text and the whole thing wraps, each run is captured
   separately and the second can land on the first. One case existed in the file
   (the AM rate-card over-ceiling notice) and was stacked by hand.
+- **Demo IDs drift.** Request IDs and the AM's minted hub code are generated at
+  random on each run, so a re-capture changes them even when nothing else moved.
 
 ## Re-running from scratch
 
@@ -46,17 +48,20 @@ node inflate.test.js          # round-trips every payload before any of it is se
 node gen.js                   # writes calls/ — the ready-to-paste use_figma scripts
 ```
 
-Then paste each `calls/*.js` into `use_figma` in order. Reset the `skip` values
-in `gen.js` to `0` first — they record how many screens per page are already
-built, so a resumed run only emits what is outstanding.
+Then paste each `calls/*.js` into `use_figma` in order. The `skip` values in
+`gen.js` are all `0`, which rebuilds everything; raise one to the number of
+screens already built on that page to resume a partial run. The first call of a
+page whose `skip` is `0` clears that page before appending, so a rebuild does
+not leave the old frames behind.
 
-After the last call, place the logo:
+The logo hash `869781bd37fe5d40d1fd1b7a7f1815c54a28d3f0` is baked into the
+generated calls, so the logo lands with each screen and needs no separate pass.
+If the file is ever recreated from nothing, upload the PNG first:
 
-1. Extract the PNG from the data URI in `index.html`.
+1. Extract it from the data URI in `index.html`.
 2. `upload_assets` it against any rectangle named `Valmo logo`; the POST
    response carries the `imageHash`.
-3. Apply that hash to every other `Valmo logo` rectangle — one `use_figma` call
-   per page, since a script may only switch pages once.
+3. Put that hash in `gen.js` and regenerate.
 
 ## How the pipeline works
 
@@ -72,7 +77,7 @@ calls/   ──► use_figma                 (inflate + build inside the Figma p
 The payload is compressed because the plugin sandbox has no `fetch` — every byte
 has to be inlined in the script. It is chunked with a per-chunk checksum because
 a long base64 blob is easy to garble in transit: a bad chunk is reported by index
-and nothing is written to the file. That caught four transcription slips during
+and nothing is written to the file. That caught every transcription slip during
 the build, each time before anything reached the canvas.
 
 `shots/`, `calls/` and `node_modules/` are not committed — all three are

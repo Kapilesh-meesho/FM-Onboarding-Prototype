@@ -13,11 +13,11 @@ fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
 const PAGES = [
-  { key: "1.", name: "1 · New Captain onboarding", skip: 27 },
-  { key: "2.", name: "2 · Existing Captain, new hub", skip: 16 },
+  { key: "1.", name: "1 · New Captain onboarding", skip: 0 },
+  { key: "2.", name: "2 · Existing Captain, new hub", skip: 0 },
   { key: "3.", name: "3 · Admin login flows", skip: 0 },
 ];
-const COLS = 4, GAPX = 160, GAPY = 240, PER_CALL = 2, CHUNK = 220;
+const COLS = 4, GAPX = 160, GAPY = 240, PER_CALL = 4, CHUNK = 110;
 
 const sum = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
 
@@ -58,7 +58,7 @@ for (const pg of PAGES) {
       "await figma.setCurrentPageAsync(page);",
       (p === 0 && pg.skip === 0) ? "for (const c of [...page.children]) c.remove();" : "",
       "const built=[];",
-      "for (const s of SCREENS) built.push(await build(s, s.x, s.y, null));",
+      'for (const s of SCREENS) built.push(await build(s, s.x, s.y, "869781bd37fe5d40d1fd1b7a7f1815c54a28d3f0"));',
       "return {page: page.name, screens: built.map(b=>b.name), nodes: built.reduce((a,b)=>a+b.nodes,0)};",
     ].filter(Boolean).join("\n");
 
