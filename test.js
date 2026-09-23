@@ -2547,6 +2547,65 @@ async function testFMCaptainCopy() {
 }
 
 /* =========================================================================
+   19. FM captain — Combined is the only payout type
+   ====================================================================== */
+
+async function testFMNoSplit() {
+  section("19. FM captain — no Split anywhere");
+  const { win, doc, api } = await boot();
+
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  click(doc, "hub-continue");
+  api.actions.bgvSet("passed");
+  click(doc, "bgv-continue");
+
+  const noSplit = (where) => {
+    check(txt(doc).indexOf("Split") === -1 && txt(doc).indexOf("split") === -1,
+          where + ": no Split on screen");
+    check(!exists(doc, '[data-testid="split-caveat"]') &&
+          !exists(doc, '[data-testid="split-caveat-ag"]'),
+          where + ": no split caveat block");
+    check(devText().indexOf("Split") === -1 && devText().indexOf("split") === -1,
+          where + ": no Split option in the dev panel");
+  };
+  const devText = () => {
+    const d = doc.getElementById("devbar");
+    return d ? d.textContent : "";
+  };
+
+  api.actions.chSetCategory("standalone");
+  noSplit("hub type set");
+  api.actions.amSubmitRate(false);
+  noSplit("rate card submitted");
+  eq(api.helpers.R().ch.rateMode, "combined", "the only mode the AM can author");
+  api.actions.chApprove();
+  noSplit("approved");
+
+  /* the split helper is gone from the surface entirely */
+  check(typeof api.helpers.indicativeCaptainSplit === "undefined",
+        "indicativeCaptainSplit is no longer exported \u2014 nothing computes a split");
+
+  click(doc, "ch-continue");
+  noSplit("agreements");
+  check(exists(doc, '[data-testid="agreement-rate-card"]'),
+        "agreements shows the agreed card");
+  check(mainTxt(doc).indexOf("Agreed rate card") >= 0,
+        "labelled without a payout mode in brackets");
+
+  /* even if old state carried a split mode, nothing renders one */
+  api.helpers.R().ch.rateMode = "split";
+  api.render();
+  noSplit("agreements with a stale split mode in state");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
    14. FM Carting Design Input — hub code, validation, and design alignment
    ====================================================================== */
 
@@ -2704,6 +2763,7 @@ async function testCartingDesign() {
     await testCeilingEscalation();
     await testCartingDesign();
     await testFMCaptainCopy();
+    await testFMNoSplit();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

@@ -1590,12 +1590,6 @@ function seedCaptainRateCard(r, above) {
   r.ch.touchpoint = (above ? +(m.tpCeiling + 1).toFixed(2) : m.tpCeiling).toFixed(2);
 }
 
-function indicativeCaptainSplit(r) {
-  var slab = r.ch.slab != null ? r.ch.slab : r.ch.rate;
-  if (slab == null) return null;
-  var pilotCut = 0.35;                 // placeholder per-shipment pilot cut
-  return Math.max(0, +(slab - pilotCut).toFixed(2));
-}
 
 /* ------------------------------------------------------------------ escape */
 
@@ -3834,37 +3828,16 @@ function captainRateRows(ch) {
    volume slab plus the touchpoint rate. Those are the only figures shown; there
    is no blended per-shipment number, and nothing is read off the ceiling. */
 function rateCardPanel(r) {
-  var cat = r.ch.category;
-  if (!cat) return "";
-  var meta = HUB_CATEGORIES[cat];
+  if (!r.ch.category) return "";
 
   var rows = captainRateRows(r.ch);
   if (!rows) return "";                       // no card authored yet
 
-  var modeBlock = "";
-  {
-    if (r.ch.rateMode === "combined") {
-      modeBlock = '<div class="notice info" data-testid="combined-blurb">' +
-        '<b>Combined rate card</b>' +
-        'You are paid the slab rate for your order volume plus the touchpoint rate, ' +
-        'on one payout line.</div>';
-    } else {
-      var cap = indicativeCaptainSplit(r);
-      modeBlock = '<div class="notice info"><b>Split rate card</b>' +
-        'The pilot and the captain are paid on separate lines.' +
-        '<div class="kv" style="margin-top:12px;background:#fff">' +
-          '<div class="row"><span class="k">Pilot — slab rate + touchpoint</span>' +
-            '<span class="v">' + money((r.ch.slab != null ? r.ch.slab : r.ch.rate)) +
-            ' + ' + money(meta.tp) + '</span></div>' +
-          '<div class="row"><span class="k">Captain — slab net of pilot cut</span>' +
-            '<span class="v mute">' + money(cap) + ' (indicative)</span></div>' +
-        '</div></div>' +
-        '<div class="notice warn" data-testid="split-caveat"><b>Indicative — formula being confirmed</b>' +
-        'The captain-side split figure above is a placeholder. The exact formula for netting ' +
-        'the pilot&rsquo;s per-shipment cut out of the slab rate is still being confirmed with ' +
-        'the payouts team, and this number must not be quoted to a partner.</div>';
-    }
-  }
+  /* Combined is the only payout type there is. */
+  var modeBlock = '<div class="notice info" data-testid="combined-blurb">' +
+    '<b>Combined rate card</b>' +
+    'You are paid the slab rate for your order volume plus the touchpoint rate, ' +
+    'on one payout line.</div>';
 
   return '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
       (r.ch.status === "approved" ? "Approved rate card" : "Proposed rate card") + '</p>' +
@@ -4338,21 +4311,13 @@ function phaseAG(r) {
 
   var rateBoxes;
   if (fm && r.ch.category) {
-    var agreed = captainRateRows(r.ch);
+    /* The agreed card is the one the Area Manager authored and the chain
+       approved: slab bands plus the touchpoint rate, on one payout line. */
     rateBoxes =
-      (agreed
-        ? '<div style="margin-bottom:18px" data-testid="agreement-rate-card">' +
-          '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
-            'Agreed rate card (' + esc(r.ch.rateMode) + ')</p>' +
-          '<div class="kv">' + agreed + '</div></div>'
-        : '<div class="rate-grid" style="grid-template-columns:1fr">' +
-          '<div class="rate-box"><span>Agreed rate (' + esc(r.ch.rateMode) + ')</span><b>' +
-            money(r.ch.rate) + '</b></div>' +
-          '</div>') +
-      (r.ch.rateMode === "split"
-        ? '<div class="notice warn" data-testid="split-caveat-ag"><b>Indicative — formula being confirmed</b>' +
-          'The captain-side split figure is a placeholder pending confirmation from the payouts team.</div>'
-        : '');
+      '<div style="margin-bottom:18px" data-testid="agreement-rate-card">' +
+        '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
+          'Agreed rate card</p>' +
+        '<div class="kv">' + captainRateRows(r.ch) + '</div></div>';
   } else {
     rateBoxes =
       '<div class="rate-grid">' +
@@ -6340,7 +6305,7 @@ if (typeof window !== "undefined") {
               VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
     helpers: {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
-      isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
+      isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
