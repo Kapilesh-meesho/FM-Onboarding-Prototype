@@ -5,16 +5,22 @@
 
 | Page | Screens | Status |
 |---|---|---|
-| `1 · New Captain onboarding` | 27 | complete (1.01 – 1.27) |
+| `1 · New Captain onboarding` | 29 | complete (1.01 – 1.29) |
 | `2 · Existing Captain, new hub` | 16 | complete (2.01 – 2.16) |
 | `3 · Admin login flows` | 22 | complete (3.01 – 3.22) |
 
-65 screens, logo applied on every one.
+67 screens, logo applied on every onboarding screen.
 
-Page 3 carries the AM's carting-design step: 3.06 – 3.09 are the new step 2
+Page 1 walks the whole FM approval chain, so it carries the two captain states
+the chain added: **1.24 pending sign-off** (the card was priced above ceiling
+and raised) and **1.25 in revision** (a desk sent it back to the Area Manager).
+1.26 is the approved state. Neither new screen names a desk above the Cluster
+Head, gives a reason, or uses the words *ceiling*, *benchmark* or *hub category*.
+
+Page 3 carries the AM's carting-design step: 3.06 – 3.09 are step 2
 (FMSC, FMCDs, onboarding type, validate, send), 3.13 – 3.14 are Central
 Admin's design queue and the eleven-field design alignment view, and the rate
-card moved to step 3 at 3.10 – 3.12.
+card is step 3 at 3.10 – 3.12.
 
 ## What the file is
 
@@ -37,6 +43,8 @@ Known limitations, all inherent to capturing a running page:
   (the AM rate-card over-ceiling notice) and was stacked by hand.
 - **Demo IDs drift.** Request IDs and the AM's minted hub code are generated at
   random on each run, so a re-capture changes them even when nothing else moved.
+- **Captain Hub screens carry no logo rectangle.** They render the panel header
+  rather than the onboarding one, so page 2 has 10 logos across 16 screens.
 
 ## Re-running from scratch
 
