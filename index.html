@@ -1228,7 +1228,9 @@ function blankRole(role) {
     bgv: { status:"pending" },
     ch:  { status:"pending", category:null, rateMode:"combined", slab:null, rate:null,
            // the approved rate card the captain is shown: slab bands + touchpoint
-           slabs:[], touchpoint:"", decidedBy:null, reason:"" },
+           slabs:[], touchpoint:"", decidedBy:null, reason:"",
+           // set when a desk sends the card back to the Area Manager to revise
+           revision:null },
     sd:  { status:"pending", amount:25000, attempts:0 },
     hub: { address:"", mapLink:"", pincode:"", city:"",
            areaSqft:"", manpower:"", maxVehicle:"",
@@ -1553,6 +1555,39 @@ function bookRateCard(r) {
   ];
   var tp = tpFor(r);
   r.ch.touchpoint = tp != null ? tp.toFixed(2) : "";
+}
+
+/* Whether the Area Manager has authored a rate card for this hub yet. */
+function chRateSubmitted(r) {
+  return !!(r.ch.slabs && r.ch.slabs.length);
+}
+
+/* Captain-side mirror of the admin panel's ceiling check: a card is above
+   ceiling if any slab beats the slab ceiling or the touchpoint beats its own. */
+function chAboveCeiling(r) {
+  var m = HUB_CATEGORIES[r.ch.category];
+  if (!m) return false;
+  var overSlab = (r.ch.slabs || []).some(function (sl) {
+    var v = parseFloat(sl.rate);
+    return !isNaN(v) && v > m.ceiling;
+  });
+  var tp = parseFloat(r.ch.touchpoint);
+  return overSlab || (!isNaN(tp) && tp > m.tpCeiling);
+}
+
+/* The Area Manager authoring a card for this hub category, either inside both
+   ceilings or deliberately over them. Slab bands mirror the admin panel's. */
+function seedCaptainRateCard(r, above) {
+  var m = HUB_CATEGORIES[r.ch.category];
+  if (!m) return;
+  var top = above ? +(m.ceiling + 1).toFixed(2)
+                  : +Math.max(0.5, m.ceiling - 0.5).toFixed(2);
+  var next = +Math.max(0.5, top - 0.5).toFixed(2);
+  r.ch.slabs = [
+    { from:"0",   to:"500", rate: top.toFixed(2) },
+    { from:"501", to:"",    rate: next.toFixed(2) }
+  ];
+  r.ch.touchpoint = (above ? +(m.tpCeiling + 1).toFixed(2) : m.tpCeiling).toFixed(2);
 }
 
 function indicativeCaptainSplit(r) {
@@ -3765,19 +3800,10 @@ function phaseBGV(r) {
 /* ------------------------------------------------------ 4. Cluster Head review */
 
 var CH_CONTACT = { name:"Rakesh Sharma", cluster:"Bengaluru Urban Cluster", phone:"+91 98765 43210" };
-var ZH_CONTACT = { name:"Priya Nair", zone:"South Zone", phone:"+91 98450 11227" };
 
-function chContactCard(who) {
-  if (who === "zh") {
-    return '<div class="side-card"><b>Zonal Head assigned</b>' +
-      '<div class="contact"><div class="ci">👤</div><div class="cx"><b>' + esc(ZH_CONTACT.name) + '</b>' +
-        '<span>' + esc(ZH_CONTACT.zone) + '</span></div></div>' +
-      '<div class="contact"><div class="ci">📞</div><div class="cx">' +
-        '<a href="tel:' + esc(ZH_CONTACT.phone) + '">' + esc(ZH_CONTACT.phone) + '</a>' +
-        '<span>Tap to call — reach out anytime</span></div></div>' +
-      '<div class="contact"><div class="ci">⏱</div><div class="cx"><b>72 hours</b>' +
-        '<span>Typical turnaround for above-benchmark rate approvals.</span></div></div></div>';
-  }
+/* The Cluster Head is the captain's only named contact through this phase.
+   Sign-off desks above them are internal and are never surfaced here. */
+function chContactCard() {
   return '<div class="side-card"><b>Cluster Head assigned</b>' +
     '<div class="contact"><div class="ci">👤</div><div class="cx"><b>' + esc(CH_CONTACT.name) + '</b>' +
       '<span>' + esc(CH_CONTACT.cluster) + '</span></div></div>' +
@@ -3866,7 +3892,7 @@ function phaseCH(r) {
         tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Phone: " + CH_CONTACT.phone) +
         tlRow("", nextRowLabel(r), "Available after approval.") +
       '</div></div>';
-    side = sideDefault(r, chContactCard("ch"));
+    side = sideDefault(r, chContactCard());
     return {
       left: phaseHeader(r, "Cluster Head review", "Cluster Head is reviewing your request.") +
             cardWrap("Cluster Head review", "Cluster Head is reviewing your request.", inner),
@@ -3877,46 +3903,44 @@ function phaseCH(r) {
   if (ch.status === "approved") {
     var nxtLabel = nextLabel(r);
     inner = statusBlock("ok", "Cluster Head review approved",
-        ch.decidedBy === "zh"
-          ? "Your above-benchmark rate card was approved by the Zonal Head."
+        ch.decidedBy === "central"
+          ? "Your request and rate card were approved."
           : "Your request and rate card were approved by the Cluster Head.") +
       (fm ? rateCardPanel(r) : '<div class="kv" style="margin-bottom:16px">' +
         '<div class="row"><span class="k">Forward rate</span><span class="v">₹14.50</span></div>' +
         '<div class="row"><span class="k">Reverse rate</span><span class="v">₹8.00</span></div></div>') +
       '<div class="tl">' +
         tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Approved on " + new Date().toDateString()) +
-        (ch.decidedBy === "zh"
-          ? tlRow("ok", "Zonal Head: " + ZH_CONTACT.name, "Above-benchmark rate approved.")
-          : "") +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
         '<button class="btn btn-primary" id="ch-continue">' + nxtLabel + '</button></div>';
-    side = sideDefault(r, chContactCard(ch.decidedBy === "zh" ? "zh" : "ch"));
+    side = sideDefault(r, chContactCard());
 
-  } else if (ch.status === "escalated") {
-    inner = statusBlock("run", "Sent for Zonal Head approval",
-        "Your proposed rate of " + money(ch.rate) + " needs Zonal Head sign-off. " +
-        "We\u2019ll notify you at " + maskPhone(S.phone) + " when there\u2019s an update.") +
+  } else if (ch.status === "central") {
+    /* Raised for a further sign-off. Which desk, and why, is internal. */
+    inner = '<div data-testid="ch-signoff">' +
+      statusBlock("run", "Rate card pending sign-off",
+        "Your rate card needs one more sign-off. We\u2019ll notify you at " +
+        maskPhone(S.phone) + " when there\u2019s an update.") +
       rateCardPanel(r) +
       '<div class="tl">' +
-        tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Reviewed and forwarded for approval.") +
-        tlRow("now", "Zonal Head: " + ZH_CONTACT.name, "Above-benchmark rate approval pending.") +
-        tlRow("", nextRowLabel(r), "Available once the Zonal Head approves.") +
-      '</div>';
-    side = sideDefault(r, chContactCard("zh"));
+        tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Reviewed and sent for sign-off.") +
+        tlRow("now", "Sign-off pending", "We\u2019ll update you here as soon as it lands.") +
+        tlRow("", nextRowLabel(r), "Available once sign-off is complete.") +
+      '</div></div>';
+    side = sideDefault(r, chContactCard());
 
-  } else if (ch.status === "zh_rejected") {
-    inner = statusBlock("bad", "Zonal Head rejected the rate card",
-        ch.reason || "The proposed rate is above what this hub category supports.") +
-      rateCardPanel(r) +
-      '<div class="notice bad"><b>What happens now</b>' +
-        'Your Cluster Head will revise the rate card, or resubmit a revised case to the ' +
-        'Zonal Head.</div>' +
+  } else if (ch.status === "revision") {
+    /* The rate card is the Area Manager's to revise. The captain is told that
+       much and no more — no reason, no desk, no hub category. */
+    inner = '<div data-testid="ch-revision">' +
+      statusBlock("run", "Rate card being revised",
+        "Your rate card is being revised by your Area Manager.") +
       '<div class="tl">' +
-        tlRow("bad", "Zonal Head: " + ZH_CONTACT.name, esc(ch.reason || "Rate rejected.")) +
-        tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Reworking the rate card.") +
-      '</div>';
-    side = sideDefault(r, chContactCard("zh"));
+        tlRow("now", "Area Manager", "Revising the rate card.") +
+        tlRow("", nextRowLabel(r), "Available once the revised rate card is approved.") +
+      '</div></div>';
+    side = sideDefault(r, chContactCard());
 
   } else if (ch.status === "rejected") {
     inner = statusBlock("bad", "Cluster Head rejected this request",
@@ -3925,7 +3949,7 @@ function phaseCH(r) {
       '<div style="display:flex;gap:10px;justify-content:flex-end">' +
         '<button class="btn btn-ghost" id="ch-back-pd">Edit personal details</button>' +
         '<button class="btn btn-primary" id="ch-resubmit">Resubmit for review</button></div>';
-    side = sideDefault(r, chContactCard("ch"));
+    side = sideDefault(r, chContactCard());
 
   } else {
     inner = statusBlock("run", "Cluster Head review in progress",
@@ -3937,7 +3961,7 @@ function phaseCH(r) {
         tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Phone: " + CH_CONTACT.phone) +
         tlRow("", nextRowLabel(r), "Available after approval.") +
       '</div>';
-    side = sideDefault(r, chContactCard("ch"));
+    side = sideDefault(r, chContactCard());
   }
 
   return {
@@ -4785,35 +4809,47 @@ var A = {
     r.ch.category = cat;
     save(); render();
   },
-  chApprove: function (mode) {
+  /* The Area Manager authors the rate card — slabs plus one touchpoint rate —
+     and submits it into the approval chain. Only Combined payouts exist. */
+  amSubmitRate: function (above) {
+    var r = R();
+    if (r.role !== "FM" || !r.ch.category) return;
+    seedCaptainRateCard(r, !!above);
+    r.ch.rateMode = "combined";
+    r.ch.status = "pending"; r.ch.decidedBy = null; r.ch.reason = "";
+    save(); render();
+  },
+  chApprove: function () {
     var r = R();
     if (!chCanDecide(r)) return;
     if (r.role === "FM") {
-      var ceil = ceilingFor(r);
-      r.ch.rateMode = mode || "combined";
-      // A within-benchmark approval books the rate at the ceiling.
-      if (r.ch.rate == null || r.ch.rate > ceil) r.ch.rate = ceil;
-      r.ch.slab = r.ch.rate;
+      // an above-ceiling card is not the Cluster Head's to settle
+      if (!chRateSubmitted(r) || chAboveCeiling(r)) return;
+      r.ch.rateMode = "combined";
     }
     bookRateCard(r);
     r.ch.status = "approved"; r.ch.decidedBy = "ch"; r.ch.reason = "";
     save(); render();
   },
-  /* The approved rate card the captain sees: volume slabs plus a touchpoint
-     rate. Mirrors what a Cluster Head sets in the admin panel. */
-  chEscalate: function (mode, rate) {
+  /* Above either ceiling the Cluster Head cannot settle it, so it is raised to
+     FM Central Admin — the captain only ever learns a sign-off is pending. */
+  chRaise: function () {
     var r = R();
     if (r.role !== "FM" || !chCanDecide(r)) return;
-    var ceil = ceilingFor(r);
-    r.ch.rateMode = mode || "combined";
-    r.ch.rate = rate != null ? rate : +(ceil + 1.5).toFixed(2);
-    r.ch.slab = r.ch.rate;
-    r.ch.status = "escalated"; r.ch.decidedBy = null;
-    r.ch.slabs = []; r.ch.touchpoint = "";     // rebooked when the decision lands
+    if (!chRateSubmitted(r) || !chAboveCeiling(r)) return;
+    r.ch.status = "central"; r.ch.decidedBy = null; r.ch.reason = "";
     save(); render();
   },
+  /* For FM the rate card is the Area Manager's work, so a Cluster Head
+     rejection sends it back there rather than back to the captain. */
   chReject: function (reason) {
     var r = R();
+    if (r.role === "FM" && chRateSubmitted(r)) {
+      r.ch.status = "revision";
+      r.ch.revision = { by:"Cluster Head" };
+      r.ch.decidedBy = null; r.ch.reason = "";
+      save(); render(); return;
+    }
     r.ch.status = "rejected";
     r.ch.reason = reason || "Details need correction before this can proceed.";
     save(); render();
@@ -4823,18 +4859,27 @@ var A = {
     r.ch.status = "pending"; r.ch.reason = "";
     save(); render();
   },
-  zhApprove: function () {
+  centralApprove: function () {
     var r = R();
-    if (r.ch.status !== "escalated") return;
-    r.ch.status = "approved"; r.ch.decidedBy = "zh"; r.ch.reason = "";
+    if (r.ch.status !== "central") return;
+    r.ch.status = "approved"; r.ch.decidedBy = "central"; r.ch.reason = "";
     bookRateCard(r);
     save(); render();
   },
-  zhReject: function (reason) {
+  centralReject: function () {
     var r = R();
-    if (r.ch.status !== "escalated") return;
-    r.ch.status = "zh_rejected";
-    r.ch.reason = reason || "Proposed rate exceeds what this hub category supports.";
+    if (r.ch.status !== "central") return;
+    r.ch.status = "revision";
+    r.ch.revision = { by:"Central Admin" };
+    r.ch.decidedBy = null; r.ch.reason = "";
+    save(); render();
+  },
+  /* The Area Manager reprices inside both ceilings and resubmits. */
+  amReprice: function () {
+    var r = R();
+    if (r.role !== "FM" || r.ch.status !== "revision") return;
+    seedCaptainRateCard(r, false);
+    r.ch.status = "pending"; r.ch.revision = null;
     save(); render();
   },
   chContinue: function () {
@@ -6122,38 +6167,38 @@ function devActions() {
   if (id === "ch") {
     if (fm) {
       if (!r.ch.category) {
-        groups.push({ title: "Area Manager · set hub category", html:
+        groups.push({ title: "Area Manager · pick hub type", html:
           CATEGORY_ORDER.map(function (c) {
             var m = HUB_CATEGORIES[c];
             return devBtn(m.label + " · ceiling " + money(m.ceiling), "cat:" + c);
           }).join("") });
       } else {
         var m = HUB_CATEGORIES[r.ch.category];
-        groups.push({ title: "Hub category (AM input)", html:
-          '<p class="dnone">' + m.label + " · ceiling " + money(m.ceiling) +
-          " · touchpoint " + money(m.tp) + '</p>' +
-          devBtn("Clear hub category", "cat:clear") });
+        var above = chAboveCeiling(r);
 
-        if (r.ch.status === "escalated") {
-          groups.push({ title: "Zonal Head decision", html:
-            devBtn("Approve as ZH", "zh:approve", "ok") +
-            devBtn("Reject as ZH", "zh:reject", "bad") });
-        } else if (r.ch.status === "zh_rejected") {
-          groups.push({ title: "Cluster Head rework", html:
-            devBtn("Approve combined (within ceiling)", "ch:combined", "ok") +
-            devBtn("Approve split (within ceiling)", "ch:split", "ok") +
-            devBtn("Resubmit above benchmark → ZH", "ch:escalate", "warn") });
+        if (!chRateSubmitted(r)) {
+          groups.push({ title: "Area Manager", html:
+            '<p class="dnone">' + m.label + " · slab ceiling " + money(m.ceiling) +
+            " · touchpoint ceiling " + money(m.tpCeiling) + '</p>' +
+            devBtn("Submit rate card within ceiling", "am:rate-within", "ok") +
+            devBtn("Submit rate card above ceiling", "am:rate-above", "warn") +
+            devBtn("Change hub type", "cat:clear") });
+        } else if (r.ch.status === "central") {
+          groups.push({ title: "Central Admin", html:
+            devBtn("Approve rate card", "central:approve", "ok") +
+            devBtn("Reject → back to Area Manager", "central:reject", "bad") });
+        } else if (r.ch.status === "revision") {
+          groups.push({ title: "Area Manager revision", html:
+            devBtn("Reprice within ceiling and resubmit", "am:reprice", "ok") });
         } else if (r.ch.status !== "approved") {
-          groups.push({ title: "Cluster Head decision", html:
-            devBtn("Approve combined (within ceiling)", "ch:combined", "ok") +
-            devBtn("Approve split (within ceiling)", "ch:split", "ok") +
-            devBtn("Submit above benchmark → ZH", "ch:escalate", "warn") +
-            devBtn("Reject", "ch:reject", "bad") });
+          groups.push({ title: "Cluster Head", html:
+            (above
+              ? devBtn("Raise to Central Admin", "ch:raise", "warn")
+              : devBtn("Approve rate card", "ch:approve", "ok")) +
+            devBtn("Reject → back to Area Manager", "ch:reject", "bad") });
         } else {
-          groups.push({ title: "Cluster Head decision", html:
-            '<p class="dnone">Approved' +
-            (r.ch.decidedBy === "zh" ? " by Zonal Head" : " by Cluster Head") + '.</p>' +
-            devBtn("Reject (send back)", "ch:reject", "bad") });
+          groups.push({ title: "Cluster Head", html:
+            '<p class="dnone">Rate card approved.</p>' });
         }
       }
     } else {
@@ -6247,18 +6292,20 @@ function devDo(cmd) {
       else A.chSetCategory(arg);
       break;
     case "ch":
-      if (arg === "approve")       A.chApprove("combined");
-      else if (arg === "combined") A.chApprove("combined");
-      else if (arg === "split")    A.chApprove("split");
-      else if (arg === "escalate") A.chEscalate(R().ch.rateMode === "split" ? "split" : "combined");
-      else if (arg === "reject")   A.chReject();
+      if (arg === "approve")     A.chApprove();
+      else if (arg === "raise")  A.chRaise();
+      else if (arg === "reject") A.chReject();
       break;
-    case "zh":
-      if (arg === "approve") A.zhApprove(); else A.zhReject();
+    case "central":
+      if (arg === "approve") A.centralApprove(); else A.centralReject();
       break;
     case "sd": A.sdSet(arg); break;
     case "am":
-      if (arg === "approve") A.amApprove(); else A.amReject();
+      if (arg === "rate-within")     A.amSubmitRate(false);
+      else if (arg === "rate-above") A.amSubmitRate(true);
+      else if (arg === "reprice")    A.amReprice();
+      else if (arg === "approve")    A.amApprove();
+      else                           A.amReject();
       break;
     case "ag": A.markAgreementRead(); break;
     case "act":
@@ -6299,6 +6346,7 @@ if (typeof window !== "undefined") {
     helpers: {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor, indicativeCaptainSplit: indicativeCaptainSplit,
+      chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,

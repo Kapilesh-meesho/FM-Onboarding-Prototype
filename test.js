@@ -413,9 +413,9 @@ async function testFMCombined() {
     check(waitingCopy.indexOf(phrase) === -1,
           "no hub-category explainer shown to the captain: \"" + phrase + "\"");
   });
-  api.actions.chApprove("combined");
+  api.actions.chApprove();
   eq(api.helpers.R().ch.status, "pending",
-     "approve is a no-op while hub category is unset");
+     "approve is a no-op while hub type is unset");
 
   api.actions.chSetCategory("standalone");     // ceiling 5, touchpoint 5
   eq(api.helpers.ceilingFor(api.helpers.R()), 5, "Standalone ceiling reads 5");
@@ -432,12 +432,23 @@ async function testFMCombined() {
   check(railTxt(doc).indexOf("Hub category") === -1,
         "and the rail does not label the phase with it either");
 
-  api.actions.chApprove("combined");
+  /* The Area Manager authors the rate card; the Cluster Head only judges it. */
+  api.actions.chApprove();
+  eq(api.helpers.R().ch.status, "pending",
+     "approve is a no-op before the Area Manager submits a rate card");
+
+  api.actions.amSubmitRate(false);
+  const submitted = api.helpers.R().ch;
+  check(submitted.slabs.length > 1, "the Area Manager's card carries slab bands");
+  check(!!submitted.touchpoint, "and one touchpoint rate");
+  check(!api.helpers.chAboveCeiling(api.helpers.R()),
+        "this one sits inside both ceilings");
+
+  api.actions.chApprove();
   const ch = api.helpers.R().ch;
-  eq(ch.status, "approved", "within-ceiling rate clears at Cluster Head");
-  eq(ch.decidedBy, "ch", "decided by Cluster Head, not escalated");
+  eq(ch.status, "approved", "within-ceiling rate clears at the Cluster Head");
+  eq(ch.decidedBy, "ch", "decided by the Cluster Head, not raised");
   eq(ch.rateMode, "combined", "combined rate card mode recorded");
-  check(!api.helpers.isAboveCeiling(api.helpers.R()), "booked rate is within the ceiling");
   check(txt(doc).indexOf("within ceiling") === -1,
         "a within-ceiling rate is shown without a 'within ceiling' suffix");
   check(txt(doc).indexOf("set by Area Manager") === -1,
@@ -512,11 +523,11 @@ async function testFMCombined() {
 }
 
 /* =========================================================================
-   3. FM escalation — split mode, above benchmark → ZH reject → resubmit → approve
+   3. FM above ceiling — CH raises, Central Admin rejects, AM reprices, approved
    ====================================================================== */
 
-async function testFMEscalation() {
-  section("3. FM escalation — split, above benchmark, ZH reject then approve");
+async function testFMAboveCeiling() {
+  section("3. FM above ceiling — raise, Central reject, AM revision, approve");
   const { win, doc, api } = await boot();
 
   login(doc);
@@ -529,57 +540,85 @@ async function testFMEscalation() {
   click(doc, "bgv-continue");
   eq(api.helpers.phaseId(), "ch", "reached Cluster Head review");
 
-  api.actions.chSetCategory("mall");            // ceiling 2, touchpoint 2
+  api.actions.chSetCategory("mall");            // ceiling 2, touchpoint ceiling 2
   eq(api.helpers.ceilingFor(api.helpers.R()), 2, "Mall hub ceiling reads 2");
 
-  api.actions.chEscalate("split", 4.5);
+  /* --- the Area Manager prices above the ceiling --- */
+  api.actions.amSubmitRate(true);
   let r = api.helpers.R();
-  eq(r.ch.status, "escalated", "above-ceiling rate escalates to Zonal Head");
-  eq(r.ch.rateMode, "split", "split rate card mode recorded");
-  check(api.helpers.isAboveCeiling(r), "4.5 is above the 2.0 mall-hub ceiling");
-  check(mainTxt(doc).indexOf("ceiling") === -1,
-        "not even the word 'ceiling' reaches the captain on an escalated rate");
-  check(txt(doc).indexOf("Zonal Head") >= 0, "Zonal Head contact card is shown");
-  ["Hub category", "benchmark ceiling", "Benchmark ceiling", "Mall hub"].forEach(phrase => {
+  check(api.helpers.chAboveCeiling(r), "the submitted card is above the mall-hub ceiling");
+  eq(r.ch.rateMode, "combined", "only Combined exists");
+
+  api.actions.chApprove();
+  eq(api.helpers.R().ch.status, "pending",
+     "the Cluster Head cannot settle an above-ceiling card");
+
+  /* --- so it is raised; the captain is told a sign-off is pending, no more --- */
+  api.actions.chRaise();
+  r = api.helpers.R();
+  eq(r.ch.status, "central", "above-ceiling card is raised to Central Admin");
+  check(exists(doc, '[data-testid="ch-signoff"]'), "captain sees a pending sign-off state");
+  check(mainTxt(doc).indexOf("needs one more sign-off") >= 0,
+        "copy says only that one more sign-off is needed");
+  check(txt(doc).indexOf("Zonal Head") === -1, "no Zonal Head anywhere on the page");
+  check(txt(doc).indexOf("Central Admin") === -1, "and the deciding desk is not named either");
+  check(txt(doc).indexOf("Rakesh Sharma") >= 0,
+        "the Cluster Head stays the captain's contact");
+  ["Hub category", "hub category", "ceiling", "benchmark", "Mall hub"].forEach(phrase => {
     check(mainTxt(doc).indexOf(phrase) === -1,
-          "the escalation state does not reveal: \"" + phrase + "\"");
+          "the sign-off state does not reveal: \"" + phrase + "\"");
   });
-  check(mainTxt(doc).indexOf("needs Zonal Head sign-off") >= 0,
-        "it just says the rate needs Zonal Head sign-off");
-  check(exists(doc, '[data-testid="split-caveat"]'),
-        "split mode shows the 'indicative, formula being confirmed' caveat");
-  check(txt(doc).indexOf("indicative") >= 0 || txt(doc).indexOf("Indicative") >= 0,
-        "caveat copy marks the captain split as indicative");
-  const indic = api.helpers.indicativeCaptainSplit(r);
-  check(typeof indic === "number" && indic < r.ch.rate,
-        "captain split is derived but shown as indicative only (" + indic + ")");
 
-  api.actions.zhReject("Rate is not supportable for a mall hub.");
+  /* --- Central Admin rejects; the card goes back to the Area Manager --- */
+  api.actions.centralReject();
   r = api.helpers.R();
-  eq(r.ch.status, "zh_rejected", "Zonal Head rejection recorded");
-  check(txt(doc).indexOf("Zonal Head rejected") >= 0, "captain sees the ZH rejection state");
+  eq(r.ch.status, "revision", "a Central Admin rejection sends the card back to the AM");
+  eq(r.ch.revision.by, "Central Admin", "and records which desk sent it back");
+  check(exists(doc, '[data-testid="ch-revision"]'), "captain sees a revision state");
+  check(mainTxt(doc).indexOf("being revised by your Area Manager") >= 0,
+        "copy names only the Area Manager");
+  check(mainTxt(doc).indexOf("reject") === -1 && mainTxt(doc).indexOf("Reject") === -1,
+        "the captain is not told it was rejected");
+  ["Zonal Head", "hub category", "Hub category", "ceiling", "benchmark"].forEach(phrase => {
+    check(txt(doc).indexOf(phrase) === -1,
+          "the revision state does not reveal: \"" + phrase + "\"");
+  });
 
-  api.actions.chEscalate("split", 3.9);         // resubmit, still above ceiling
+  /* --- the AM reprices inside the ceiling and it clears at the Cluster Head --- */
+  api.actions.amReprice();
   r = api.helpers.R();
-  eq(r.ch.status, "escalated", "resubmission re-escalates to Zonal Head");
-  eq(r.ch.rate, 3.9, "resubmitted rate recorded");
+  eq(r.ch.status, "pending", "repricing puts it back in front of the Cluster Head");
+  check(!api.helpers.chAboveCeiling(r), "and the revised card is inside both ceilings");
+  eq(r.ch.revision, null, "the revision marker is cleared");
 
-  api.actions.zhApprove();
+  api.actions.chApprove();
   r = api.helpers.R();
-  eq(r.ch.status, "approved", "Zonal Head approval clears the phase");
-  eq(r.ch.decidedBy, "zh", "approval is attributed to the Zonal Head");
+  eq(r.ch.status, "approved", "the revised card clears at the Cluster Head");
+  eq(r.ch.decidedBy, "ch", "attributed to the Cluster Head");
 
   click(doc, "ch-continue");
-  eq(api.helpers.phaseId(), "ag", "ZH-approved request moves on to agreements");
+  eq(api.helpers.phaseId(), "ag", "approved request moves on to agreements");
 
-  /* every reject path routes somewhere the captain can act */
+  /* --- a Cluster Head rejection routes to the AM, never to the captain --- */
   api.helpers.goPhase("ch");
-  api.actions.chReject("Hub address does not match the surveyed site.");
-  eq(api.helpers.R().ch.status, "rejected", "Cluster Head reject reachable");
-  check(exists(doc, "#ch-back-pd"),
-        "rejected state offers a route back to personal details");
-  click(doc, "ch-resubmit");
-  eq(api.helpers.R().ch.status, "pending", "captain can resubmit after a CH rejection");
+  api.actions.chReject();
+  r = api.helpers.R();
+  eq(r.ch.status, "revision", "a Cluster Head rejection also goes back to the AM");
+  eq(r.ch.revision.by, "Cluster Head", "recorded as the Cluster Head's send-back");
+  check(!exists(doc, "#ch-back-pd"),
+        "the captain is given no corrections to make \u2014 it is not their rate card");
+
+  /* --- Central Admin can also approve outright --- */
+  api.actions.amSubmitRate(true);
+  api.actions.chRaise();
+  api.actions.centralApprove();
+  r = api.helpers.R();
+  eq(r.ch.status, "approved", "Central Admin approval clears the phase");
+  eq(r.ch.decidedBy, "central", "attributed internally to Central Admin");
+  check(mainTxt(doc).indexOf("Your request and rate card were approved") >= 0,
+        "but the captain copy names no desk");
+  check(txt(doc).indexOf("Central Admin") === -1,
+        "and still does not say Central Admin");
 
   api.stopTimers();
   win.close();
@@ -984,25 +1023,51 @@ async function testDevPanel() {
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
 
-  check(devText().indexOf("set hub category") >= 0,
-        "FM Cluster Head: hub category buttons offered (one per category)");
+  check(devText().indexOf("pick hub type") >= 0,
+        "FM Area Manager: hub type buttons offered (one per category)");
   api.config.FANOUT; // no-op, keeps the config surface referenced
   Object.keys(api.config.HUB_CATEGORIES).forEach(k => {
     check(devText().indexOf(api.config.HUB_CATEGORIES[k].label) >= 0,
-          "category button present: " + api.config.HUB_CATEGORIES[k].label);
+          "hub type button present: " + api.config.HUB_CATEGORIES[k].label);
   });
 
   api.actions.chSetCategory("sah");
   const d2 = devText();
-  check(d2.indexOf("Approve combined") >= 0, "FM CH: approve combined offered");
-  check(d2.indexOf("Approve split") >= 0, "FM CH: approve split offered");
-  check(d2.indexOf("above benchmark") >= 0, "FM CH: escalate-to-ZH offered");
-  check(d2.indexOf("Reject") >= 0, "FM CH: reject offered");
+  check(d2.indexOf("Submit rate card within ceiling") >= 0,
+        "FM AM: submit within ceiling offered");
+  check(d2.indexOf("Submit rate card above ceiling") >= 0,
+        "FM AM: submit above ceiling offered");
+  check(d2.indexOf("Approve rate card") === -1,
+        "no Cluster Head decision until a rate card exists");
 
-  api.actions.chEscalate("combined", 9);
+  api.actions.amSubmitRate(false);
+  const dWithin = devText();
+  check(dWithin.indexOf("Approve rate card") >= 0,
+        "FM CH: approve offered on a within-ceiling card");
+  check(dWithin.indexOf("Raise to Central Admin") === -1,
+        "and raising is not offered on a within-ceiling card");
+  check(dWithin.indexOf("back to Area Manager") >= 0, "FM CH: reject offered");
+
+  api.actions.amSubmitRate(true);
+  const dAbove = devText();
+  check(dAbove.indexOf("Raise to Central Admin") >= 0,
+        "FM CH: raise offered on an above-ceiling card");
+  check(dAbove.indexOf("Approve rate card") === -1,
+        "and the Cluster Head cannot approve one");
+
+  api.actions.chRaise();
   const d3 = devText();
-  check(d3.indexOf("Approve as ZH") >= 0, "ZH approve offered once escalated");
-  check(d3.indexOf("Reject as ZH") >= 0, "ZH reject offered once escalated");
+  check(d3.indexOf("Central Admin") >= 0, "Central Admin group appears once raised");
+  check(d3.indexOf("Approve rate card") >= 0, "Central Admin approve offered");
+
+  api.actions.centralReject();
+  const d3b = devText();
+  check(d3b.indexOf("Area Manager revision") >= 0,
+        "the AM revision group appears after a rejection");
+  check(d3b.indexOf("Reprice within ceiling and resubmit") >= 0,
+        "and offers a reprice-and-resubmit");
+  api.actions.amReprice();
+  api.actions.chApprove();
 
   /* LM-only actors */
   api.actions.switchRole();
@@ -1837,7 +1902,8 @@ async function testCaptainHub() {
   api.actions.bgvSet("passed");
   click(doc, "bgv-continue");
   api.actions.chSetCategory("standalone");
-  api.actions.chApprove("combined");
+  api.actions.amSubmitRate(false);
+  api.actions.chApprove();
   click(doc, "ch-continue");
   doAgreements(doc, api);
   api.stopTimers();
@@ -2539,7 +2605,7 @@ async function testCartingDesign() {
   try {
     await testLM();
     await testFMCombined();
-    await testFMEscalation();
+    await testFMAboveCeiling();
     await testRoleIndependence();
     await testValidation();
     await testOtpFocusSurvivesCountdown();
