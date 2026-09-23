@@ -1,4 +1,4 @@
-# Figma export — complete
+# Figma export — page 3 being rebuilt
 
 **Figma file:** https://www.figma.com/design/fMILzWywpzbmqBTKIJwnXc
 (Valmo — FM Captain Self-Serve Onboarding (Prototype Mirror), Meesho org, in Drafts)
@@ -7,9 +7,14 @@
 |---|---|---|
 | `1 · New Captain onboarding` | 27 | complete (1.01 – 1.27) |
 | `2 · Existing Captain, new hub` | 16 | complete (2.01 – 2.16) |
-| `3 · Admin login flows` | 16 | complete (3.01 – 3.16) |
+| `3 · Admin login flows` | 22 | **rebuilding** — the AM's new carting-design step |
 
-59 screens, ~4,080 text layers, the Valmo logo placed on all 53 logo slots.
+Pages 1 and 2 are untouched by the carting-design change and stay as built.
+Page 3 grew from 16 screens to 22 and is being rebuilt from scratch: `gen.js`
+skips pages 1 and 2, and the first page-3 call clears the page before appending.
+
+After the last page-3 call, re-apply the logo to page 3 only — upload is not
+needed again, the hash is `869781bd37fe5d40d1fd1b7a7f1815c54a28d3f0`.
 
 ## What the file is
 

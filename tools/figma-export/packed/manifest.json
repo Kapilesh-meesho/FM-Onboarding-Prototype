@@ -269,7 +269,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 40310,
-    "packed": 6653
+    "packed": 6649
   },
   {
     "name": "2.08 Hub details · vehicle picker",
@@ -277,7 +277,7 @@
     "w": 1440,
     "h": 1074,
     "bytes": 54690,
-    "packed": 8353
+    "packed": 8349
   },
   {
     "name": "2.09 Hub details complete",
@@ -285,7 +285,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 41062,
-    "packed": 6680
+    "packed": 6676
   },
   {
     "name": "2.10 Hub submitted",
@@ -293,7 +293,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 38713,
-    "packed": 6386
+    "packed": 6382
   },
   {
     "name": "2.11 Cluster Head review · waiting",
@@ -301,7 +301,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 37642,
-    "packed": 5972
+    "packed": 5968
   },
   {
     "name": "2.12 Cluster Head review · approved",
@@ -309,7 +309,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 39364,
-    "packed": 6346
+    "packed": 6342
   },
   {
     "name": "2.13 Agreements",
@@ -317,7 +317,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 39167,
-    "packed": 6949
+    "packed": 6945
   },
   {
     "name": "2.14 Agreements accepted",
@@ -325,7 +325,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 39227,
-    "packed": 6926
+    "packed": 6922
   },
   {
     "name": "2.15 Activation",
@@ -333,7 +333,7 @@
     "w": 1440,
     "h": 1019,
     "bytes": 40842,
-    "packed": 6327
+    "packed": 6323
   },
   {
     "name": "2.16 Captain Hub · four hubs",
@@ -371,101 +371,149 @@
     "name": "3.04 AM · infra checklist",
     "file": "3-04-am-infra-checklist.json",
     "w": 1440,
-    "h": 1234,
-    "bytes": 52805,
-    "packed": 7750
+    "h": 1265,
+    "bytes": 53613,
+    "packed": 7859
   },
   {
     "name": "3.05 AM · infra checklist passed",
     "file": "3-05-am-infra-checklist-passed.json",
     "w": 1440,
-    "h": 1234,
-    "bytes": 54237,
-    "packed": 7839
+    "h": 1265,
+    "bytes": 55045,
+    "packed": 7948
   },
   {
-    "name": "3.06 AM · rate card",
-    "file": "3-06-am-rate-card.json",
+    "name": "3.06 AM · carting design",
+    "file": "3-06-am-carting-design.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 35163,
-    "packed": 6247
+    "bytes": 30865,
+    "packed": 5395
   },
   {
-    "name": "3.07 AM · rate card within ceiling",
-    "file": "3-07-am-rate-card-within-ceiling.json",
+    "name": "3.07 AM · carting design · invalid code",
+    "file": "3-07-am-carting-design-invalid-code.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 34552,
-    "packed": 5992
+    "bytes": 32163,
+    "packed": 5628
   },
   {
-    "name": "3.08 AM · rate card above ceiling",
-    "file": "3-08-am-rate-card-above-ceiling.json",
+    "name": "3.08 AM · carting design validated",
+    "file": "3-08-am-carting-design-validated.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 36043,
-    "packed": 6413
+    "bytes": 31614,
+    "packed": 5510
   },
   {
-    "name": "3.09 CH · my requests",
-    "file": "3-09-ch-my-requests.json",
+    "name": "3.09 AM · carting design sent",
+    "file": "3-09-am-carting-design-sent.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 32135,
+    "packed": 5610
+  },
+  {
+    "name": "3.10 AM · rate card",
+    "file": "3-10-am-rate-card.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 35171,
+    "packed": 6251
+  },
+  {
+    "name": "3.11 AM · rate card within ceiling",
+    "file": "3-11-am-rate-card-within-ceiling.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 34560,
+    "packed": 5996
+  },
+  {
+    "name": "3.12 AM · rate card above ceiling",
+    "file": "3-12-am-rate-card-above-ceiling.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 36048,
+    "packed": 6419
+  },
+  {
+    "name": "3.13 Central Admin · design approvals",
+    "file": "3-13-central-admin-design-approvals.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 26793,
+    "packed": 4278
+  },
+  {
+    "name": "3.14 Central Admin · design alignment",
+    "file": "3-14-central-admin-design-alignment.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 36391,
+    "packed": 6272
+  },
+  {
+    "name": "3.15 CH · my requests",
+    "file": "3-15-ch-my-requests.json",
     "w": 1440,
     "h": 1000,
     "bytes": 28524,
     "packed": 4637
   },
   {
-    "name": "3.10 CH · review within ceiling",
-    "file": "3-10-ch-review-within-ceiling.json",
+    "name": "3.16 CH · review within ceiling",
+    "file": "3-16-ch-review-within-ceiling.json",
     "w": 1440,
     "h": 1014,
     "bytes": 39672,
     "packed": 6526
   },
   {
-    "name": "3.11 CH · review above ceiling",
-    "file": "3-11-ch-review-above-ceiling.json",
+    "name": "3.17 CH · review above ceiling",
+    "file": "3-17-ch-review-above-ceiling.json",
     "w": 1440,
     "h": 1123,
     "bytes": 41542,
     "packed": 7012
   },
   {
-    "name": "3.12 ZH · pendency monitor",
-    "file": "3-12-zh-pendency-monitor.json",
+    "name": "3.18 ZH · pendency monitor",
+    "file": "3-18-zh-pendency-monitor.json",
     "w": 1440,
     "h": 1000,
     "bytes": 32621,
     "packed": 5304
   },
   {
-    "name": "3.13 ZH · CH pendency",
-    "file": "3-13-zh-ch-pendency.json",
+    "name": "3.19 ZH · CH pendency",
+    "file": "3-19-zh-ch-pendency.json",
     "w": 1440,
     "h": 1000,
     "bytes": 28530,
     "packed": 4640
   },
   {
-    "name": "3.14 ZH · request status",
-    "file": "3-14-zh-request-status.json",
+    "name": "3.20 ZH · request status",
+    "file": "3-20-zh-request-status.json",
     "w": 1440,
     "h": 1000,
     "bytes": 28869,
     "packed": 5066
   },
   {
-    "name": "3.15 Central Admin · queue",
-    "file": "3-15-central-admin-queue.json",
+    "name": "3.21 Central Admin · queue",
+    "file": "3-21-central-admin-queue.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 26009,
-    "packed": 4178
+    "bytes": 26781,
+    "packed": 4264
   },
   {
-    "name": "3.16 Central Admin · rate card approval",
-    "file": "3-16-central-admin-rate-card-approval.json",
+    "name": "3.22 Central Admin · rate card approval",
+    "file": "3-22-central-admin-rate-card-approval.json",
     "w": 1440,
     "h": 1000,
     "bytes": 29411,
