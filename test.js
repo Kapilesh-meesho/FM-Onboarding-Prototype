@@ -470,6 +470,23 @@ async function testFMCombined() {
   });
   check(rateTxt.indexOf("Touchpoint rate") >= 0, "and the touchpoint rate");
   check(rateTxt.indexOf("₹" + capCh.touchpoint) >= 0, "with its value");
+
+  /* --- the combined blurb describes the card, it does not blend it --- */
+  check(exists(doc, '[data-testid="combined-blurb"]'), "the combined blurb is shown");
+  const blurb = sel(doc, '[data-testid="combined-blurb"]').textContent;
+  check(blurb.indexOf("slab rate for your order volume plus the touchpoint rate") >= 0,
+        "it says slab rate plus touchpoint, on one payout line");
+  check(blurb.indexOf("on one payout line") >= 0, "and names the single payout line");
+  check(blurb.indexOf("blended") === -1, "no 'blended figure' claim");
+  check(blurb.indexOf("single per-shipment rate") === -1,
+        "and no single per-shipment rate that would contradict the slabs above");
+  check(!/₹\d/.test(blurb),
+        "the blurb quotes no figure of its own — the slabs and touchpoint are the only ones");
+  /* the legacy blended field must not reach the captain's screen */
+  api.helpers.R().ch.rate = 99.99;
+  api.render();
+  check(mainTxt(doc).indexOf("99.99") === -1,
+        "the legacy r.ch.rate is never displayed on the FM rate card");
   /* still no category or ceiling */
   ["Hub category","ceiling","Standalone"].forEach(w =>
     check(rateTxt.indexOf(w) === -1, "the slab card reveals no internals: " + w));

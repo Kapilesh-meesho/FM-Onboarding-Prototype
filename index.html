@@ -3830,27 +3830,24 @@ function captainRateRows(ch) {
     : "");
 }
 
-/* Rate card panel — FM only. Reads the ceiling from the AM-set hub category. */
+/* Rate card panel — FM only. The card the Area Manager authored: one row per
+   volume slab plus the touchpoint rate. Those are the only figures shown; there
+   is no blended per-shipment number, and nothing is read off the ceiling. */
 function rateCardPanel(r) {
   var cat = r.ch.category;
   if (!cat) return "";
   var meta = HUB_CATEGORIES[cat];
 
-  var booked = captainRateRows(r.ch);
-  var rows = booked || (
-    '<div class="row"><span class="k">Touchpoint rate</span>' +
-      '<span class="v">' + money(meta.tp) + '</span></div>' +
-    (r.ch.rate != null
-      ? '<div class="row"><span class="k">Proposed rate</span>' +
-        '<span class="v">' + money(r.ch.rate) + '</span></div>'
-      : ""));
+  var rows = captainRateRows(r.ch);
+  if (!rows) return "";                       // no card authored yet
 
   var modeBlock = "";
-  if (r.ch.rate != null) {
+  {
     if (r.ch.rateMode === "combined") {
-      modeBlock = '<div class="notice info"><b>Combined rate card</b>' +
-        'One blended figure for the hub: slab rate plus touchpoint, billed as a single ' +
-        'per-shipment rate of ' + money(r.ch.rate) + '.</div>';
+      modeBlock = '<div class="notice info" data-testid="combined-blurb">' +
+        '<b>Combined rate card</b>' +
+        'You are paid the slab rate for your order volume plus the touchpoint rate, ' +
+        'on one payout line.</div>';
     } else {
       var cap = indicativeCaptainSplit(r);
       modeBlock = '<div class="notice info"><b>Split rate card</b>' +
@@ -3869,10 +3866,8 @@ function rateCardPanel(r) {
     }
   }
 
-  return (booked
-    ? '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
-      'Approved rate card</p>'
-    : "") +
+  return '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
+      (r.ch.status === "approved" ? "Approved rate card" : "Proposed rate card") + '</p>' +
     '<div class="kv" style="margin-bottom:16px" data-testid="captain-rate-card">' + rows +
     '</div>' + modeBlock;
 }
