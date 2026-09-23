@@ -1318,7 +1318,7 @@ async function testHubFacilityInputs() {
         "exactly one row is the max");
   check(!rows.find(r => r.getAttribute("data-veh") === "8MT").classList.contains("inc"),
         "larger rows are not marked as included");
-  check(txt(doc).indexOf("13 smaller types also fit") >= 0,
+  check(txt(doc).indexOf("Also fits 13 smaller types") >= 0,
         "the footer states how many smaller types are covered");
   check(txt(doc).indexOf("assumed to fit") >= 0,
         "the hint spells out that smaller types are assumed to fit");
@@ -1410,8 +1410,8 @@ async function testHubFacilityInputs() {
         "summary shows the derived max vehicle size");
   check(body.indexOf("Smaller types also accommodated") >= 0,
         "summary states that smaller types are covered");
-  check(body.indexOf("13 of 23") >= 0,
-        "and how many of them there are");
+  check(body.indexOf("Also fits 13 smaller types") >= 0,
+        "and how many of them there are, framed the same way as on the picker");
 
   /* values survive a reopen after an AM rejection */
   click(doc, "hub-continue");
@@ -2740,6 +2740,103 @@ async function testCartingDesign() {
   win.close();
 }
 
+/* =========================================================================
+   20. Copy and seed-data consistency
+   ====================================================================== */
+
+async function testCopyConsistency() {
+  section("20. Copy and seed-data consistency");
+  const { win, doc, api } = await boot();
+
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  /* --- one framing for the vehicle count, picker and summary alike --- */
+  type(doc, "hub-address", "Plot 7, Bommasandra");
+  type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
+  type(doc, "hub-area", "4000");
+  type(doc, "hub-manpower", "12");
+  pickMaxVehicle(doc, "7MT_20FT");
+  const picker = txt(doc);
+  const m = picker.match(/Also fits (\d+) smaller types?/);
+  check(!!m, "the picker frames the count as 'Also fits N smaller types'");
+  check(picker.indexOf(" of 23") === -1, "and not as 'N of 23'");
+  click(doc, "hub-submit");
+  const summary = txt(doc);
+  check(summary.indexOf("Also fits " + m[1] + " smaller types") >= 0,
+        "the submitted summary uses the same framing and the same number");
+  check(summary.indexOf(" of 23") === -1, "the 'N of 23' framing is gone");
+  click(doc, "hub-continue");
+
+  api.actions.bgvSet("passed");
+  click(doc, "bgv-continue");
+  api.actions.chSetCategory("standalone");
+  api.actions.amSubmitRate(false);
+
+  /* --- the header follows the state --- */
+  check(txt(doc).indexOf("Cluster Head is reviewing your request") >= 0,
+        "while pending, the header says the Cluster Head is reviewing");
+  api.actions.chApprove();
+  check(txt(doc).indexOf("Your rate card is approved") >= 0,
+        "once approved, the header says the rate card is approved");
+  check(txt(doc).indexOf("Cluster Head is reviewing your request") === -1,
+        "and no longer claims it is still under review");
+
+  /* --- the approval date reads like the activation date --- */
+  check(/Approved on \d{2} \w+ \d{4}/.test(txt(doc)),
+        "the approval date is a day stamp like '23 Sept 2026'");
+  check(!/Approved on \w{3} \w{3} \d{2}/.test(txt(doc)),
+        "not a raw toDateString");
+
+  /* --- one default hub name in both places --- */
+  click(doc, "ch-continue");
+  doAgreements(doc, api);
+  api.stopTimers();
+  api.actions.finishActivation();
+  const shownName = txt(doc).match(/\d{6} Hub/);
+  check(!!shownName, "activation names the hub '<pincode> Hub'");
+  const hub = api.state.hubs.find(h => h.role === "FM");
+  eq(hub.name, shownName[0],
+     "and the hub Captain Hub lists carries exactly that name");
+  check(hub.name.indexOf("New Hub") === -1, "no separate 'New Hub' default");
+  win.close();
+
+  /* --- seeded admin data is internally consistent --- */
+  const b = await boot();
+  b.api.actions.openAdminRole("am");
+  const reqs = b.api.state.adminRequests;
+  const r19 = reqs.find(r => r.id === "OBD-78219");
+  check(r19.address.indexOf("Indiranagar") === -1,
+        "OBD-78219 no longer claims an Indiranagar address on a 560076 pincode");
+  check(r19.address.indexOf("BTM Layout") >= 0, "it sits in BTM Layout, which is 560076");
+  reqs.forEach(r => {
+    check(r.pincodesServing.indexOf(r.pincode) >= 0,
+          r.id + " serves its own pincode " + r.pincode);
+  });
+
+  /* --- hub type is honestly unset until the AM reaches the rate card --- */
+  const fresh = reqs.find(r => r.stage === "am" && !r.hubCategory);
+  check(!!fresh, "a request the AM has not priced yet exists");
+  b.api.actions.adminOpen(fresh.id);
+  b.api.actions.amStep("design");
+  b.api.actions.designField("fmsc", "SSY");
+  b.api.actions.designField("onboarding", "split");
+  b.api.actions.designValidate();
+  b.api.actions.designSend();
+  b.api.actions.adminSwitchRole();
+  clickSel(b.doc, '[data-aprole="central"]');
+  b.api.actions.adminTab("design");
+  b.api.actions.adminOpen(fresh.id);
+  check(txt(b.doc).indexOf("Not set yet") >= 0,
+        "the design alignment shows hub type as not set yet");
+  check(txt(b.doc).indexOf(fresh.pincode) >= 0,
+        "and the serving pincodes include the hub's own");
+
+  b.api.stopTimers();
+  b.win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -2764,6 +2861,7 @@ async function testCartingDesign() {
     await testCartingDesign();
     await testFMCaptainCopy();
     await testFMNoSplit();
+    await testCopyConsistency();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

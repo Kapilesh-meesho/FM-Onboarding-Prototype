@@ -1598,6 +1598,17 @@ function esc(s) {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
+/* Day stamps read the same everywhere: "23 Sept 2026", matching the format the
+   activation screen and the seeded hubs already use. */
+function fmtDay(d) {
+  return (d || new Date()).toLocaleDateString("en-IN",
+    { day:"2-digit", month:"short", year:"numeric" }).replace(/ /g, " ");
+}
+/* The name a brand new hub takes until it is renamed. Both the activation
+   screen and the hub it produces read it from here. */
+function defaultHubName(r) {
+  return ((r.pd && r.pd.selected) || r.hub.pincode || "New") + " Hub";
+}
 function money(n) {
   if (n == null) return "—";
   return "₹" + (Math.round(n * 100) / 100).toFixed(2);
@@ -1827,8 +1838,16 @@ var AP_STATUS = {
   sla_breach: { label:"SLA breach", tone:"red"  }
 };
 
+/* Pincodes a hub serves always start with its own, then the ones around it. */
+var NEARBY_PINCODES = ["560034","560102","560076","560038"];
+function servingPincodes(pin) {
+  var list = pin ? [pin] : [];
+  NEARBY_PINCODES.forEach(function (p) { if (list.indexOf(p) === -1) list.push(p); });
+  return list.slice(0, 3);
+}
+
 function apReq(o) {
-  return Object.assign({
+  var r = Object.assign({
     id:"", captain:"", phone:"+91 7004301290", hubAppId:"", address:"", pincode:"",
     // hub category is an Area Manager input; its benchmark ceiling is the
     // threshold a rate card has to stay within
@@ -1837,7 +1856,7 @@ function apReq(o) {
     // the 3-letter code the Area Manager is assigned when they open the infra check
     hubCode:"",
     city:"Bengaluru", state:"Karnataka", latLng:"12.9352, 77.6245",
-    pincodesServing:["560076","560034","560102"],
+    pincodesServing:null,          // filled below so it always leads with r.pincode
     /* FM carting design — the hub's mapping onto the sorting network. Sent to
        Central Admin for alignment while the AM carries on to the rate card. */
     design:{ fmsc:"", fmcds:"", onboarding:"", validated:false, sent:false,
@@ -1858,6 +1877,8 @@ function apReq(o) {
          rating:0, reason:"", notes:"", done:false },
     zh:{ decision:null, reason:"" }
   }, o || {});
+  if (!r.pincodesServing) r.pincodesServing = servingPincodes(r.pincode);
+  return r;
 }
 
 /* A request only reaches the Cluster Head by passing the Area Manager's infra
@@ -1883,7 +1904,7 @@ function seedAdminRequests() {
             address:"Unit 3, HSR Layout, Bengaluru", pincode:"560102",
             stage:"am", status:"sla_breach", sla:"5h overdue", slaTone:"warn" }),
     apAmReviewed(apReq({ id:"OBD-78219", hubCategory:"standalone", rate:{ payoutType:"Combined", slabs:[{from:"0",to:"500",rate:"4.50"},{from:"501",to:"",rate:"4.00"}], touchpoint:"5.00" }, captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
-            address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560076",
+            address:"Plot 14, 16th Main, BTM Layout, Bengaluru", pincode:"560076",
             stage:"ch", status:"pending", sla:"6h left", slaTone:"warn" })),
     apAmReviewed(apReq({ id:"OBD-78255", hubCategory:"mall", captain:"Rajesh Gupta", phone:"+91 88617 55092", hubAppId:"HUB-APP-90255",
             address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
@@ -3845,6 +3866,15 @@ function rateCardPanel(r) {
     '</div>' + modeBlock;
 }
 
+/* One line describing where the request actually is, so an approved request
+   does not keep saying the Cluster Head is reviewing it. */
+function chPhaseSub(r) {
+  if (r.ch.status === "approved") return "Your rate card is approved.";
+  if (r.ch.status === "central")  return "Your rate card is awaiting sign-off.";
+  if (r.ch.status === "revision") return "Your rate card is being revised.";
+  return "Cluster Head is reviewing your request.";
+}
+
 function phaseCH(r) {
   var ch = r.ch, fm = r.role === "FM", inner, side;
 
@@ -3878,7 +3908,7 @@ function phaseCH(r) {
         '<div class="row"><span class="k">Forward rate</span><span class="v">₹14.50</span></div>' +
         '<div class="row"><span class="k">Reverse rate</span><span class="v">₹8.00</span></div></div>') +
       '<div class="tl">' +
-        tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Approved on " + new Date().toDateString()) +
+        tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Approved on " + fmtDay(new Date())) +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
         '<button class="btn btn-primary" id="ch-continue">' + nxtLabel + '</button></div>';
@@ -3933,10 +3963,10 @@ function phaseCH(r) {
   }
 
   return {
-    left: phaseHeader(r, "Cluster Head review", "Cluster Head is reviewing your request.") +
+    left: phaseHeader(r, "Cluster Head review", chPhaseSub(r)) +
           cardWrap("Cluster Head review",
                    fm ? "Rate card review."
-                      : "Cluster Head is reviewing your request.", inner),
+                      : chPhaseSub(r), inner),
     side: side
   };
 }
@@ -4022,10 +4052,15 @@ function vehSummaryHtml(max) {
          '<span class="ms-more">' + vehicleTonnage(max) + ' MT</span>';
 }
 
+/* The same framing the submitted summary uses, so the count does not change
+   shape between picking a vehicle and reading it back. */
 function vehCountText(max) {
   var n = smallerThan(max).length;
   if (!max) return VEHICLE_TYPES.length + " types, smallest first";
-  return n ? n + " smaller " + (n === 1 ? "type" : "types") + " also fit" : "Smallest type";
+  return n ? alsoFitsText(n) : "Smallest type";
+}
+function alsoFitsText(n) {
+  return "Also fits " + n + " smaller " + (n === 1 ? "type" : "types");
 }
 
 function vehHintText(max, err) {
@@ -4138,7 +4173,7 @@ function hubSpecRows(h) {
             : '') +
          '<div class="row"><span class="k">Smaller types also accommodated</span>' +
            '<span class="v' + (maxV ? '' : ' mute') + '">' +
-           (maxV ? alsoFits + " of " + (VEHICLE_TYPES.length - 1) : "—") + '</span></div>';
+           (maxV ? alsoFitsText(alsoFits) : "—") + '</span></div>';
 }
 
 function phaseHUB(r) {
@@ -4394,7 +4429,7 @@ function phaseACT(r) {
         '<div class="row"><span class="k">Hub code</span><span class="v">' +
           esc(r.hub.hubCode || "—") + '</span></div>' +
         '<div class="row"><span class="k">Hub name</span><span class="v">' +
-          esc((r.pd.selected || "") + " Hub") + '</span></div>' +
+          esc(defaultHubName(r)) + '</span></div>' +
         (fm
           ? '<div class="row"><span class="k">Partner ID</span><span class="v">' +
             esc(a.partnerId || "—") + '</span></div>'
@@ -5047,7 +5082,7 @@ var A = {
     }
     var gst = r.newHubGst || { registered: !!r.kyc.gst.registered, gstin: r.kyc.gst.gstin || "" };
     var hub = makeHub({
-      code: r.hub.hubCode, name: (r.pd.selected || "New") + " Hub", role: r.role,
+      code: r.hub.hubCode, name: defaultHubName(r), role: r.role,
       address: r.hub.address, pincode: r.hub.pincode, city: r.hub.city,
       status: "active", gst: gst,
       areaSqft: r.hub.areaSqft, manpower: r.hub.manpower,
