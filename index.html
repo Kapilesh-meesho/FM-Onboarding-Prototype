@@ -2570,9 +2570,9 @@ function apContext(r) {
         '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
           '<span class="st green">KYC verified</span><span class="st green">BGV pass</span></div>' +
       '</div>' +
-      '<div style="display:flex;gap:10px;align-items:center;margin-top:14px;' +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;' +
         'background:var(--sum-bg);border:1px solid var(--line);border-radius:10px;padding:12px">' +
-        '<span style="flex:1;min-width:0"><b class="nm">' + esc(r.captain) + '</b>' +
+        '<span style="flex:1 1 120px;min-width:120px"><b class="nm">' + esc(r.captain) + '</b>' +
         '<span style="display:block;font-size:11px;color:var(--muted)">Full phone visible on detail page</span></span>' +
         '<a class="btn btn-primary" style="padding:8px 12px;font-size:12px;text-decoration:none" ' +
           'href="tel:' + esc(r.phone) + '">Call ' + esc(r.phone) + '</a>' +
