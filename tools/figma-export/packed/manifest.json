@@ -29,7 +29,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 38430,
-    "packed": 6550
+    "packed": 6546
   },
   {
     "name": "1.05 Personal details filled",
@@ -37,7 +37,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 41093,
-    "packed": 6878
+    "packed": 6874
   },
   {
     "name": "1.06 KYC · Aadhaar",
@@ -45,7 +45,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 32051,
-    "packed": 5286
+    "packed": 5282
   },
   {
     "name": "1.07 KYC · Aadhaar OTP",
@@ -53,7 +53,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 34649,
-    "packed": 5702
+    "packed": 5698
   },
   {
     "name": "1.08 KYC · Aadhaar verified",
@@ -61,7 +61,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 34979,
-    "packed": 5751
+    "packed": 5747
   },
   {
     "name": "1.09 KYC · PAN",
@@ -69,7 +69,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 33475,
-    "packed": 5471
+    "packed": 5467
   },
   {
     "name": "1.10 KYC · PAN verified",
@@ -77,7 +77,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 33668,
-    "packed": 5477
+    "packed": 5473
   },
   {
     "name": "1.11 KYC · Bank account",
@@ -85,7 +85,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 34999,
-    "packed": 5758
+    "packed": 5754
   },
   {
     "name": "1.12 KYC · Bank verified",
@@ -93,7 +93,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 34440,
-    "packed": 5593
+    "packed": 5589
   },
   {
     "name": "1.13 KYC · GST status",
@@ -101,7 +101,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 33552,
-    "packed": 5420
+    "packed": 5416
   },
   {
     "name": "1.14 KYC · GSTIN entered",
@@ -109,7 +109,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 35252,
-    "packed": 5705
+    "packed": 5701
   },
   {
     "name": "1.15 KYC · MSME optional",
@@ -117,7 +117,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 38538,
-    "packed": 6258
+    "packed": 6254
   },
   {
     "name": "1.16 KYC complete",
@@ -125,7 +125,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 36658,
-    "packed": 5907
+    "packed": 5903
   },
   {
     "name": "1.17 Hub details",
@@ -133,7 +133,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 41510,
-    "packed": 6863
+    "packed": 6859
   },
   {
     "name": "1.18 Hub details · vehicle picker",
@@ -141,7 +141,7 @@
     "w": 1440,
     "h": 1074,
     "bytes": 55914,
-    "packed": 8568
+    "packed": 8564
   },
   {
     "name": "1.19 Hub details complete",
@@ -149,15 +149,15 @@
     "w": 1440,
     "h": 1000,
     "bytes": 42289,
-    "packed": 6899
+    "packed": 6895
   },
   {
     "name": "1.20 Hub submitted",
     "file": "1-20-hub-submitted.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39923,
-    "packed": 6595
+    "bytes": 39942,
+    "packed": 6614
   },
   {
     "name": "1.21 Background verification",
@@ -165,7 +165,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 34408,
-    "packed": 5549
+    "packed": 5545
   },
   {
     "name": "1.22 Background verification passed",
@@ -173,7 +173,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 33564,
-    "packed": 5414
+    "packed": 5410
   },
   {
     "name": "1.23 Cluster Head review · waiting",
@@ -181,39 +181,55 @@
     "w": 1440,
     "h": 1000,
     "bytes": 37642,
-    "packed": 5972
+    "packed": 5968
   },
   {
-    "name": "1.24 Cluster Head review · approved",
-    "file": "1-24-cluster-head-review-approved.json",
+    "name": "1.24 Cluster Head review · pending sign-off",
+    "file": "1-24-cluster-head-review-pending-sign-off.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39364,
-    "packed": 6346
+    "bytes": 41602,
+    "packed": 6575
   },
   {
-    "name": "1.25 Agreements",
-    "file": "1-25-agreements.json",
+    "name": "1.25 Cluster Head review · in revision",
+    "file": "1-25-cluster-head-review-in-revision.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39167,
-    "packed": 6949
+    "bytes": 36023,
+    "packed": 5657
   },
   {
-    "name": "1.26 Agreements accepted",
-    "file": "1-26-agreements-accepted.json",
+    "name": "1.26 Cluster Head review · approved",
+    "file": "1-26-cluster-head-review-approved.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39227,
-    "packed": 6926
+    "bytes": 39336,
+    "packed": 6312
   },
   {
-    "name": "1.27 Activation",
-    "file": "1-27-activation.json",
+    "name": "1.27 Agreements",
+    "file": "1-27-agreements.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39106,
+    "packed": 6868
+  },
+  {
+    "name": "1.28 Agreements accepted",
+    "file": "1-28-agreements-accepted.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 39166,
+    "packed": 6845
+  },
+  {
+    "name": "1.29 Activation",
+    "file": "1-29-activation.json",
     "w": 1440,
     "h": 1019,
     "bytes": 40842,
-    "packed": 6327
+    "packed": 6323
   },
   {
     "name": "2.01 Login switch · existing captain",
@@ -292,8 +308,8 @@
     "file": "2-10-hub-submitted.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 38713,
-    "packed": 6382
+    "bytes": 38732,
+    "packed": 6401
   },
   {
     "name": "2.11 Cluster Head review · waiting",
@@ -308,24 +324,24 @@
     "file": "2-12-cluster-head-review-approved.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39364,
-    "packed": 6342
+    "bytes": 39336,
+    "packed": 6312
   },
   {
     "name": "2.13 Agreements",
     "file": "2-13-agreements.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39167,
-    "packed": 6945
+    "bytes": 39106,
+    "packed": 6868
   },
   {
     "name": "2.14 Agreements accepted",
     "file": "2-14-agreements-accepted.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39227,
-    "packed": 6922
+    "bytes": 39166,
+    "packed": 6845
   },
   {
     "name": "2.15 Activation",
@@ -453,7 +469,7 @@
     "w": 1440,
     "h": 1000,
     "bytes": 36391,
-    "packed": 6251
+    "packed": 6255
   },
   {
     "name": "3.15 CH · my requests",
@@ -468,8 +484,8 @@
     "file": "3-16-ch-review-within-ceiling.json",
     "w": 1440,
     "h": 1014,
-    "bytes": 39668,
-    "packed": 6515
+    "bytes": 39667,
+    "packed": 6514
   },
   {
     "name": "3.17 CH · review above ceiling",
@@ -500,8 +516,8 @@
     "file": "3-20-zh-request-status.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 28865,
-    "packed": 5055
+    "bytes": 28864,
+    "packed": 5054
   },
   {
     "name": "3.21 Central Admin · queue",

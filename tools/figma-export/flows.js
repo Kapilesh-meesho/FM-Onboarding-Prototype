@@ -27,10 +27,14 @@ module.exports = [
       ["1.21 Background verification", `click("hub-continue");`],
       ["1.22 Background verification passed", `api.actions.bgvSet("passed");`],
       ["1.23 Cluster Head review · waiting", `click("bgv-continue");`],
-      ["1.24 Cluster Head review · approved", `api.actions.chSetCategory("standalone"); api.actions.chApprove("combined");`],
-      ["1.25 Agreements",            `click("ch-continue");`],
-      ["1.26 Agreements accepted",   `setCheck("ag-rate",true); api.actions.markAgreementRead(); setCheck("ag-service",true);`],
-      ["1.27 Activation",            `click("ag-activate");`],
+      /* The Area Manager prices above the ceiling, so the Cluster Head cannot
+         settle it: raise → Central Admin rejects → AM reprices → approved. */
+      ["1.24 Cluster Head review · pending sign-off", `api.actions.chSetCategory("standalone"); api.actions.amSubmitRate(true); api.actions.chRaise();`],
+      ["1.25 Cluster Head review · in revision", `api.actions.centralReject();`],
+      ["1.26 Cluster Head review · approved", `api.actions.amReprice(); api.actions.chApprove();`],
+      ["1.27 Agreements",            `click("ch-continue");`],
+      ["1.28 Agreements accepted",   `setCheck("ag-rate",true); api.actions.markAgreementRead(); setCheck("ag-service",true);`],
+      ["1.29 Activation",            `click("ag-activate");`],
     ],
   },
   {
@@ -47,7 +51,7 @@ module.exports = [
       ["2.09 Hub details complete",  `clickSel('#veh-list [data-veh="7MT_20FT"]');`],
       ["2.10 Hub submitted",         `click("hub-submit");`],
       ["2.11 Cluster Head review · waiting", `click("hub-continue");`],
-      ["2.12 Cluster Head review · approved", `api.actions.chSetCategory("standalone"); api.actions.chApprove("combined");`],
+      ["2.12 Cluster Head review · approved", `api.actions.chSetCategory("standalone"); api.actions.amSubmitRate(false); api.actions.chApprove();`],
       ["2.13 Agreements",            `click("ch-continue");`],
       ["2.14 Agreements accepted",   `setCheck("ag-rate",true); api.actions.markAgreementRead(); setCheck("ag-service",true);`],
       ["2.15 Activation",            `click("ag-activate");`],
