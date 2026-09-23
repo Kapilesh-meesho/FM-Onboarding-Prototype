@@ -1602,7 +1602,7 @@ function esc(s) {
    activation screen and the seeded hubs already use. */
 function fmtDay(d) {
   return (d || new Date()).toLocaleDateString("en-IN",
-    { day:"2-digit", month:"short", year:"numeric" }).replace(/ /g, " ");
+    { day:"2-digit", month:"short", year:"numeric" });
 }
 /* The name a brand new hub takes until it is renamed. Both the activation
    screen and the hub it produces read it from here. */

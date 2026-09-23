@@ -95,9 +95,9 @@ deliberate product decisions, not gaps in the build.
 
 **1. No security deposit phase.** FM hubs don't take one.
 
-**2. No standalone Area Manager phase.** The AM still does the work — hub category, hub
-design, lat-long, mapping — but it happens in a separate system outside the captain-facing
-flow, so it isn't a step the captain waits on as its own screen.
+**2. No standalone Area Manager phase in the captain flow.** The AM does the work — infra
+check, carting design, hub type and the rate card — on their own console in the admin panel,
+which this prototype builds. It is not a step the captain waits on as its own screen.
 
 ### KYC is one record at a time
 
@@ -127,14 +127,16 @@ carried over when adding a second hub, since there may be nothing to carry.
 
 **4. Hub category and its rate ceiling are never shown to an FM captain.** Not at Cluster
 Head review, not in the application summary, not in the rail's phase label, not on
-agreements — and not even the word *ceiling* on an escalated rate. The captain sees the
-touchpoint rate and the proposed rate; the classification that produced them, and the
-threshold it sets, stay internal.
+agreements — and not the words *ceiling*, *benchmark* or *hub category* anywhere in the FM
+captain flow, which a test sweeps every screen to enforce. The captain sees the slab bands
+and the touchpoint rate; the classification that produced them, and the threshold it sets,
+stay internal.
 
-The mechanics are unchanged underneath: the category is still an Area Manager input, it
-still determines the benchmark ceiling, and a rate above the ceiling still escalates — to
-the Cluster Head, and from there to Central Admin. Only the narration is gone. An escalated
-request tells the captain the rate *needs sign-off*, not why.
+The same applies to the desks. A card raised above ceiling tells the captain only that it
+*needs one more sign-off*, and does not name the desk deciding it. A rejection at either
+desk tells the captain the Area Manager is revising the card — no reason, no desk, and not
+the word *rejected*. A Central Admin approval reads simply *your request and rate card were
+approved*. The Cluster Head stays the captain's only named contact throughout.
 
 **5. The rate card is approved against a benchmark ceiling** determined by that hub
 category:
@@ -152,25 +154,27 @@ is paid per touchpoint rather than per slab. A card is above threshold if *any* 
 exceeds the slab ceiling **or** the touchpoint rate exceeds the touchpoint ceiling — either
 one alone is enough to turn the submission into an approval request.
 
-A rate **within** the ceiling clears at Cluster Head. A rate **above** it the Cluster Head
-cannot settle at all — it goes to **Central Admin**. Neither case is annotated on the
-captain's screen: the rate is shown as a plain figure, because the ceiling it is being
-measured against is not something the captain is shown.
+The chain, on both the captain side and the admin panel:
 
-The ceiling table above describes internal behaviour and the dev panel, not anything the
+- The **Area Manager** sets the hub type and authors the rate card — slabs plus one
+  touchpoint rate.
+- **Within both ceilings**, the **Cluster Head** approves it.
+- **Above either ceiling**, the Cluster Head cannot settle it and raises it to **Central
+  Admin**, which approves or rejects.
+- A rejection at either desk sends the card **back to the Area Manager** to revise. It does
+  not go to the captain.
+- The **Zonal Head approves nothing.** ZH is monitor-only.
+
+Neither case is annotated on the captain's screen: the card is shown as plain figures,
+because the ceiling it is measured against is not something the captain is shown. The
+ceiling table above describes internal behaviour and the dev panel, not anything the
 captain reads.
 
-Two rate card modes:
-
-- **Combined** — one blended *slab rate + touchpoint* figure for the hub.
-- **Split** — the pilot gets slab rate + touchpoint as its own line; the captain gets the
-  slab rate net of the pilot's per-shipment cut.
-
-> ⚠️ **The captain-side split formula is not confirmed.** It is rendered in the UI with an
-> explicit *"indicative — formula being confirmed"* caveat and is deliberately **not**
-> implemented as a hardened calculation: it uses a visible placeholder cut, doesn't gate
-> anything downstream, and carries copy telling the reader not to quote it to a partner.
-> Swap `indicativeCaptainSplit()` for the real formula once payouts confirm it.
+**Combined is the only payout type.** The captain is paid the slab rate for their order
+volume plus the touchpoint rate, on one payout line — which is what the blurb under the
+card says. There is no blended per-shipment figure, and no Split mode: the admin panel's
+payout select offers *Split (not available yet)* disabled, and nothing in the captain flow
+offers it at all.
 
 **6. Hub details submission does not generate a hub code for FM.** It confirms submission
 and tells the captain the code is finalised later. (LM still mints its hub code at submit.)
@@ -298,8 +302,8 @@ them, but they are explicitly marked out of scope rather than faked.
 does not re-ask for them. The handoff creates a fresh onboarding draft for the chosen role,
 copies the captain-level record into it (personal details, Aadhaar, PAN, bank, background
 verification) and marks those phases complete, applies the GST choice, and drops the captain
-into the same onboarding flow — same rail, same dev panel, same Cluster Head / Area Manager
-/ Zonal Head logic — starting at **hub details**, the first phase that is actually about
+into the same onboarding flow — same rail, same dev panel, same Area Manager / Cluster Head
+/ Central Admin logic — starting at **hub details**, the first phase that is actually about
 this hub. Carried-over phases are skipped rather than re-walked, so the captain is not shown
 a background check they have already passed. On activation the finished hub joins My Hubs.
 
@@ -321,9 +325,9 @@ the panel picker from `panel-select`, with four consoles:
 | Panel | |
 |---|---|
 | **Area Manager** | Infra hard-gate checklist and VLS field pre-check |
-| **Cluster Head** | Interview, hub type, rate card, approve / reject / escalate |
-| **Zonal Head** | Above-benchmark rate cards escalated by Cluster Heads |
-| **FM Central Admin** | National view of AM, CH and ZH requests, plus user mapping |
+| **Cluster Head** | Interview and the AM's rate card — approve within ceiling, raise above it, or send back |
+| **Zonal Head** | Monitoring only — AM and CH pendency. Approves nothing |
+| **FM Central Admin** | Design alignment and above-ceiling rate cards, plus user mapping |
 
 Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
 SLA chip — over a request table with search and status filters, and stat tiles. Each row
@@ -468,16 +472,16 @@ the picker is described accordingly.
 
 **Not built, as scoped:** the `geo-bind-am` / `geo-bind-ch` / `geo-bind-zh` binding screens.
 
-The designs are LM's and are implemented as-is apart from the security-deposit removal and
-the FM naming — FM-specific changes come later.
+The designs are LM's, implemented with the security deposit removed, FM naming throughout,
+and the FM approval chain in place of LM's.
 
 ## Why the dev panel exists
 
 There is a floating **⚙ Simulate backend** panel, bottom-right, collapsible.
 
 Onboarding is not a single-actor flow. Half the state transitions belong to people the
-captain never sees: a Cluster Head approving a rate card, an Area Manager classifying a hub
-or failing a facility check, a Zonal Head ruling on an above-benchmark rate, a payment
+captain never sees: an Area Manager pricing a hub or failing a facility check, a Cluster
+Head approving a rate card, Central Admin ruling on one that is above ceiling, a payment
 gateway timing out. Without something standing in for them, most of this prototype is
 simply unreachable — you would get as far as "Cluster Head review in progress" and stop.
 
@@ -487,8 +491,10 @@ The panel is contextual to the current phase and exposes exactly those actors:
 |---|---|
 | Background verification | mark passed / mark failed |
 | Cluster Head (LM) | approve / reject |
-| Cluster Head (FM) | set hub category (one button per category), then approve combined / approve split / submit above benchmark → escalate to ZH / reject |
-| Zonal Head (FM, once escalated) | approve as ZH / reject as ZH |
+| Area Manager (FM) | pick hub type (one button per type), then submit rate card within ceiling / above ceiling |
+| Cluster Head (FM) | approve rate card (within ceiling only) / raise to Central Admin (above ceiling only) / reject → back to Area Manager |
+| Central Admin (FM, once raised) | approve rate card / reject → back to Area Manager |
+| Area Manager revision (FM, after a rejection) | reprice within ceiling and resubmit |
 | Security deposit (LM only) | force success / failure / quote expired |
 | Area Manager (LM only) | approve / reject (two-strike counter shown) |
 | Agreements | mark agreement scrolled to end |
@@ -497,8 +503,9 @@ The panel is contextual to the current phase and exposes exactly those actors:
 | Captain Hub · bank change | penny-drop succeeded / failed |
 | Always | reset entire demo |
 
-Every reject path is reachable and routes the captain back to the right earlier phase to
-fix and resubmit.
+Every reject path is reachable. For LM that routes the captain back to the right earlier
+phase to fix and resubmit. For FM the rate card is the Area Manager's work, so a rejection
+at either desk routes it back to the Area Manager, never to the captain.
 
 ### A note on the admin screens
 
@@ -523,14 +530,17 @@ build from.
 npm install && npm test
 ```
 
-**876 assertions across 17 groups:**
+**1055 assertions across 20 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
-2. **FM Captain** — 7 phases, combined mode within benchmark; asserts no SD phase, no AM
-   phase, mandatory GST, MSME required, no cheque upload, no hub code at submit, Partner ID
-   instead of vendor ID, hub code issued at activation
-3. **FM escalation** — split mode, above benchmark, the caveat rendering and the captain's
-   reject/resubmit path
+2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
+   CH; asserts no SD phase, no AM phase, mandatory GST, MSME optional and not gating, no
+   cheque upload, no hub code at submit, Partner ID instead of vendor ID, hub code issued at
+   activation, and the Combined blurb quoting no figure of its own
+3. **FM above ceiling** — the AM prices over the ceiling, the CH cannot settle it and raises
+   it, Central Admin rejects, the card goes back to the AM, is repriced and approved; plus a
+   CH rejection routing to the AM rather than the captain, and a Central Admin approval that
+   names no desk
 4. **Role independence** — LM parked mid-flow is byte-identical after a full FM run; both
    subtrees round-trip through localStorage; resume lands on the right phase
 5. **Validation** — pincode format, duplicate, max-5, PAN, IFSC, GSTIN, map link, hub
@@ -593,6 +603,17 @@ npm install && npm test
    Send Design for Approval, and an edit withdrawing it; the rate card staying closed until
    the design is sent; Central Admin's design queue, all eleven design-alignment fields,
    a mapping correction and *Approve Design*; and the Area Manager seeing the result
+18. **FM captain copy** — a sweep over every FM screen, from the role picker through the
+   raise, reject, revise and approve path to activation, asserting no rendered captain text
+   contains *Zonal Head*, *hub category*, *ceiling* or *benchmark*; plus the rewritten
+   service-agreement clause and rate card checkbox
+19. **No Split** — nothing in the FM flow, the dev panel or the helper surface offers a
+   Split payout, even when stale state carries a split mode
+20. **Copy and seed-data consistency** — one framing for the vehicle count on the picker
+   and the summary; the phase header following the state rather than always saying the
+   Cluster Head is reviewing; the approval date as a day stamp; one default hub name across
+   activation and Captain Hub; and seeded requests whose address matches their pincode and
+   whose serving pincodes include their own
 
 Three notes on how the tests drive the app:
 
