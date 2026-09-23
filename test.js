@@ -2464,6 +2464,72 @@ async function testCeilingEscalation() {
 const apiTpFlagged = (doc) => !!doc.querySelector('[data-testid="am-tp"].over');
 
 /* =========================================================================
+   18. FM captain copy — nothing internal leaks through
+   ====================================================================== */
+
+/* Words the FM captain must never be shown. The hub category, the ceiling it
+   drives and every desk above the Cluster Head are internal (README decision 4). */
+const FM_FORBIDDEN = ["Zonal Head", "hub category", "Hub category",
+                      "ceiling", "Ceiling", "benchmark", "Benchmark"];
+
+function scanFM(doc, where) {
+  const seen = txt(doc);
+  FM_FORBIDDEN.forEach(w =>
+    check(seen.indexOf(w) === -1, where + ": no \"" + w + "\""));
+}
+
+async function testFMCaptainCopy() {
+  section("18. FM captain copy — nothing internal leaks");
+  const { win, doc, api } = await boot();
+
+  login(doc);
+  pickRole(doc, "FM");
+  scanFM(doc, "role picker");
+  doPersonalDetails(doc);
+  scanFM(doc, "personal details");
+  doKyc(doc, "FM");
+  scanFM(doc, "KYC");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  scanFM(doc, "hub details");
+  click(doc, "hub-continue");
+  scanFM(doc, "hub submitted");
+  api.actions.bgvSet("passed");
+  scanFM(doc, "background verification");
+  click(doc, "bgv-continue");
+  scanFM(doc, "Cluster Head review, awaiting hub type");
+
+  api.actions.chSetCategory("mall");
+  scanFM(doc, "Cluster Head review, hub type set");
+  api.actions.amSubmitRate(true);
+  scanFM(doc, "rate card submitted");
+  api.actions.chRaise();
+  scanFM(doc, "pending sign-off");
+  api.actions.centralReject();
+  scanFM(doc, "in revision");
+  api.actions.amReprice();
+  api.actions.chApprove();
+  scanFM(doc, "approved");
+
+  click(doc, "ch-continue");
+  scanFM(doc, "agreements");
+  /* the agreement text itself, which the captain scrolls through in full */
+  check(txt(doc).indexOf("Rate card revisions follow Valmo\u2019s internal approval process") >= 0,
+        "the service agreement points at an internal process, naming no desk");
+  check(txt(doc).indexOf("Rate card values are set by your Area Manager") >= 0,
+        "the rate card checkbox credits the Area Manager");
+  check(txt(doc).indexOf("captured during Cluster Head review") === -1,
+        "and no longer says the Cluster Head captured the values");
+
+  doAgreements(doc, api);
+  scanFM(doc, "activation");
+  api.stopTimers();
+  api.actions.finishActivation();
+  scanFM(doc, "activated");
+
+  win.close();
+}
+
+/* =========================================================================
    14. FM Carting Design Input — hub code, validation, and design alignment
    ====================================================================== */
 
@@ -2620,6 +2686,7 @@ async function testCartingDesign() {
     await testAdminPanel();
     await testCeilingEscalation();
     await testCartingDesign();
+    await testFMCaptainCopy();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

@@ -4379,8 +4379,7 @@ function phaseAG(r) {
         'operating windows.</p>' +
       '<p>You agree that shipment handling, scanning and handover follow the standard operating ' +
         'procedure issued to you at activation, and that deviations may affect payouts.</p>' +
-      '<p>Rate card revisions follow the approval path defined for your hub category. Revisions ' +
-        'beyond the agreed rate require Zonal Head approval.</p>' +
+      '<p>Rate card revisions follow Valmo&rsquo;s internal approval process.</p>' +
       '<p>Either party may terminate with 30 days written notice. ' +
         (fm ? "" : "Security deposits are refunded on exit after reconciliation. ") +
         'Outstanding dues are settled against the final invoice.</p>' +
@@ -4391,7 +4390,8 @@ function phaseAG(r) {
     '<div class="check-row">' +
       '<input type="checkbox" id="ag-rate"' + (ag.rateAccepted ? ' checked' : '') + '>' +
       '<div class="cl"><b>I accept the rate card.</b>' +
-        '<span>Rate card values are captured during Cluster Head review.</span></div></div>' +
+        '<span>Rate card values are set by your Area Manager and approved before ' +
+          'agreements.</span></div></div>' +
 
     '<div class="check-row' + (ag.serviceRead ? '' : ' off') + '">' +
       '<input type="checkbox" id="ag-service"' + (ag.serviceAccepted ? ' checked' : '') +
