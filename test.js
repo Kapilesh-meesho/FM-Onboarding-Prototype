@@ -1896,8 +1896,12 @@ async function testCaptainHub() {
   click(doc, "hub-add");                       // reopen HB-07 after the checks above
   api.actions.addHubRole("LM");
   api.actions.addHubChoice("existing");
-  const hubsBefore = api.state.hubs.length;
+  /* a hub mid-onboarding is listed as in progress until it activates */
+  const settled = () => api.state.hubs.filter(h => h.status !== "in_progress").length;
+  const inFlight = () => api.state.hubs.filter(h => h.status === "in_progress");
+  const hubsBefore = settled();
   click(doc, "addhub-go");
+  eq(inFlight().length, 1, "starting a hub lists it as in progress (one per role)");
   eq(api.state.screen, "flow", "Add new hub hands off to the onboarding flow");
   eq(api.state.activeRole, "LM", "into the role chosen for the new hub");
   eq(api.helpers.phaseId(), "hub", "starting at hub details, the first hub-specific phase");
@@ -1930,7 +1934,8 @@ async function testCaptainHub() {
   api.stopTimers();
   api.actions.finishActivation();
 
-  eq(api.state.hubs.length, hubsBefore + 1, "the finished hub is added to My Hubs");
+  eq(settled(), hubsBefore + 1, "the finished hub is added to My Hubs");
+  eq(inFlight().length, 0, "replacing its in-progress entry");
   const added = api.state.hubs[api.state.hubs.length - 1];
   check(!!added.code, "the new hub has a hub code (" + added.code + ")");
   eq(added.role, "LM", "with the role it was created for");
@@ -3068,6 +3073,234 @@ async function testMapPin() {
   win.close();
 }
 
+/* =========================================================================
+   23. API failures — the reason, and resuming from the same step
+   ====================================================================== */
+
+async function testApiFailures() {
+  section("23. API failures — reason shown, resume from the same step");
+  const { win, doc, api } = await boot();
+  const A = api.actions, H = api.helpers, C = api.config;
+  const failBox = (d = doc) => sel(d, '[data-testid="api-fail"]');
+  const failText = (d = doc) => (failBox(d) ? failBox(d).textContent : "");
+
+  login(doc);
+  pickRole(doc, "FM");
+
+  /* --- personal details: the email code --- */
+  type(doc, "pd-name", "Karan Verma");
+  type(doc, "pd-email", "karan.verma@gmail.com");
+  check(devText(doc).indexOf("Fail next email code · times out (504)") >= 0,
+        "the dev panel offers an email failure on personal details");
+  devClick(doc, "fail:email:timeout");
+  check(devText(doc).indexOf("Armed · Fail next email code") >= 0, "and shows it armed");
+  click(doc, "pd-verify-email");
+  check(!!failBox(), "a failed email code shows a failure notice");
+  check(failText().indexOf("Email verification didn’t go through") >= 0, "naming what failed");
+  check(failText().indexOf(C.API_FAIL.email.timeout) >= 0, "with the service’s reason");
+  check(failText().indexOf(C.FAIL_SAVED) >= 0, "and that nothing entered is lost");
+  check(/^Error 504 · Ref EMAIL-504-\d{5} · \d{1,2} \w+ 20\d\d, /.test(
+          sel(doc, '[data-testid="api-fail-ref"]').textContent),
+        "with an error code, a reference and a time for Support");
+  check(!exists(doc, "#pd-email-otp"), "no code box opens");
+  eq($(doc, "pd-email").value, "karan.verma@gmail.com", "the email stays filled in");
+  eq($(doc, "pd-verify-email").textContent, "Resume", "its button becomes Resume");
+  check(devText(doc).indexOf("Armed ·") === -1, "the armed failure is spent on that one call");
+  click(doc, "pd-verify-email");
+  check(!failBox(), "resuming clears the notice");
+  check(exists(doc, "#pd-email-otp"), "and sends the code");
+  type(doc, "pd-email-otp", "000000");
+  click(doc, "pd-email-otp-go");
+  click(doc, "pd-continue");
+  eq(H.phaseId(), "kyc", "personal details completes after the resume");
+
+  /* --- Aadhaar: fails at the OTP send, then at the DigiLocker fetch --- */
+  check(devText(doc).indexOf("Fail next Aadhaar check · service down (503)") >= 0,
+        "on each KYC card the dev panel offers that card’s failures");
+  check(devText(doc).indexOf("Fail next PAN check") === -1, "and only that card’s");
+  A.armFail("aadhaar", "timeout");
+  type(doc, "kyc-aadhaar", "123412341234");
+  click(doc, "kyc-aadhaar-go");
+  check(failText().indexOf("Aadhaar verification didn’t go through") >= 0 &&
+        failText().indexOf(C.API_FAIL.aadhaar.timeout) >= 0, "Aadhaar: the DigiLocker timeout is explained");
+  eq($(doc, "kyc-aadhaar").value, "123412341234", "the Aadhaar number stays filled in");
+  eq($(doc, "kyc-aadhaar-go").textContent, "Resume verification →",
+     "the card’s button becomes Resume verification");
+  click(doc, "kyc-aadhaar-go");
+  check(!failBox() && exists(doc, "#kyc-aadhaar-otp"), "resuming sends the OTP");
+  A.armFail("aadhaar", "down");
+  type(doc, "kyc-aadhaar-otp", "000000");
+  click(doc, "kyc-aadhaar-confirm");
+  check(failText().indexOf(C.API_FAIL.aadhaar.down) >= 0, "a fetch that fails after a good OTP is explained too");
+  check(!H.R().kyc.aadhaar.done, "and Aadhaar is not marked verified");
+  check(!exists(doc, "#kyc-aadhaar-otp"), "the spent OTP box closes");
+  click(doc, "kyc-aadhaar-go");
+  type(doc, "kyc-aadhaar-otp", "000000");
+  click(doc, "kyc-aadhaar-confirm");
+  check(H.R().kyc.aadhaar.done && !H.R().fail, "resuming with a fresh OTP verifies Aadhaar");
+  click(doc, "kyc-ack-aadhaar");
+
+  /* --- PAN: the failure survives leaving and coming back --- */
+  A.armFail("pan", "down");
+  type(doc, "kyc-pan", "ABCDE1234F");
+  type(doc, "kyc-pan-father", "Suresh Verma");
+  click(doc, "kyc-pan-go");
+  check(failText().indexOf(C.API_FAIL.pan.down) >= 0, "PAN: the maintenance window is explained");
+  check(/Error 503 · Ref PAN-503-\d{5}/.test(failText()), "with the 503 code");
+  click(doc, "save-exit");
+  eq(api.state.screen, "roles", "the captain can save and exit from a failure");
+  const paused = sel(doc, '[data-role-card="FM"] [data-testid="role-paused"]');
+  check(!!paused && paused.textContent.indexOf("PAN verification didn’t go through") >= 0,
+        "the role card says what is waiting");
+  eq(sel(doc, '[data-pick="FM"]').textContent, "Resume onboarding", "and offers to resume");
+  check(api.reload(), "the failure is saved with the application");
+  pickRole(doc, "FM");
+  eq(H.phaseId(), "kyc", "resuming reopens KYC");
+  check(failText().indexOf(C.API_FAIL.pan.down) >= 0, "on the PAN card, still explaining the failure");
+  eq($(doc, "kyc-pan").value, "ABCDE1234F", "with the PAN still filled in");
+  eq($(doc, "kyc-pan-father").value, "Suresh Verma", "and the father’s name");
+  click(doc, "kyc-pan-go");
+  check(H.R().kyc.pan.done && !failBox(), "resume verifies the PAN");
+  click(doc, "kyc-ack-pan");
+
+  /* --- bank and GST --- */
+  A.armFail("bank", "timeout");
+  type(doc, "kyc-acc", "123456789012");
+  type(doc, "kyc-ifsc", "HDFC0001234");
+  click(doc, "kyc-bank-go");
+  check(failText().indexOf(C.API_FAIL.bank.timeout) >= 0, "bank: the penny-drop timeout is explained");
+  check(!H.R().kyc.bank.done, "the account is not marked verified");
+  click(doc, "kyc-bank-go");
+  check(H.R().kyc.bank.done, "resume verifies the account");
+  click(doc, "kyc-ack-bank");
+
+  clickSel(doc, '[data-gstchoice="registered"]');
+  A.armFail("gst", "down");
+  type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
+  click(doc, "kyc-gst-go");
+  check(failText().indexOf(C.API_FAIL.gst.down) >= 0, "GST: the portal maintenance is explained");
+  eq($(doc, "kyc-gstin").value, "29ABCDE1234F1Z5", "the GSTIN stays filled in");
+  click(doc, "kyc-gst-go");
+  check(H.R().kyc.gst.done, "resume verifies the GSTIN");
+  click(doc, "kyc-continue");
+  eq(H.phaseId(), "hub", "KYC completes after four resumed failures");
+
+  /* --- hub details: the availability check --- */
+  eq(devText(doc).indexOf("service down"), -1, "the availability check only times out");
+  A.armFail("pincode", "timeout");
+  type(doc, "hub-pins", "560076");
+  click(doc, "hub-addpin");
+  click(doc, "hub-check");
+  check(failText().indexOf(C.API_FAIL.pincode.timeout) >= 0, "availability: the timeout is explained");
+  check(!exists(doc, '[data-selpin="560076"]'), "no pincode can be picked from a check that did not run");
+  eq($(doc, "hub-check").textContent, "Resume check", "its button becomes Resume check");
+  click(doc, "hub-check");
+  check(exists(doc, '[data-selpin="560076"]') && !failBox(), "resume runs the check");
+  doHubDetails(doc);
+  click(doc, "hub-continue");
+
+  /* --- background verification fails in place --- */
+  eq(H.phaseId(), "bgv", "at background verification");
+  devClick(doc, "bgvfail:timeout");
+  check(txt(doc).indexOf("Background verification paused") >= 0, "BGV: the check is paused, not failed");
+  check(failText().indexOf(C.API_FAIL.bgv.timeout) >= 0, "with the partner’s reason");
+  check(devText(doc).indexOf("Mark BGV passed") === -1, "no outcome can arrive until it is resumed");
+  click(doc, "bgv-resume");
+  check(!failBox() && txt(doc).indexOf("Background verification in progress") >= 0,
+        "resume sends it again");
+  A.bgvSet("passed");
+  eq(H.R().bgv.status, "passed", "and it can then clear");
+  eq(Object.keys(api.state.failNext).length, 0, "nothing is left armed");
+
+  api.stopTimers();
+  win.close();
+
+  /* --- activation resumes from the system that failed --- */
+  const b = await boot();
+  login(b.doc);
+  pickRole(b.doc, "LM");
+  doPersonalDetails(b.doc);
+  doKyc(b.doc, "LM");
+  doHubDetails(b.doc);
+  click(b.doc, "hub-continue");
+  b.api.actions.bgvSet("passed");
+  click(b.doc, "bgv-continue");
+  b.api.actions.chApprove();
+  click(b.doc, "ch-continue");
+  click(b.doc, "sd-pay");
+  click(b.doc, "sd-continue");
+  b.api.actions.amApprove();
+  click(b.doc, "am-continue");
+  doAgreements(b.doc, b.api);
+  const act = () => b.api.helpers.R().act;
+  await waitFor(b.win, () => Object.keys(act().done).length >= 2, "two systems done");
+  b.api.actions.actFail();
+  const doneAtFail = Object.keys(act().done);
+  const failedSys = b.api.config.FANOUT.LM.filter(f => doneAtFail.indexOf(f.id) < 0)[0];
+  check(failText(b.doc).indexOf(failedSys.label + " did not respond in time.") >= 0,
+        "activation names the system that failed (" + failedSys.label + ")");
+  check(txt(b.doc).indexOf("Activation paused") >= 0, "and calls activation paused");
+  eq(b.doc.querySelectorAll(".tl .tlrow.bad, .tl .bad").length >= 1, true, "the failed system is marked");
+  eq($(b.doc, "act-retry").textContent, "Resume activation", "the button is Resume activation");
+  click(b.doc, "act-retry");
+  eq(Object.keys(act().done).sort(), doneAtFail.sort(), "resuming keeps the systems that finished");
+  check(!failBox(b.doc), "and clears the notice");
+  await waitFor(b.win, () => act().status === "active", "resumed activation");
+  eq(Object.keys(act().done).length, 6, "and carries on through the rest");
+  b.api.stopTimers();
+  b.win.close();
+
+  /* --- Captain Hub: the bank not answering is not a failed account --- */
+  const c = await boot();
+  c.api.state.loginAs = "existing";
+  c.api.helpers.seedExistingCaptain();
+  login(c.doc);
+  c.api.actions.openPanel("profile", "personal");
+  c.api.actions.bankEditStart();
+  c.api.actions.bankOtp("000000");
+  c.api.actions.bankSubmit("998877665544", "ICIC0000123", "Karan Verma");
+  check(devText(c.doc).indexOf("Bank times out (504)") >= 0, "bank change: the dev panel offers a bank timeout");
+  devClick(c.doc, "bank:timeout");
+  eq(c.api.state.panel.bank.step, "error", "the change pauses");
+  check(failText(c.doc).indexOf(C.API_FAIL.bank.timeout) >= 0, "with the bank’s reason");
+  check(txt(c.doc).indexOf("Verification failed") === -1, "and is not reported as a failed account");
+  click(c.doc, "bank-resume");
+  eq(c.api.state.panel.bank.step, "verifying", "resume re-sends the same penny-drop");
+  eq(c.api.state.panel.bank.draft.acc, "998877665544", "with the same details");
+  devClick(c.doc, "bank:ok");
+  eq(c.api.state.profile.bank.acc, "998877665544", "and the new account is saved");
+  c.api.stopTimers();
+  c.win.close();
+
+  /* --- an existing captain's paused hub says so on the hub list --- */
+  const e = await boot();
+  e.api.state.loginAs = "existing";
+  e.api.helpers.seedExistingCaptain();
+  login(e.doc);
+  e.api.actions.openPanel("hubs", "hubs");
+  e.api.actions.addHubOpen();
+  e.api.actions.addHubRole("LM");
+  e.api.actions.addHubChoice("none");
+  e.api.actions.addHubContinue();
+  e.api.actions.armFail("pincode", "timeout");
+  type(e.doc, "hub-pins", "560102");
+  click(e.doc, "hub-addpin");
+  click(e.doc, "hub-check");
+  click(e.doc, "save-exit");
+  eq(e.api.state.screen, "panel", "saving and exiting returns to the hub list");
+  const pausedHub = sel(e.doc, '[data-testid="hub-paused"]');
+  check(!!pausedHub && pausedHub.textContent.indexOf("Pincode availability check didn’t go through") >= 0 &&
+        pausedHub.textContent.indexOf(C.API_FAIL.pincode.timeout) >= 0,
+        "the in-progress hub says what is waiting, and why");
+  clickSel(e.doc, "[data-resume]");
+  eq(e.api.helpers.phaseId(), "hub", "Resume onboarding reopens hub details");
+  check(!!failBox(e.doc), "with the failure still explained");
+  click(e.doc, "hub-check");
+  check(exists(e.doc, '[data-selpin="560102"]'), "and the check resumes");
+  e.api.stopTimers();
+  e.win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -3095,6 +3328,7 @@ async function testMapPin() {
     await testCopyConsistency();
     await testPincodesOnHub();
     await testMapPin();
+    await testApiFailures();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

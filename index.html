@@ -426,6 +426,7 @@ img{max-width:100%}
   border-top:1px solid var(--line-soft);padding-top:18px;margin-top:22px;
 }
 .cfoot .note{font-size:12px;font-weight:500;color:var(--muted);line-height:16px;max-width:430px}
+.cfoot > .btn-primary{flex:none;white-space:nowrap}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 @media (max-width:1180px){.grid2{grid-template-columns:1fr}}
@@ -1017,6 +1018,13 @@ img{max-width:100%}
 .map-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;font-size:12px}
 .map-meta .coords{color:var(--muted);font-weight:600}
 .map-meta a{margin-left:auto;color:var(--cyan-ink);font-weight:700;text-decoration:none}
+
+/* an API failure: what failed, the service's reason, and that nothing is lost */
+.api-fail .why{display:block;color:var(--ink);font-weight:600;margin:2px 0 6px}
+.api-fail .why i{font-style:normal;font-weight:700;color:var(--err);margin-right:6px}
+.api-fail .kept{display:block;color:var(--ink)}
+.api-fail .ref{display:block;margin-top:6px;font-size:11px;font-weight:600;color:var(--muted)}
+.api-fail .act{display:flex;justify-content:flex-end;margin-top:12px}
 </style>
 </head>
 <body>
@@ -1101,6 +1109,91 @@ var FANOUT = {
     { id:"pay",     label:"Payout profile",   desc:"Payout profile linked to the Partner ID." }
   ]
 };
+
+/* Simulated backend failures — the reasons a real service gives when it is
+   slow or down. The dev panel arms one for the next call to that service;
+   that call then fails with the reason instead of going through, and the
+   captain resumes it once it is back. `call` names the call in the dev panel. */
+var API_FAIL = {
+  email:   { what:"Email verification", call:"email code",
+             timeout:"Our email service did not respond, so the code was not sent." },
+  aadhaar: { what:"Aadhaar verification", call:"Aadhaar check",
+             timeout:"DigiLocker did not respond in time.",
+             down:"UIDAI’s Aadhaar service is temporarily unavailable." },
+  pan:     { what:"PAN verification", call:"PAN check",
+             timeout:"The Income Tax PAN service did not respond in time.",
+             down:"The Income Tax PAN service is under scheduled maintenance." },
+  bank:    { what:"Bank account verification", call:"penny-drop",
+             timeout:"Your bank did not confirm the ₹1 penny-drop in time.",
+             down:"IMPS transfers are temporarily unavailable at your bank." },
+  gst:     { what:"GSTIN verification", call:"GSTIN check",
+             timeout:"The GST portal did not respond in time.",
+             down:"The GST portal is under scheduled maintenance." },
+  pincode: { what:"Pincode availability check", call:"availability check",
+             timeout:"Our serviceability service did not respond in time." },
+  bgv:     { what:"Background verification", call:"background check",
+             timeout:"Our background-check partner did not respond in time.",
+             down:"Our background-check partner’s service is temporarily unavailable." },
+  act:     { what:"Activation", call:"activation step",
+             timeout:function (sys) { return sys.label + " did not respond in time."; } }
+};
+var FAIL_CODE = { timeout:"504", down:"503" };
+var FAIL_KIND = { timeout:"times out", down:"service down" };
+var FAIL_SAVED = "Your details are saved — nothing you entered is lost. Resume when you’re " +
+                 "ready, or save and exit: your application opens at this step next time.";
+
+function fmtStamp(d) {
+  return fmtDay(d) + ", " +
+    d.toLocaleTimeString("en-IN", { hour:"numeric", minute:"2-digit" }).replace(/\u202f/g, " ");
+}
+
+function makeFail(api, kind, detail) {
+  var c = API_FAIL[api], reason = c[kind];
+  return {
+    api:api, kind:kind, what:c.what, code:FAIL_CODE[kind],
+    reason: typeof reason === "function" ? reason(detail) : reason,
+    system: detail ? detail.id : null,
+    ref: api.toUpperCase() + "-" + FAIL_CODE[kind] + "-" + String(10000 + Math.floor(Math.random() * 90000)),
+    at: fmtStamp(new Date())
+  };
+}
+
+/* One simulated backend call. A failure armed in the dev panel is spent here:
+   it is recorded on `holder` (a role, or a Captain Hub editor) and the call
+   reports false. A call that goes through clears that API's last failure. */
+function apiCall(holder, api) {
+  var kind = S.failNext && S.failNext[api];
+  if (kind) {
+    delete S.failNext[api];
+    holder.fail = makeFail(api, kind);
+    return false;
+  }
+  if (holder.fail && holder.fail.api === api) holder.fail = null;
+  return true;
+}
+
+/* The failure a role is waiting to resume, if it was this API's. */
+function failOf(holder, api) {
+  return holder && holder.fail && holder.fail.api === api ? holder.fail : null;
+}
+
+/* What failed, the service's reason, a reference for Support, and that the
+   captain's details are kept. The resume button is optional — on the KYC
+   cards the card's own button turns into "Resume verification" instead. */
+function failNotice(f, resumeId, resumeLabel) {
+  if (!f) return "";
+  return '<div class="notice bad api-fail" data-testid="api-fail" data-api="' + esc(f.api) + '">' +
+    '<b>' + esc(f.what) + ' didn’t go through</b>' +
+    '<span class="why"><i>Reason</i>' + esc(f.reason) + '</span>' +
+    '<span class="kept">' + esc(FAIL_SAVED) + '</span>' +
+    '<span class="ref" data-testid="api-fail-ref">Error ' + esc(f.code) + ' · Ref ' + esc(f.ref) +
+      ' · ' + esc(f.at) + '</span>' +
+    (resumeId
+      ? '<div class="act"><button class="btn btn-primary" id="' + resumeId + '">' +
+        esc(resumeLabel) + '</button></div>'
+      : '') +
+  '</div>';
+}
 
 /* Pincode availability — deterministic so the demo and the tests agree. */
 var SERVICEABLE = ["560076","560034","560102","110017","400059","560001"];
@@ -1364,6 +1457,7 @@ function blankRole(role) {
     complete: false,
     phaseIdx: 0,
     requestId: null,
+    fail: null,                // the last backend call that failed, until it is resumed
     pd: {
       name:"", altPhone:"", email:"",
       emailVerified:false, emailOtpOpen:false, emailOtpAttempts:0, emailLocked:false,
@@ -1416,9 +1510,9 @@ function blankPanel() {
   return {
     section:"hubs",            // hubs | profile | home | payments | loss | incentive | support | addhub
     tab:"hubs",                // personal | hubs
-    bank:{ open:false, step:"otp", otp:"", attempts:0, locked:false, error:"",
+    bank:{ open:false, step:"otp", otp:"", attempts:0, locked:false, error:"", fail:null,
            draft:{ acc:"", ifsc:"", holder:"" } },
-    gst:{ hubId:null, mode:"view", value:"", error:"" },   // view | edit | confirmRemove
+    gst:{ hubId:null, mode:"view", value:"", error:"", fail:null },   // view | edit | confirmRemove
     addHub:{ role:"LM", choice:"existing", gstin:"", existing:"", error:"" }
   };
 }
@@ -1441,7 +1535,8 @@ function blankState() {
     activeHubId: null,
     panel: blankPanel(),
     admin: blankAdmin(),
-    adminRequests: []
+    adminRequests: [],
+    failNext: {}               // dev panel: API → failure kind armed for its next call
   };
 }
 
@@ -1499,6 +1594,7 @@ function hubById(id) {
 function knownGstins() {
   var out = [];
   S.hubs.forEach(function (h) {
+    if (h.status === "in_progress") return;          // not verified until it activates
     if (h.gst && h.gst.registered && h.gst.gstin && out.indexOf(h.gst.gstin) < 0) {
       out.push(h.gst.gstin);
     }
@@ -1883,6 +1979,11 @@ function roleCard(code) {
   if (r.complete) {
     tagHtml = '<span class="tag ok">Active</span>';
     btnLabel = "Open role";
+  } else if (r.started && r.fail) {
+    /* a failed call waits on this role — say which, and offer to resume it */
+    tagHtml = '<span class="tag warn" data-testid="role-paused">Step ' + (r.phaseIdx + 1) + ' of ' +
+      total + ' · ' + esc(r.fail.what) + ' didn’t go through</span>';
+    btnLabel = "Resume onboarding";
   } else if (r.started) {
     tagHtml = '<span class="tag info">Step ' + (r.phaseIdx + 1) + ' of ' + total + '</span>';
     btnLabel = "Continue onboarding";
@@ -2410,6 +2511,12 @@ function bankEditBlock(bk) {
     inner = statusBlock("run", "Verifying the new account",
       "We have sent ₹1 to the account. This usually takes a few seconds.");
 
+  } else if (bk.step === "error") {
+    inner = failNotice(bk.fail) +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="bank-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="bank-resume">Resume verification</button></div>';
+
   } else if (bk.step === "failed") {
     inner = statusBlock("bad", "Verification failed",
         bk.error || "The penny-drop did not reach that account. Check the details and try again.") +
@@ -2442,9 +2549,14 @@ function hubCard(h) {
 
   var gstRow;
   if (pending) {
+    var paused = S.roles[h.role].fail;
     gstRow = '<div class="prow"><div class="pl"><span class="k">Onboarding</span>' +
       '<span class="v">Step ' + (S.roles[h.role].phaseIdx + 1) + ' of ' +
-      PHASES[h.role].length + '</span></div>' +
+      PHASES[h.role].length + '</span>' +
+      (paused
+        ? '<span class="s" data-testid="hub-paused" style="font-size:11px;color:var(--err);' +
+          'font-weight:600">' + esc(paused.what) + ' didn’t go through — ' + esc(paused.reason) + '</span>'
+        : '') + '</div>' +
       '<div class="pr"><button class="btn btn-primary" data-resume="' + esc(h.id) + '">' +
       'Resume onboarding</button></div></div>';
   } else {
@@ -2459,11 +2571,17 @@ function hubCard(h) {
       '</div></div>';
   }
 
+  /* a hub mid-onboarding shows what has been entered for it so far */
+  var rr = pending ? S.roles[h.role] : null;
+  var name = pending ? defaultHubName(rr) : h.name;
+  var address = pending ? (rr.hub.address || "Address not added yet") : h.address;
+  var pin = pending ? (rr.hub.selected || rr.hub.pincode) : h.pincode;
+
   return '<div class="hub-card' + (inactive ? " off" : "") + '" data-hub="' + esc(h.id) + '">' +
     '<div class="hh">' +
       '<span class="hcode">Hub ' + esc(h.code || "—") + '</span>' +
-      '<span class="ht"><b>' + esc(h.name) + '</b>' +
-        '<span>' + esc(h.address) + (h.pincode ? " · " + esc(h.pincode) : "") + '</span>' +
+      '<span class="ht"><b>' + esc(name) + '</b>' +
+        '<span>' + esc(address) + (pin ? " · " + esc(pin) : "") + '</span>' +
         '<span class="hrole">' + esc(h.role) + ' Captain</span></span>' +
       right +
     '</div>' +
@@ -3585,7 +3703,8 @@ function phasePD(r) {
       '<input id="pd-email" placeholder="you@example.com" value="' + esc(pd.email) + '"' +
         (pd.emailLocked ? ' disabled' : '') + '>' +
       '<button class="btn-sm" id="pd-verify-email"' +
-        (V.email(pd.email) && !pd.emailLocked ? '' : ' disabled') + '>Verify</button></div>';
+        (V.email(pd.email) && !pd.emailLocked ? '' : ' disabled') + '>' +
+        (failOf(r, "email") ? "Resume" : "Verify") + '</button></div>';
   }
 
   var otpBlock = "";
@@ -3632,6 +3751,7 @@ function phasePD(r) {
         '</div></div>' +
     '</div>' +
 
+    (pd.emailVerified ? "" : failNotice(failOf(r, "email"))) +
     otpBlock +
 
     '<div class="cfoot">' +
@@ -3708,7 +3828,9 @@ function phaseKYC(r) {
           '<button class="btn btn-primary" id="kyc-aadhaar-confirm" style="padding:10px 18px">' +
             'Confirm</button></div></div>'
         : "") +
-      kycFoot(r, "kyc-aadhaar-go", "Verify Aadhaar →", !k.aadhaar.otpOpen);
+      failNotice(failOf(r, "aadhaar")) +
+      kycFoot(r, "kyc-aadhaar-go", failOf(r, "aadhaar") ? "Resume verification →" : "Verify Aadhaar →",
+              !k.aadhaar.otpOpen);
 
   } else if (step === "aadhaar-done") {
     var ad = k.aadhaar.data || {};
@@ -3751,7 +3873,8 @@ function phaseKYC(r) {
           '<div class="hint' + (e.panFather ? ' err' : '') + '">' +
             (e.panFather || "Required — as printed on your PAN card.") + '</div></div>' +
       '</div>' +
-      kycFoot(r, "kyc-pan-go", "Verify PAN →", true);
+      failNotice(failOf(r, "pan")) +
+      kycFoot(r, "kyc-pan-go", failOf(r, "pan") ? "Resume verification →" : "Verify PAN →", true);
 
   } else if (step === "pan-done") {
     lede  = "PAN verification is complete.";
@@ -3795,7 +3918,8 @@ function phaseKYC(r) {
         '<div class="hint">Shown after bank verification.</div></div>' +
       (fm ? '<div class="hint" style="padding-bottom:4px">Cancelled cheque is not required for FM — ' +
             'the ₹1 penny-drop is the bank proof.</div>' : '') +
-      kycFoot(r, "kyc-bank-go", "Verify bank account →", true);
+      failNotice(failOf(r, "bank")) +
+      kycFoot(r, "kyc-bank-go", failOf(r, "bank") ? "Resume verification →" : "Verify bank account →", true);
 
   } else if (step === "bank-done") {
     lede  = "Bank verification is complete.";
@@ -3847,7 +3971,9 @@ function phaseKYC(r) {
           '<div class="hint' + (e.gstin ? ' err' : '') + '">' +
             (e.gstin || "15 characters, as printed on your GST certificate.") + '</div></div>'
         : '') +
-      kycFoot(r, "kyc-gst-go", reg ? "Verify GSTIN →" : "Continue →",
+      (reg ? failNotice(failOf(r, "gst")) : "") +
+      kycFoot(r, "kyc-gst-go",
+              reg ? (failOf(r, "gst") ? "Resume verification →" : "Verify GSTIN →") : "Continue →",
               k.gst.registered !== null);
 
   /* ------------------------------------------------------ complete (KYC-14) */
@@ -3914,6 +4040,16 @@ function phaseBGV(r) {
       '<div style="display:flex;gap:10px;justify-content:flex-end">' +
         '<button class="btn btn-ghost" id="bgv-back-kyc">Back to KYC</button>' +
         '<button class="btn btn-primary" id="bgv-retry">Resubmit for verification</button></div>';
+  } else if (failOf(r, "bgv")) {
+    inner = statusBlock("bad", "Background verification paused",
+        "Your check could not reach our verification partner. It has not failed — " +
+        "resume to send it again.") +
+      failNotice(failOf(r, "bgv"), "bgv-resume", "Resume verification") +
+      '<div class="tl">' +
+        tlRow("ok", "KYC submitted", "Your identity and payout records were received.") +
+        tlRow("bad", "Background check paused", "Waiting to be sent to our verification partner again.") +
+        tlRow("", nextRowLabel(r), "Available once the check clears.") +
+      '</div>';
   } else {
     inner = statusBlock("run", "Background verification in progress",
         "This usually finishes within a few minutes. You can safely close this page — " +
@@ -4357,8 +4493,10 @@ function pincodePicker(h) {
       '<span class="r">' + h.pincodes.length + ' of 5 added</span></div>' +
     '<div style="margin-top:16px">' +
       '<button class="btn btn-ghost" id="hub-check"' + (h.pincodes.length ? '' : ' disabled') + '>' +
-        'Check availability</button>' +
+        (failOf(R(), "pincode") ? "Resume check" : "Check availability") + '</button>' +
     '</div>' +
+    (failOf(R(), "pincode")
+      ? '<div style="margin-top:16px">' + failNotice(failOf(R(), "pincode")) + '</div>' : '') +
     (results ? '<div style="margin-top:16px">' + results + '</div>' : '') +
   '</div>';
 }
@@ -4611,9 +4749,11 @@ function phaseAG(r) {
 function phaseACT(r) {
   var a = r.act, fm = r.role === "FM", list = FANOUT[r.role], inner;
 
+  var actFailed = failOf(r, "act");
   var fan = list.map(function (f) {
     var st = a.done[f.id] ? "ok" : (a.status === "running" ? "now" : "");
-    if (a.failed && !a.done[f.id]) st = "bad";
+    /* only the system that failed is marked — the rest are simply still to run */
+    if (a.failed && !a.done[f.id]) st = (!actFailed || actFailed.system === f.id) ? "bad" : "";
     var sub = f.desc + (f.passive ? "" : "");
     return tlRow(st, f.label + (f.passive ? " · external system" : ""), sub);
   }).join("");
@@ -4647,11 +4787,14 @@ function phaseACT(r) {
         '<button class="btn btn-primary" id="act-panel">Open Captain Panel →</button></div>';
 
   } else if (a.failed) {
-    inner = statusBlock("bad", "Activation failed",
-        "One or more systems did not complete. Nothing is lost — you can retry activation.") +
-      '<div class="tl">' + fan + '</div>' +
-      '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
-        '<button class="btn btn-primary" id="act-retry">Retry activation</button></div>';
+    inner = statusBlock("bad", "Activation paused",
+        "A system did not complete. The systems that finished stay done — resume to carry " +
+        "on from where it stopped.") +
+      (actFailed
+        ? failNotice(actFailed, "act-retry", "Resume activation")
+        : '<div style="display:flex;justify-content:flex-end;margin-bottom:16px">' +
+          '<button class="btn btn-primary" id="act-retry">Resume activation</button></div>') +
+      '<div class="tl">' + fan + '</div>';
 
   } else {
     inner = statusBlock("run", "Activation in progress",
@@ -4666,10 +4809,10 @@ function phaseACT(r) {
       '<div class="tl">' + fan + '</div>';
   }
 
+  var lede = a.status === "active" ? "Your hub is active."
+           : (a.failed ? "Activation paused." : "Activation in progress.");
   return {
-    left: phaseHeader(r, "Activation", a.status === "active" ? "Your hub is active." : "Activation in progress.") +
-          cardWrap("Activation",
-                   a.status === "active" ? "Your hub is active." : "Activation in progress.", inner),
+    left: phaseHeader(r, "Activation", lede) + cardWrap("Activation", lede, inner),
     side: sideDefault(r)
   };
 }
@@ -4796,6 +4939,7 @@ var A = {
   checkAvailability: function () {
     var h = R().hub;
     if (!h.pincodes.length) return;
+    if (!apiCall(R(), "pincode")) { h.checked = false; h.selected = null; save(); render(); return; }
     h.checked = true; h.selected = null;
     if (h.errors) delete h.errors.pincode;
     save(); render();
@@ -4812,6 +4956,7 @@ var A = {
     var pd = R().pd;
     pd.errors = {};
     if (!V.email(pd.email)) { pd.errors.email = ERR.email; save(); render(); return; }
+    if (!apiCall(R(), "email")) { pd.emailOtpOpen = false; save(); render(); return; }
     pd.emailOtpOpen = true; pd.emailOtpAttempts = 0;
     save(); render();
   },
@@ -4839,12 +4984,16 @@ var A = {
   aadhaarStart: function (val) {
     var k = R().kyc; k.errors = {};
     if (!V.aadhaar(val)) { k.errors.aadhaar = ERR.aadhaar; save(); render(); return; }
-    k.aadhaar.value = val; k.aadhaar.otpOpen = true;
+    k.aadhaar.value = val;
+    if (!apiCall(R(), "aadhaar")) { k.aadhaar.otpOpen = false; save(); render(); return; }
+    k.aadhaar.otpOpen = true;
     save(); render();
   },
   aadhaarConfirm: function (code) {
     var k = R().kyc; k.errors = {};
     if (code !== "000000") { k.errors.aadhaar = ERR.otpWrong; save(); render(); return; }
+    /* the fetch from DigiLocker can fail after a good OTP — resuming sends a fresh one */
+    if (!apiCall(R(), "aadhaar")) { k.aadhaar.otpOpen = false; save(); render(); return; }
     k.aadhaar.done = true; k.aadhaar.otpOpen = false;
     k.aadhaar.data = {
       name: R().pd.name || "Karan Verma",
@@ -4861,7 +5010,9 @@ var A = {
     if (!V.pan(pan))            k.errors.pan = ERR.pan;
     if (!(father || "").trim()) k.errors.panFather = ERR.panFather;
     if (Object.keys(k.errors).length) { k.pan.value = pan; k.pan.father = father || ""; save(); render(); return; }
-    k.pan.value = pan; k.pan.father = father.trim(); k.pan.done = true;
+    k.pan.value = pan; k.pan.father = father.trim();
+    if (!apiCall(R(), "pan")) { save(); render(); return; }
+    k.pan.done = true;
     k.ack.pan = false; k.editing = null;
     save(); render();
   },
@@ -4871,7 +5022,9 @@ var A = {
     if (!V.account(acc)) k.errors.account = ERR.account;
     if (!V.ifsc(ifsc))   k.errors.ifsc = ERR.ifsc;
     if (Object.keys(k.errors).length) { k.bank.acc = acc || ""; k.bank.ifsc = ifsc; save(); render(); return; }
-    k.bank.acc = acc; k.bank.ifsc = ifsc; k.bank.pennyDone = true; k.bank.done = true;
+    k.bank.acc = acc; k.bank.ifsc = ifsc;
+    if (!apiCall(R(), "bank")) { save(); render(); return; }
+    k.bank.pennyDone = true; k.bank.done = true;
     k.bank.holder = R().pd.name || "Karan Verma";      // returned by the penny-drop
     k.ack.bank = false; k.editing = null;
     save(); render();
@@ -4889,7 +5042,9 @@ var A = {
     }
     gstin = (gstin || "").toUpperCase().trim();
     if (!V.gstin(gstin)) { k.errors.gstin = ERR.gstin; k.gst.gstin = gstin; save(); render(); return; }
-    k.gst.gstin = gstin; k.gst.registered = true; k.gst.done = true;
+    k.gst.gstin = gstin;
+    if (!apiCall(r, "gst")) { save(); render(); return; }
+    k.gst.registered = true; k.gst.done = true;
     k.editing = null;
     save(); render();
   },
@@ -4993,7 +5148,25 @@ var A = {
   },
 
   /* ---- BGV ---- */
-  bgvSet: function (status) { R().bgv.status = status; save(); render(); },
+  bgvSet: function (status) {
+    var r = R();
+    if (failOf(r, "bgv")) r.fail = null;     // the check has an outcome after all
+    r.bgv.status = status; save(); render();
+  },
+  /* The background check is already with the partner when it fails, so the
+     dev panel fails it in place rather than arming the next call. */
+  bgvApiFail: function (kind) {
+    var r = R();
+    if (r.bgv.status !== "pending" || !FAIL_CODE[kind]) return;
+    r.fail = makeFail("bgv", kind);
+    save(); render();
+  },
+  bgvResume: function () {
+    var r = R();
+    if (!failOf(r, "bgv")) return;
+    r.fail = null; r.bgv.status = "pending";
+    save(); render();
+  },
   bgvContinue: function () {
     var r = R();
     if (r.bgv.status !== "passed") return;
@@ -5250,12 +5423,18 @@ var A = {
     var r = R();
     if (r.act.status === "active") return;
     stopFanout();
+    var sys = FANOUT[r.role].filter(function (f) { return !r.act.done[f.id]; })[0];
+    if (!sys) return;
     r.act.status = "failed"; r.act.failed = true;
+    r.fail = makeFail("act", "timeout", sys);
     save(); render();
   },
+  /* Resume carries on from the system that failed — the ones that finished
+     stay finished. */
   actRetry: function () {
     var r = R();
-    r.act.status = "running"; r.act.failed = false; r.act.done = {};
+    r.act.status = "running"; r.act.failed = false;
+    if (failOf(r, "act")) r.fail = null;
     save(); render();
     runFanout();
   },
@@ -5376,6 +5555,27 @@ var A = {
     save(); render();
   },
   bankBackToForm: function () { S.panel.bank.step = "form"; save(); render(); },
+  /* The bank not answering is not a verdict on the account — resume re-sends
+     the same penny-drop. */
+  bankApiFail: function (kind) {
+    var bk = S.panel.bank;
+    if (bk.step !== "verifying" || !FAIL_CODE[kind]) return;
+    bk.fail = makeFail("bank", kind); bk.step = "error";
+    save(); render();
+  },
+  bankResume: function () {
+    var bk = S.panel.bank;
+    if (bk.step !== "error") return;
+    bk.fail = null; bk.step = "verifying";
+    save(); render();
+  },
+  /* Dev panel: arm (or disarm) a failure for the next call to an API. */
+  armFail: function (api, kind) {
+    if (!API_FAIL[api] || !FAIL_CODE[kind]) return;
+    S.failNext = S.failNext || {};
+    if (S.failNext[api] === kind) delete S.failNext[api]; else S.failNext[api] = kind;
+    save(); render();
+  },
 
   /* ---- HB-02…HB-06: per-hub GSTIN ---- */
   gstOpen: function (hubId) {
@@ -5480,6 +5680,10 @@ var A = {
     r.phaseIdx = idx;
 
     S.roles[role] = r;
+    /* List it under "Onboarding in progress" so the captain can leave and
+       resume it from My Hubs. Activation replaces this placeholder. */
+    S.hubs = S.hubs.filter(function (h) { return !(h.status === "in_progress" && h.role === role); });
+    S.hubs.push(makeHub({ id:"hub-new-" + role.toLowerCase(), role:role, status:"in_progress", gst:gst }));
     S.activeRole = role;
     S.screen = "flow";
     save(); render();
@@ -5725,7 +5929,8 @@ var fanTimers = [];
 function stopFanout() { fanTimers.forEach(clearTimeout); fanTimers = []; }
 function runFanout() {
   stopFanout();
-  var r = R(), role = S.activeRole, list = FANOUT[r.role];
+  var r = R(), role = S.activeRole;
+  var list = FANOUT[r.role].filter(function (f) { return !r.act.done[f.id]; });   // resume skips finished systems
   list.forEach(function (f, i) {
     fanTimers.push(setTimeout(function () {
       var rr = S.roles[role];
@@ -5961,6 +6166,7 @@ function bind() {
   /* bgv */
   on("bgv-continue", "click", A.bgvContinue);
   on("bgv-retry", "click", A.bgvRetry);
+  on("bgv-resume", "click", A.bgvResume);
   on("bgv-back-kyc", "click", function () { goPhase("kyc"); });
 
   /* cluster head */
@@ -6246,6 +6452,7 @@ function bindPanel() {
     A.bankSubmit(val("bank-acc"), val("bank-ifsc"), val("bank-holder"));
   });
   on("bank-retry", "click", A.bankBackToForm);
+  on("bank-resume", "click", A.bankResume);
   on("bank-done", "click", A.bankCancel);
 
   /* per-hub GSTIN */
@@ -6346,7 +6553,9 @@ function devActions() {
     if (bk.open && bk.step === "verifying") {
       groups.push({ title: "Bank penny-drop", html:
         devBtn("Penny-drop succeeded", "bank:ok", "ok") +
-        devBtn("Penny-drop failed", "bank:fail", "bad") });
+        devBtn("Penny-drop failed", "bank:fail", "bad") +
+        devBtn("Bank times out (504)", "bank:timeout", "warn") +
+        devBtn("IMPS down at the bank (503)", "bank:down", "warn") });
     } else if (bk.open) {
       groups.push({ title: "Bank change", html:
         '<p class="dnone">Step: ' + esc(bk.step) + '. The penny-drop outcome is simulated ' +
@@ -6367,9 +6576,36 @@ function devActions() {
   var groups = [];
 
   if (id === "bgv") {
-    groups.push({ title: "Background verification", html:
-      devBtn("Mark BGV passed", "bgv:passed", "ok") +
-      devBtn("Mark BGV failed", "bgv:failed", "bad") });
+    if (failOf(r, "bgv")) {
+      groups.push({ title: "Background verification", html:
+        '<p class="dnone">Paused — the check reaches the partner again when the captain ' +
+        'resumes.</p>' });
+    } else {
+      groups.push({ title: "Background verification", html:
+        devBtn("Mark BGV passed", "bgv:passed", "ok") +
+        devBtn("Mark BGV failed", "bgv:failed", "bad") +
+        (r.bgv.status === "pending"
+          ? devBtn("Partner times out (504)", "bgvfail:timeout", "warn") +
+            devBtn("Partner is down (503)", "bgvfail:down", "warn")
+          : "") });
+    }
+  }
+
+  /* The calls the captain makes on this step that can fail. */
+  var armable = armableApis(r, id);
+  if (armable.length) {
+    groups.push({ title: "Simulate an API failure", html:
+      armable.map(function (api) {
+        return Object.keys(FAIL_CODE).filter(function (kind) { return !!API_FAIL[api][kind]; })
+          .map(function (kind) {
+            var armed = S.failNext && S.failNext[api] === kind;
+            return devBtn((armed ? "Armed · " : "") + "Fail next " + API_FAIL[api].call + " · " +
+                          FAIL_KIND[kind] + " (" + FAIL_CODE[kind] + ")",
+                          "fail:" + api + ":" + kind, armed ? "warn" : "");
+          }).join("");
+      }).join("") +
+      '<p class="dnone">The next call fails with that service’s reason; the captain resumes ' +
+      'it from the same step. Click an armed one again to disarm it.</p>' });
   }
 
   if (id === "ch") {
@@ -6448,6 +6684,17 @@ function devActions() {
   return { ctx: ctx, groups: groups };
 }
 
+/* The backend calls a captain can trigger from where they are. */
+function armableApis(r, id) {
+  if (id === "pd")  return r.pd.emailVerified || r.pd.emailLocked ? [] : ["email"];
+  if (id === "hub") return r.hub.submitted ? [] : ["pincode"];
+  if (id === "kyc") {
+    var step = kycStep(r);
+    return ["aadhaar", "pan", "bank", "gst"].indexOf(step) >= 0 ? [step] : [];
+  }
+  return [];
+}
+
 function renderDev() {
   var host = document.getElementById("dev");
   if (!host) return;
@@ -6491,9 +6738,12 @@ function devDo(cmd) {
       save(); render();
       break;
     case "bank":
+      if (FAIL_CODE[arg]) { A.bankApiFail(arg); break; }
       A.bankPennyResult(arg === "ok", arg === "ok" ? "" :
         "Name on the account did not match your KYC records.");
       break;
+    case "fail": A.armFail(arg, parts[2]); break;
+    case "bgvfail": A.bgvApiFail(arg); break;
     case "bgv": A.bgvSet(arg); break;
     case "cat":
       if (arg === "clear") { R().ch.category = null; save(); render(); }
@@ -6550,7 +6800,8 @@ if (typeof window !== "undefined") {
               AM_GATES: AM_GATES, AP_STATUS: AP_STATUS,
               KNOWN_HUB_CODES: KNOWN_HUB_CODES, ONBOARDING_TYPES: ONBOARDING_TYPES,
               SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
-              VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW },
+              VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW,
+              API_FAIL: API_FAIL, FAIL_CODE: FAIL_CODE, FAIL_SAVED: FAIL_SAVED },
     helpers: {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
