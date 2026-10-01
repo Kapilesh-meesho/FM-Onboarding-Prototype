@@ -1008,6 +1008,15 @@ img{max-width:100%}
   width:100%;background:#2a1418;border:1px solid #5c2a2a;border-radius:9px;
   padding:9px;font-size:11px;font-weight:700;color:#ff9b8e;margin-top:4px;
 }
+/* map preview beneath a Google Maps link field */
+.map-prev{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sum-bg)}
+.map-frame{position:relative;height:190px;background:
+  linear-gradient(0deg,rgba(9,45,94,.04) 1px,transparent 1px) 0 0/24px 24px,
+  linear-gradient(90deg,rgba(9,45,94,.04) 1px,transparent 1px) 0 0/24px 24px,#eef3f9}
+.map-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.map-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;font-size:12px}
+.map-meta .coords{color:var(--muted);font-weight:600}
+.map-meta a{margin-left:auto;color:var(--cyan-ink);font-weight:700;text-decoration:none}
 </style>
 </head>
 <body>
@@ -1175,6 +1184,147 @@ var V = {
   }
 };
 
+/* ------------------------------------------------------ map pin location */
+
+/* Where each pincode the prototype knows about sits. A real build reverse-
+   geocodes the pin through a maps API; offline, an approximate area centre per
+   pincode stands in, and the pin is placed in whichever centre it is nearest. */
+var PIN_AREAS = {
+  "560001": { name:"MG Road",             lat:12.9758, lng:77.6045 },
+  "560034": { name:"Koramangala",         lat:12.9352, lng:77.6245 },
+  "560038": { name:"Indiranagar",         lat:12.9784, lng:77.6408 },
+  "560058": { name:"Peenya",              lat:13.0280, lng:77.5190 },
+  "560071": { name:"Domlur",              lat:12.9610, lng:77.6387 },
+  "560076": { name:"BTM Layout",          lat:12.9081, lng:77.6040 },
+  "560099": { name:"Bommasandra",         lat:12.8156, lng:77.6982 },
+  "560102": { name:"HSR Layout",          lat:12.9116, lng:77.6474 },
+  "110017": { name:"Malviya Nagar",       lat:28.5355, lng:77.2167 },
+  "400059": { name:"Marol, Andheri East", lat:19.1176, lng:72.8790 }
+};
+// a pin further than this from its pincode's centre is treated as misplaced
+var PIN_RADIUS_KM = 4;
+
+/* Coordinates out of the link formats Google Maps hands out. The exact place
+   pin (!3d…!4d) wins over the viewport centre (@lat,lng), which is only where
+   the map happened to be scrolled. Short links carry no coordinates at all. */
+function parseMapLink(link) {
+  var s = String(link || "");
+  try { s = decodeURIComponent(s); } catch (e) { /* leave it encoded */ }
+  var num = "(-?\\d{1,3}(?:\\.\\d+)?)";
+  var pats = [
+    new RegExp("!3d" + num + "!4d" + num),
+    new RegExp("@" + num + "," + num),
+    new RegExp("[?&](?:q|query|ll|center|destination|daddr)=(?:loc:)?" + num + ",\\s*\\+?" + num),
+    new RegExp("/(?:place|search|dir)/" + num + ",\\s*\\+?" + num)
+  ];
+  for (var i = 0; i < pats.length; i++) {
+    var m = s.match(pats[i]);
+    if (m) return { lat: +m[1], lng: +m[2] };
+  }
+  return null;
+}
+
+function haversineKm(a, b) {
+  var R = 6371, rad = Math.PI / 180;
+  var dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/* Every check a map link goes through: it is a Google Maps link, it carries a
+   pin, the pin is a real place in India, and it sits inside the hub's pincode —
+   both nearer that pincode than any other and within reach of its centre. */
+function checkMapPin(link, pin) {
+  link = String(link || "").trim();
+  if (!link) return { ok:false, code:"empty", msg:ERR.mapLink };
+  if (!V.mapLink(link)) return { ok:false, code:"format", msg:ERR.mapLink };
+  var c = parseMapLink(link);
+  if (!c) {
+    return { ok:false, code:"nocoords",
+             msg: /goo\.gl/i.test(link) ? ERR.mapShort : ERR.mapNoPin };
+  }
+  var out = { lat:c.lat, lng:c.lng };
+  if (Math.abs(c.lat) > 90 || Math.abs(c.lng) > 180) {
+    return Object.assign(out, { ok:false, code:"range", msg:ERR.mapRange, short:"Invalid location" });
+  }
+  if (c.lat < 6.5 || c.lat > 37.5 || c.lng < 68 || c.lng > 97.5) {
+    return Object.assign(out, { ok:false, code:"india", msg:ERR.mapIndia, short:"Outside India" });
+  }
+  var area = pin && PIN_AREAS[pin];
+  if (!area) return Object.assign(out, { ok:true, code:"nopin", pending:true });
+
+  var dSel = haversineKm(c, area), nearest = null, dNear = Infinity;
+  Object.keys(PIN_AREAS).forEach(function (k) {
+    var d = haversineKm(c, PIN_AREAS[k]);
+    if (d < dNear) { dNear = d; nearest = k; }
+  });
+  out.distKm = dSel; out.nearest = nearest;
+  if (nearest !== pin && dNear <= PIN_RADIUS_KM) {
+    return Object.assign(out, { ok:false, code:"elsewhere", short:"Outside " + pin,
+      msg:"This pin is in " + nearest + " (" + PIN_AREAS[nearest].name + "), not the hub\u2019s pincode " +
+          pin + ". Move the pin to the hub\u2019s location." });
+  }
+  if (dSel > PIN_RADIUS_KM) {
+    return Object.assign(out, { ok:false, code:"far", short:"Outside " + pin,
+      msg:"This pin is " + dSel.toFixed(1) + " km from the " + pin + " (" + area.name +
+          ") area. Check the pin is on the hub." });
+  }
+  return Object.assign(out, { ok:true, code:"ok", msg:"" });
+}
+
+var MAP_HINT = "Paste a Google Maps link with the hub pinned. A photo of the location is optional.";
+
+/* Redraw the preview and the field's hint in place as the link is typed, so the
+   input keeps focus. `loud` reports a broken link — used once the captain
+   leaves the field, not on every keystroke while they are mid-paste. */
+function paintMapPreview(link, pin, loud) {
+  var box = document.getElementById("hub-map-box"),
+      hint = document.getElementById("hub-map-hint"),
+      prev = document.getElementById("hub-map-preview");
+  if (!prev) return;
+  var c = checkMapPin(link, pin);
+  var key = (c.lat == null ? "" : c.lat + "," + c.lng) + "|" + (pin || "") + "|" + c.code;
+  if (prev.getAttribute("data-key") !== key) {
+    prev.innerHTML = mapPreviewHtml(link, pin);
+    prev.setAttribute("data-key", key);
+  }
+  var show = !c.ok && String(link || "").trim() && (loud || c.lat != null);
+  if (box) box.classList.toggle("bad", !!show);
+  if (hint) {
+    hint.classList.toggle("err", !!show);
+    hint.textContent = show ? c.msg : MAP_HINT;
+  }
+}
+
+function gmapsUrl(c) { return "https://www.google.com/maps?q=" + c.lat + "," + c.lng; }
+
+/* The pin on a live Google map, with whether it sits inside the pincode.
+   Nothing is drawn until the link yields a location to show. */
+function mapPreviewHtml(link, pin) {
+  var c = checkMapPin(link, pin);
+  if (c.lat == null) return "";
+  var area = pin && PIN_AREAS[pin];
+  var badge = c.ok
+    ? (c.pending
+        ? '<span class="st grey">Pick the hub pincode to check this pin</span>'
+        : '<span class="st green" data-testid="map-pin-ok">Inside ' + esc(pin) +
+          (area ? ' · ' + esc(area.name) : '') + '</span>')
+    : '<span class="st red" data-testid="map-pin-bad">' + esc(c.short) + '</span>';
+  return '<div class="map-prev" data-testid="map-preview">' +
+      '<div class="map-frame"><iframe title="Map preview of the hub location" loading="lazy" ' +
+        'referrerpolicy="no-referrer-when-downgrade" ' +
+        'src="https://maps.google.com/maps?q=' + c.lat + ',' + c.lng + '&amp;z=16&amp;output=embed">' +
+      '</iframe></div>' +
+      '<div class="map-meta">' + badge +
+        '<span class="coords">' + c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) +
+          (c.ok && !c.pending ? ' · ' + c.distKm.toFixed(1) + ' km from the area centre' : '') +
+        '</span>' +
+        '<a href="' + esc(gmapsUrl(c)) + '" target="_blank" rel="noopener">Open in Google Maps ↗</a>' +
+      '</div>' +
+    '</div>';
+}
+
 var ERR = {
   pincodeFormat: "Enter a valid 6-digit pincode.",
   pincodeDupe:   "This pincode is already added.",
@@ -1187,6 +1337,10 @@ var ERR = {
   gstin:         "GSTIN must be 15 characters.",
   gstRequired:   "GST registration is mandatory for FM captains.",
   mapLink:       "Paste a valid Google Maps link.",
+  mapNoPin:      "This link has no pin location in it. Drop a pin on the hub in Google Maps and paste that link.",
+  mapShort:      "Short links can\u2019t be checked here. Open it in Google Maps and paste the full link from the address bar.",
+  mapRange:      "Those map coordinates aren\u2019t valid.",
+  mapIndia:      "This pin is outside India. Check the link points at the hub.",
   aadhaar:       "Enter a valid 12-digit Aadhaar number.",
   email:         "Enter a valid email address.",
   phone:         "Enter a valid 10-digit mobile number.",
@@ -4123,6 +4277,15 @@ function paintVehicleList() {
   bindVehicleRows();
 }
 
+function mapRow(link) {
+  var c = parseMapLink(link);
+  return '<div class="row"><span class="k">Map location</span><span class="v">' +
+    (c ? '<a href="' + esc(gmapsUrl(c)) + '" target="_blank" rel="noopener" ' +
+         'style="color:var(--cyan-ink);text-decoration:none">' +
+         c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) + ' ↗</a>'
+       : '—') + '</span></div>';
+}
+
 function hubSpecRows(h) {
   var area = h.areaSqft ? Number(h.areaSqft).toLocaleString("en-IN") + " sq ft" : "—";
   var maxV = h.maxVehicle || "";
@@ -4211,6 +4374,7 @@ function phaseHUB(r) {
           '<div class="row"><span class="k">Hub address</span><span class="v">' + esc(h.address) + '</span></div>' +
           '<div class="row"><span class="k">Hub pincode</span><span class="v">' + esc(h.pincode) + '</span></div>' +
           '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
+          mapRow(h.mapLink) +
           hubSpecRows(h) +
           '<div class="row"><span class="k">Hub code</span>' +
             '<span class="v mute">Finalised later</span></div>' +
@@ -4229,6 +4393,7 @@ function phaseHUB(r) {
           '<div class="row"><span class="k">Hub address</span><span class="v">' + esc(h.address) + '</span></div>' +
           '<div class="row"><span class="k">Hub pincode</span><span class="v">' + esc(h.pincode) + '</span></div>' +
           '<div class="row"><span class="k">City / State</span><span class="v">' + esc(h.city) + '</span></div>' +
+          mapRow(h.mapLink) +
           hubSpecRows(h) +
         '</div>' +
         '<div class="cfoot">' + backBtn(r) +
@@ -4252,7 +4417,7 @@ function phaseHUB(r) {
         '<div class="hint' + (e.address ? ' err' : '') + '">' +
           (e.address || "Enter the full address of the proposed hub.") + '</div></div>' +
       '<div class="fl"><label>Google Maps link</label>' +
-        '<div class="box' + (e.mapLink ? ' bad' : '') + '">' +
+        '<div class="box' + (e.mapLink ? ' bad' : '') + '" id="hub-map-box">' +
           '<input id="hub-map" placeholder="https://maps.google.com/?q=..." ' +
             'value="' + esc(h.mapLink) + '">' +
           '<button class="btn-sm" id="hub-photo-btn" type="button" ' +
@@ -4260,9 +4425,10 @@ function phaseHUB(r) {
             (h.photo ? "Replace photo" : "Add photo") + '</button>' +
           '<input type="file" id="hub-photo-file" accept="image/*" hidden>' +
         '</div>' +
-        '<div class="hint' + (e.mapLink || e.photo ? ' err' : '') + '">' +
-          (e.photo || e.mapLink || "Paste a valid Google Maps link. A photo of the location is optional.") +
+        '<div class="hint' + (e.mapLink || e.photo ? ' err' : '') + '" id="hub-map-hint">' +
+          esc(e.photo || e.mapLink || MAP_HINT) +
         '</div>' +
+        '<div id="hub-map-preview">' + mapPreviewHtml(h.mapLink, h.selected) + '</div>' +
         photoRow(h) +
       '</div>' +
       '<div class="grid2">' +
@@ -4309,6 +4475,8 @@ function cityFor(pin) {
   var map = {
     "560076":"Bengaluru, Karnataka", "560034":"Bengaluru, Karnataka",
     "560102":"Bengaluru, Karnataka", "560001":"Bengaluru, Karnataka",
+    "560038":"Bengaluru, Karnataka", "560071":"Bengaluru, Karnataka",
+    "560099":"Bengaluru, Karnataka", "560058":"Bengaluru, Karnataka",
     "110017":"New Delhi, Delhi", "400059":"Mumbai, Maharashtra"
   };
   return map[pin] || (pin ? "Resolved from pincode" : "");
@@ -4943,7 +5111,8 @@ var A = {
     h.errors = {};
     if (!h.selected) h.errors.pincode = ERR.pincodeSelect;
     if (!String(address == null ? "" : address).trim()) h.errors.address = ERR.hubAddress;
-    if (!V.mapLink(mapLink))      h.errors.mapLink  = ERR.mapLink;
+    var pinCheck = checkMapPin(mapLink, h.selected);
+    if (!pinCheck.ok) h.errors.mapLink = pinCheck.msg;
     if (!V.hubArea(areaSqft))     h.errors.areaSqft = ERR.hubArea;
     if (!V.hubManpower(manpower)) h.errors.manpower = ERR.hubManpower;
     if (!V.vehicle(maxVehicle))   h.errors.maxVehicle = ERR.hubVehicle;
@@ -5818,7 +5987,14 @@ function bind() {
 
   /* hub */
   on("hub-address", "input", function (e) { r.hub.address = e.target.value; save(); });
-  on("hub-map", "input", function (e) { r.hub.mapLink = e.target.value; save(); });
+  on("hub-map", "input", function (e) {
+    r.hub.mapLink = e.target.value; save();
+    paintMapPreview(r.hub.mapLink, r.hub.selected, false);
+  });
+  on("hub-map", "change", function (e) {
+    r.hub.mapLink = e.target.value; save();
+    paintMapPreview(r.hub.mapLink, r.hub.selected, true);
+  });
   on("hub-area", "input", function (e) { r.hub.areaSqft = e.target.value; save(); });
   on("hub-manpower", "input", function (e) { r.hub.manpower = e.target.value; save(); });
   bindVehicleRows();
@@ -6376,6 +6552,7 @@ if (typeof window !== "undefined") {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
+      parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,

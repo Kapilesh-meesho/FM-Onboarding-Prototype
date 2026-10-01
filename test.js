@@ -205,12 +205,21 @@ function pickMaxVehicle(doc, type) {
   row.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
 }
 
+/* A Google Maps link pinned at the centre of a pincode's area — so a driver's
+   pin always lands inside the pincode it picked. */
+function mapFor(doc, pin) {
+  const a = doc.defaultView.__APP__.helpers.PIN_AREAS[pin];
+  if (!a) throw new Error("mapFor: no area for " + pin);
+  return "https://maps.google.com/?q=" + a.lat + "," + a.lng;
+}
+
 function doHubDetails(doc, { pin = "560076",
                               address = "No. 42, 4th Cross, Koramangala, Bengaluru",
-                              map = "https://maps.google.com/?q=12.9352,77.6245",
+                              map,
                               area = "4000", manpower = "12",
                               maxVehicle = "7MT_20FT" } = {}) {
   if (pin && exists(doc, "#hub-pins")) pickPincode(doc, pin);
+  if (!map) map = mapFor(doc, doc.defaultView.__APP__.helpers.R().hub.selected || pin);
   type(doc, "hub-address", address);
   type(doc, "hub-map", map);
   type(doc, "hub-area", area);
@@ -395,8 +404,7 @@ async function testFMCombined() {
   click(doc, "kyc-continue");
   eq(api.helpers.phaseId(), "hub", "FM KYC → hub details (now before background verification)");
 
-  doHubDetails(doc, { address: "Plot 7, Bommasandra Industrial Area, Bengaluru",
-                      map: "https://maps.google.com/?q=12.8156,77.6982",
+  doHubDetails(doc, { address: "Plot 7, 16th Main, BTM Layout 2nd Stage, Bengaluru",
                       area: "6500", manpower: "18", maxVehicle: "10MT_32FT" });
   check(!api.helpers.R().hub.hubCode,
         "FM hub details submit does NOT generate a hub code");
@@ -2781,7 +2789,7 @@ async function testCopyConsistency() {
   /* --- one framing for the vehicle count, picker and summary alike --- */
   pickPincode(doc, "560076");
   type(doc, "hub-address", "Plot 7, Bommasandra");
-  type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
+  type(doc, "hub-map", mapFor(doc, "560076"));
   type(doc, "hub-area", "4000");
   type(doc, "hub-manpower", "12");
   pickMaxVehicle(doc, "7MT_20FT");
@@ -2948,6 +2956,100 @@ async function testPincodesOnHub() {
   b.win.close();
 }
 
+/* =========================================================================
+   22. Map preview and pin-location checks
+   ====================================================================== */
+
+async function testMapPin() {
+  section("22. Map preview and pin-location checks");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, E = api.errors;
+  const at = (pin) => "https://maps.google.com/?q=" + H.PIN_AREAS[pin].lat + "," + H.PIN_AREAS[pin].lng;
+
+  /* --- the link formats Google Maps hands out --- */
+  eq(H.parseMapLink("https://maps.google.com/?q=12.9081,77.6040"), { lat: 12.9081, lng: 77.604 },
+     "?q=lat,lng");
+  eq(H.parseMapLink("https://www.google.com/maps/@12.9116,77.6474,17z"), { lat: 12.9116, lng: 77.6474 },
+     "/@lat,lng,zoom");
+  eq(H.parseMapLink("https://www.google.com/maps/place/Hub/@12.0,77.0,17z/data=!3d12.9081!4d77.6040"),
+     { lat: 12.9081, lng: 77.604 }, "a place link reads the pin, not where the map was scrolled");
+  eq(H.parseMapLink("https://maps.google.com/?q=12.9081%2C77.6040"), { lat: 12.9081, lng: 77.604 },
+     "an encoded comma");
+  eq(H.parseMapLink("https://maps.app.goo.gl/AbC123"), null, "a short link carries no coordinates");
+  eq(H.parseMapLink("https://maps.google.com/?q=Koramangala"), null, "nor does a text search");
+
+  /* --- every outcome of the check --- */
+  const k = (link, pin) => H.checkMapPin(link, pin);
+  check(k(at("560076"), "560076").ok, "a pin at the pincode's centre passes");
+  const wrong = k(at("560034"), "560076");
+  eq(wrong.code, "elsewhere", "a pin in a neighbouring pincode fails");
+  check(wrong.msg.indexOf("560034 (Koramangala)") >= 0 && wrong.msg.indexOf("560076") >= 0,
+        "and names both the pincode it is in and the one it should be in");
+  const far = k("https://maps.google.com/?q=12.30,76.65", "560076");
+  eq(far.code, "far", "a pin in another city fails");
+  check(/123\.\d km/.test(far.msg), "with how far off it is: " + far.msg.slice(0, 40));
+  eq(k("https://maps.google.com/?q=51.5,-0.12", "560076").code, "india", "a pin abroad fails");
+  eq(k("https://maps.google.com/?q=12.9,190.2", "560076").code, "range", "impossible coordinates fail");
+  eq(k("https://maps.app.goo.gl/AbC123", "560076").msg, E.mapShort, "a short link gets its own advice");
+  eq(k("https://maps.google.com/?q=Koramangala", "560076").msg, E.mapNoPin, "a pinless link too");
+  eq(k("notalink", "560076").msg, E.mapLink, "a non-maps link is a format error");
+  const pending = k(at("560076"), null);
+  check(pending.ok && pending.pending, "with no pincode chosen there is nothing to check it against yet");
+
+  /* --- on hub details --- */
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  pickPincode(doc, "560076");
+  check(!exists(doc, '[data-testid="map-preview"]'), "no preview before a link is pasted");
+
+  const input = $(doc, "hub-map");
+  type(doc, "hub-map", at("560076"));
+  check($(doc, "hub-map") === input, "typing patches the preview in place — the field is never redrawn");
+  check(exists(doc, '[data-testid="map-preview"]'), "a valid link draws the preview");
+  const frame = sel(doc, '[data-testid="map-preview"] iframe');
+  check(!!frame && frame.getAttribute("src").indexOf("q=12.9081,77.604") >= 0 &&
+        frame.getAttribute("src").indexOf("output=embed") >= 0,
+        "as an embedded Google map at the pin");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "marked inside the pincode");
+  check(sel(doc, '[data-testid="map-pin-ok"]').textContent.indexOf("560076 · BTM Layout") >= 0,
+        "naming the pincode and its area");
+  check(txt(doc).indexOf("Open in Google Maps") >= 0, "with a link out to Google Maps");
+
+  /* a wrong pin is flagged while typing, because its coordinates already read */
+  type(doc, "hub-map", at("560034"));
+  check(exists(doc, '[data-testid="map-pin-bad"]'), "a pin in another pincode is flagged on the map");
+  check($(doc, "hub-map-hint").textContent.indexOf("560034 (Koramangala)") >= 0,
+        "and explained under the field straight away");
+  check($(doc, "hub-map-box").classList.contains("bad"), "with the field marked");
+
+  /* a half-typed link is left alone until the captain leaves the field */
+  type(doc, "hub-map", "https://maps.goo");
+  check(!$(doc, "hub-map-box").classList.contains("bad"), "a half-typed link is not shouted at");
+  $(doc, "hub-map").dispatchEvent(new win.Event("change", { bubbles: true }));
+  check($(doc, "hub-map-box").classList.contains("bad"), "but is flagged once the field is left");
+  eq($(doc, "hub-map-hint").textContent, E.mapLink, "with the format error");
+
+  /* submit runs the same check */
+  doHubDetails(doc, { pin: null, map: at("560034") });
+  check(!H.R().hub.submitted, "a hub pinned outside its pincode cannot be submitted");
+  check(txt(doc).indexOf("not the hub’s pincode 560076") >= 0, "and says why");
+
+  /* choosing the pincode the pin is actually in clears it */
+  api.actions.addPincodes("560034");
+  api.actions.checkAvailability();
+  api.actions.selectPincode("560034");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "re-picking the pincode re-checks the pin");
+  doHubDetails(doc, { pin: null, map: at("560034") });
+  check(H.R().hub.submitted, "and the hub submits");
+  check(txt(doc).indexOf("Map location") >= 0 && txt(doc).indexOf("12.93520, 77.62450") >= 0,
+        "the summary records where the pin landed");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -2974,6 +3076,7 @@ async function testPincodesOnHub() {
     await testFMNoSplit();
     await testCopyConsistency();
     await testPincodesOnHub();
+    await testMapPin();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }
