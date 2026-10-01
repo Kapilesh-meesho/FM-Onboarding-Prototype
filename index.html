@@ -1607,7 +1607,7 @@ var ERR = {
   pincodeFormat: "Enter a valid 6-digit pincode.",
   pincodeDupe:   "This pincode is already added.",
   pincodeMax:    "You can add up to 5 pincodes.",
-  pincodeSelect: "Check availability and pick the pincode this hub will run in.",
+  pincodeSelect: "Enter the hub’s pincode, or check availability below and pick one.",
   pan:           "Enter a valid PAN (e.g. ABCDE1234F).",
   panFather:     "Father's name is required for PAN verification.",
   ifsc:          "Enter a valid IFSC (e.g. HDFC0001234).",
@@ -1673,6 +1673,7 @@ function blankRole(role) {
            // serviceable-pincode picker: up to 5 candidates, an availability
            // check, and the one this hub will run in
            pincodes:[], checked:false, selected:null, lastAdded:0,
+           pinEntry:"",          // what is typed into the Hub pincode field itself
            areaSqft:"", manpower:"", maxVehicle:"",
            photo:"", photoName:"",
            submitted:false, hubCode:null, returnTo:null, errors:{} },
@@ -5264,6 +5265,41 @@ function pincodePicker(h) {
   '</div>';
 }
 
+/* The Hub pincode field: typed straight in, or filled by a pick from the
+   serviceable-pincode check further down. While a typed pincode is not yet the
+   hub's (part-typed, refused, or waiting on the check) it shows what was typed. */
+var HUB_PIN_HINT = "Type the hub’s pincode, or pick one from the serviceable pincodes below.";
+function hubPinHint(h) {
+  var e = h.errors || {};
+  if (e.hubPin) return { err:true, text:e.hubPin };
+  if (!h.selected && e.pincode === ERR.pincodeSelect) return { err:true, text:ERR.pincodeSelect };
+  if (!h.selected && h.pinEntry && h.pinEntry.length === 6) {
+    return { err:false, text:"Check availability below to confirm " + h.pinEntry + "." };
+  }
+  return { err:false, text:HUB_PIN_HINT };
+}
+function hubPinField(h) {
+  var hint = hubPinHint(h);
+  return '<div class="fl"><label>Hub pincode</label>' +
+    '<div class="box' + (hint.err ? ' bad' : '') + '" id="hub-pin-box">' +
+      '<input id="hub-pin" inputmode="numeric" maxlength="6" placeholder="6-digit pincode" ' +
+        'value="' + esc(h.pinEntry || h.selected || "") + '"></div>' +
+    '<div class="hint' + (hint.err ? ' err' : '') + '" id="hub-pin-hint">' + esc(hint.text) + '</div></div>';
+}
+
+/* Re-render, then put the caret back where the captain was typing — a full
+   render() replaces the field and would otherwise drop focus mid-entry. */
+function renderKeepingFocus(id) {
+  var el = document.getElementById(id), had = !!el && document.activeElement === el;
+  var pos = had && typeof el.selectionStart === "number" ? el.selectionStart : null;
+  render();
+  if (!had) return;
+  var again = document.getElementById(id);
+  if (!again) return;
+  again.focus();
+  if (pos != null) { try { again.setSelectionRange(pos, pos); } catch (e) {} }
+}
+
 function phaseHUB(r) {
   var h = r.hub, e = h.errors || {}, fm = r.role === "FM", inner;
   var maxVehicle = h.maxVehicle || "";
@@ -5334,10 +5370,7 @@ function phaseHUB(r) {
         photoRow(h) +
       '</div>' +
       '<div class="grid2">' +
-        '<div class="fl"><label>Hub pincode</label>' +
-          '<div class="box"><input id="hub-pin" value="' + esc(h.selected || "") + '" ' +
-            'placeholder="Not selected yet" disabled></div>' +
-          '<div class="hint">Choose it from the serviceable pincodes below.</div></div>' +
+        hubPinField(h) +
         '<div class="fl"><label>City / State</label>' +
           '<div class="box"><input id="hub-city" value="' + esc(cityFor(h.selected)) + '" disabled></div>' +
           '<div class="hint">Resolved from pincode.</div></div>' +
@@ -5701,6 +5734,7 @@ var A = {
     var h = R().hub;
     h.pincodes = h.pincodes.filter(function (x) { return x !== p; });
     if (h.selected === p) h.selected = null;
+    if (h.pinEntry === p) { h.pinEntry = ""; if (h.errors) delete h.errors.hubPin; }
     h.checked = false;
     if (h.errors) delete h.errors.pincode;
     save(); render();
@@ -5710,15 +5744,63 @@ var A = {
     if (!h.pincodes.length) return;
     if (!apiCall(R(), "pincode")) { h.checked = false; h.selected = null; save(); render(); return; }
     h.checked = true; h.selected = null;
-    if (h.errors) delete h.errors.pincode;
+    h.errors = h.errors || {};
+    delete h.errors.pincode;
+    /* a pincode typed into the Hub pincode field is chosen as soon as the
+       check confirms it */
+    var typed = h.pinEntry;
+    if (typed && h.pincodes.indexOf(typed) >= 0) {
+      delete h.errors.hubPin;
+      if (SERVICEABLE.indexOf(typed) >= 0) h.selected = typed;
+      else h.errors.hubPin = "VALMO isn’t opening hubs in " + typed + " yet. Try another pincode.";
+    }
     save(); render();
   },
   selectPincode: function (p) {
     var h = R().hub;
     if (!h.checked || SERVICEABLE.indexOf(p) < 0 || h.pincodes.indexOf(p) < 0) return;
     h.selected = p;
-    if (h.errors) delete h.errors.pincode;
+    h.pinEntry = "";                      // the Hub pincode field now shows the pick
+    if (h.errors) { delete h.errors.pincode; delete h.errors.hubPin; }
     save(); render();
+  },
+  /* The Hub pincode field takes a pincode typed straight in. A complete one runs
+     the same availability check as the list below — joining that list if it
+     isn't on it — and becomes the hub's pincode when VALMO serves it. Nothing is
+     redrawn while the captain is part-way through typing. */
+  typeHubPincode: function (v) {
+    var r = R(), h = r.hub;
+    h.errors = h.errors || {};
+    v = String(v == null ? "" : v).replace(/\D/g, "").slice(0, 6);
+    var redraw = !!h.selected || !!h.errors.hubPin ||
+                 (!!h.pinEntry && h.pinEntry.length === 6);
+    h.pinEntry = v;
+    delete h.errors.hubPin;
+    if (h.errors.pincode === ERR.pincodeSelect) delete h.errors.pincode;
+    if (v.length < 6) {
+      h.selected = null;
+      save();
+      if (redraw) renderKeepingFocus("hub-pin");
+      return;
+    }
+    h.selected = null;
+    if (!V.pincode(v)) {
+      h.errors.hubPin = ERR.pincodeFormat;
+    } else if (h.pincodes.indexOf(v) < 0 && h.pincodes.length >= 5) {
+      h.errors.hubPin = "You’ve added 5 pincodes below already — remove one to use " + v + ".";
+    } else {
+      if (h.pincodes.indexOf(v) < 0) h.pincodes.push(v);
+      if (!apiCall(r, "pincode")) {
+        h.checked = false;
+        h.errors.hubPin = "We couldn’t check " + v + " just now — resume the check below.";
+      } else {
+        h.checked = true;
+        if (SERVICEABLE.indexOf(v) >= 0) { h.selected = v; delete h.errors.pincode; }
+        else h.errors.hubPin = "VALMO isn’t opening hubs in " + v + " yet. Try another pincode.";
+      }
+    }
+    save();
+    renderKeepingFocus("hub-pin");
   },
 
   sendEmailOtp: function () {
@@ -7138,6 +7220,11 @@ function bind() {
     el.addEventListener("click", function () { A.selectPincode(el.getAttribute("data-selpin")); });
   });
   on("hub-check", "click", A.checkAvailability);
+  on("hub-pin", "input", function (e) {
+    var v = e.target.value.replace(/\D/g, "").slice(0, 6);
+    if (v !== e.target.value) e.target.value = v;
+    A.typeHubPincode(v);
+  });
   on("pd-continue", "click", A.pdContinue);
 
   /* kyc */

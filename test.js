@@ -2920,7 +2920,7 @@ async function testPincodesOnHub() {
   check(isBefore($(doc, "hub-area"), picker) && isBefore($(doc, "hub-manpower"), picker),
         "and after hub area and estimated manpower");
   check(isBefore(picker, $(doc, "veh-toggle")), "and before max vehicle size");
-  check(txt(doc).indexOf("Choose it from the serviceable pincodes below.") >= 0,
+  check(txt(doc).indexOf("Type the hub\u2019s pincode, or pick one from the serviceable pincodes below.") >= 0,
         "the hub pincode field points down to it");
   check($(doc, "hub-check").disabled, "Check availability waits for a pincode");
   type(doc, "hub-pins", "560076, 700001");
@@ -3889,6 +3889,97 @@ async function testRateUpdates() {
   win.close();
 }
 
+/* =========================================================================
+   28. The hub pincode can be typed straight into its field
+   ====================================================================== */
+
+async function testTypedHubPincode() {
+  section("28. Typing the hub pincode after the map link");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, E = api.errors, A = api.actions;
+  const hint = () => $(doc, "hub-pin-hint").textContent;
+
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  eq(H.phaseId(), "hub", "at hub details");
+  type(doc, "hub-address", "Plot 7, 16th Main, BTM Layout 2nd Stage, Bengaluru");
+  type(doc, "hub-map", mapFor(doc, "560076"));
+  check(!exists(doc, '[data-testid="map-pin-ok"]'), "with no pincode yet the pin waits to be checked");
+
+  const pin = $(doc, "hub-pin");
+  check(!pin.disabled, "the Hub pincode field after the map link can be typed in");
+  eq(hint(), "Type the hub’s pincode, or pick one from the serviceable pincodes below.",
+     "and says both ways in");
+
+  pin.focus();
+  type(doc, "hub-pin", "5600");
+  check($(doc, "hub-pin") === pin, "a part-typed pincode is left alone — nothing redraws mid-entry");
+  type(doc, "hub-pin", "560076");
+  eq(H.R().hub.selected, "560076", "a complete serviceable pincode becomes the hub’s pincode");
+  eq(doc.activeElement && doc.activeElement.id, "hub-pin", "the caret stays in the field");
+  eq($(doc, "hub-pin").value, "560076", "which still shows it");
+  eq($(doc, "hub-city").value, "Bengaluru, Karnataka", "the city resolves from it");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "and the map pin is checked against it at once");
+  check(exists(doc, '[data-selpin="560076"].on'), "the serviceable-pincode check below shows it chosen");
+  eq(H.R().hub.pincodes, ["560076"], "having joined that list");
+
+  /* refused entries */
+  type(doc, "hub-pin", "700001");
+  check(hint().indexOf("VALMO isn’t opening hubs in 700001 yet.") >= 0, "an unserviceable pincode is refused at the field");
+  check($(doc, "hub-pin-box").classList.contains("bad"), "the field is marked");
+  eq(H.R().hub.selected, null, "nothing is chosen");
+  check(sel(doc, '[data-testid="pincode-picker"]').textContent.indexOf("700001 ✕") >= 0,
+        "and the check below marks it unavailable");
+  type(doc, "hub-pin", "012345");
+  eq(hint(), E.pincodeFormat, "a malformed pincode is refused too");
+
+  /* picking from the check fills the field */
+  clickSel(doc, '[data-selpin="560076"]');
+  eq($(doc, "hub-pin").value, "560076", "picking from the check below fills the field");
+  eq(hint(), "Type the hub’s pincode, or pick one from the serviceable pincodes below.", "and clears its error");
+
+  /* clearing the field means there is no hub pincode */
+  type(doc, "hub-pin", "");
+  eq(H.R().hub.selected, null, "clearing the field clears the hub’s pincode");
+  click(doc, "hub-submit");
+  eq(hint(), E.pincodeSelect, "submitting without one says so at the field");
+  check(!H.R().hub.submitted, "and nothing is submitted");
+
+  /* a full list, then a failed check that resumes */
+  A.addPincodes("560034, 560102, 110017");
+  eq(H.R().hub.pincodes.length, 5, "the list below is full");
+  type(doc, "hub-pin", "560001");
+  check(hint().indexOf("You’ve added 5 pincodes below already") >= 0, "a sixth pincode can’t join it");
+  A.removePincode("700001");
+  A.armFail("pincode", "timeout");
+  type(doc, "hub-pin", "560001");
+  check(hint().indexOf("We couldn’t check 560001 just now") >= 0, "a failed check is explained at the field");
+  check(exists(doc, '[data-testid="api-fail"]'), "with the failure notice in the check below");
+  eq($(doc, "hub-check").textContent, "Resume check", "which resumes from there");
+  click(doc, "hub-check");
+  eq(H.R().hub.selected, "560001", "the resumed check chooses the pincode that was typed");
+  eq($(doc, "hub-pin").value, "560001", "and the field shows it");
+
+  /* adding candidates later clears the pick, but never what was typed */
+  A.removePincode("110017");               // make room in the list of five
+  A.addPincodes("400059");
+  eq(H.R().hub.selected, null, "adding more pincodes clears the pick, as before");
+  eq($(doc, "hub-pin").value, "560001", "but the typed pincode stays in the field");
+  eq(hint(), "Check availability below to confirm 560001.", "waiting on the check");
+  click(doc, "hub-check");
+  eq(H.R().hub.selected, "560001", "and is chosen again once it runs");
+
+  /* the typed pincode is the one the hub is submitted with */
+  doHubDetails(doc, { pin: null, map: mapFor(doc, "560001") });
+  check(H.R().hub.submitted, "hub details submits");
+  eq(H.R().hub.pincode, "560001", "with the pincode typed into the field");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -3921,6 +4012,7 @@ async function testRateUpdates() {
     await testAmMapEdit();
     await testHubEdits();
     await testRateUpdates();
+    await testTypedHubPincode();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

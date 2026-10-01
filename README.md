@@ -201,11 +201,14 @@ classification, not a mapping feature.)
 
 ### Shared behaviour worth calling out
 
-**The serviceable-pincode check opens hub details.** It used to sit on personal details,
+**The serviceable-pincode check lives on hub details.** It used to sit on personal details,
 which now asks only about the person (name, email, alternate phone). The hub's pincode is
-picked from the serviceable results, which sit between the hub area / estimated manpower
-row and max vehicle size — and an existing captain
-adding a hub now picks one too, which they previously never did. An older save that kept
+typed straight into the **Hub pincode** field after the map link — a complete pincode runs
+the same availability check, joins the list and becomes the hub's pincode when VALMO serves
+it, with the city and the map pin checked at once — or picked from the serviceable results,
+which sit between the hub area / estimated manpower row and max vehicle size. The two stay in
+step: a pick fills the field, and a typed pincode shows as chosen in the check. An existing
+captain adding a hub now picks one too, which they previously never did. An older save that kept
 the picks on personal details is migrated onto hub details on load.
 
 **Serviceable pincodes take a pasted list.** Rather than adding one at a time, a captain
@@ -674,7 +677,7 @@ build from.
 npm install && npm test
 ```
 
-**1411 assertions across 27 groups:**
+**1449 assertions across 28 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -763,6 +766,11 @@ npm install && npm test
    before max vehicle size; an unserviceable pincode cannot
    be forced in; the pick survives a failed submit; an older save is migrated; an existing
    captain adding a hub picks one; and the availability notice counts properly
+28. **Typing the hub pincode** — the field after the map link takes a pincode: a complete
+   serviceable one is chosen with the caret kept in place, the city resolved and the map pin
+   checked; unserviceable, malformed and sixth pincodes are refused at the field; a pick from
+   the check fills it; clearing it clears the hub's pincode; a failed check resumes and
+   chooses what was typed; and the typed pincode is the one the hub submits with
 22. **Map pin** — every link format parsed, every outcome of the check (inside, another
    pincode, too far, abroad, impossible, short link, text search, no pincode yet), the
    embedded map and badges, live checking that keeps the field, a half-typed link left alone
