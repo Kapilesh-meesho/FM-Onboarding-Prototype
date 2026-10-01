@@ -3028,7 +3028,10 @@ async function testMapPin() {
   check(/123\.\d km/.test(far.msg), "with how far off it is: " + far.msg.slice(0, 40));
   eq(k("https://maps.google.com/?q=51.5,-0.12", "560076").code, "india", "a pin abroad fails");
   eq(k("https://maps.google.com/?q=12.9,190.2", "560076").code, "range", "impossible coordinates fail");
-  eq(k("https://maps.app.goo.gl/AbC123", "560076").msg, E.mapShort, "a short link gets its own advice");
+  const shared = k("https://maps.app.goo.gl/AbC123", "560076");
+  check(shared.ok && shared.code === "shared", "a short share link from the Maps app is accepted as it is");
+  check(!shared.msg, "with no advice to swap it for the full link");
+  check(H.isShortMapLink("https://goo.gl/maps/xyz789"), "the older goo.gl/maps form counts too");
   eq(k("https://maps.google.com/?q=Koramangala", "560076").msg, E.mapNoPin, "a pinless link too");
   eq(k("notalink", "560076").msg, E.mapLink, "a non-maps link is a format error");
   const pending = k(at("560076"), null);
@@ -3083,6 +3086,26 @@ async function testMapPin() {
   check(H.R().hub.submitted, "and the hub submits");
   check(txt(doc).indexOf("Map location") >= 0 && txt(doc).indexOf("12.93520, 77.62450") >= 0,
         "the summary records where the pin landed");
+
+  /* a short share link goes straight through — it opens in Google Maps */
+  const sh = await boot();
+  login(sh.doc);
+  pickRole(sh.doc, "FM");
+  doPersonalDetails(sh.doc);
+  doKyc(sh.doc, "FM");
+  pickPincode(sh.doc, "560076");
+  type(sh.doc, "hub-map", "https://maps.app.goo.gl/AbC123");
+  $(sh.doc, "hub-map").dispatchEvent(new sh.win.Event("change", { bubbles: true }));
+  check(!$(sh.doc, "hub-map-box").classList.contains("bad"), "hub details: a short share link is not flagged");
+  check($(sh.doc, "hub-map-hint").textContent.indexOf("Short links") === -1, "and gets no short-link advice");
+  const out = sel(sh.doc, '[data-testid="map-preview-shared"] a');
+  check(!!out && out.getAttribute("href") === "https://maps.app.goo.gl/AbC123",
+        "its preview is a link out to it in Google Maps");
+  doHubDetails(sh.doc, { pin: null, map: "https://maps.app.goo.gl/AbC123" });
+  check(sh.api.helpers.R().hub.submitted, "and hub details submits with it");
+  check(txt(sh.doc).indexOf("Google Maps share link") >= 0, "the summary shows it as a share link");
+  sh.api.stopTimers();
+  sh.win.close();
 
   api.stopTimers();
   win.close();
@@ -3567,6 +3590,12 @@ async function testAmMapEdit() {
   click(doc, "ap-map-save");
   check(exists(doc, '[data-testid="ap-map-updated"]'), "a second correction replaces the first");
   check(H.checkMapPin(H.apMapLink(req()), "560102").ok, "still inside the pincode");
+  click(doc, "ap-map-edit");
+  type(doc, "ap-map", "https://maps.app.goo.gl/HsrHub42");
+  click(doc, "ap-map-save");
+  eq(req().am.mapLink, "https://maps.app.goo.gl/HsrHub42", "a short share link can be saved too");
+  check(sel(doc, '[data-testid="ap-map-row"]').textContent.indexOf("Google Maps share link") >= 0,
+        "and shows as a share link");
 
   /* only the Area Manager edits it */
   A.adminSwitchRole();

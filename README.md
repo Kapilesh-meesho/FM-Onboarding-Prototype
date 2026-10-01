@@ -286,7 +286,8 @@ The pin is then checked against the pincode the captain picked:
 | Nearer another pincode | ✗ *This pin is in 560034 (Koramangala), not the hub's pincode 560076.* |
 | More than 4 km from the pincode's area | ✗ names the distance |
 | Outside India, or impossible coordinates | ✗ |
-| A short `maps.app.goo.gl` link, or a text search | ✗ asks for the full link with the hub pinned |
+| A short `maps.app.goo.gl` share link | ✓ accepted as it is — it opens in Google Maps; it has no coordinates in it, so it isn't previewed or pincode-checked here |
+| A text search with no pin | ✗ asks for a link with the hub pinned |
 | No pincode picked yet | previewed, checked once one is picked |
 
 The check runs live once a link has coordinates (a half-typed link is left alone until the
@@ -677,7 +678,7 @@ build from.
 npm install && npm test
 ```
 
-**1449 assertions across 28 groups:**
+**1458 assertions across 28 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -772,9 +773,10 @@ npm install && npm test
    the check fills it; clearing it clears the hub's pincode; a failed check resumes and
    chooses what was typed; and the typed pincode is the one the hub submits with
 22. **Map pin** — every link format parsed, every outcome of the check (inside, another
-   pincode, too far, abroad, impossible, short link, text search, no pincode yet), the
-   embedded map and badges, live checking that keeps the field, a half-typed link left alone
-   until the field is left, submit blocked with the same message, and the summary row
+   pincode, too far, abroad, impossible, text search, no pincode yet), the embedded map and
+   badges, live checking that keeps the field, a half-typed link left alone until the field
+   is left, submit blocked with the same message, the summary row, and a short share link
+   accepted as it is — linked out to Google Maps, submitting, and saved by the Area Manager
 23. **API failures and resume** — each failing call (email, Aadhaar at send and at fetch,
    PAN, bank, GST, availability, BGV, activation) shows the reason, a reference and that
    nothing is lost, keeps what was entered, and resumes from the same step; the failure

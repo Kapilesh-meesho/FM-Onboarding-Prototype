@@ -1509,14 +1509,23 @@ function haversineKm(a, b) {
 /* Every check a map link goes through: it is a Google Maps link, it carries a
    pin, the pin is a real place in India, and it sits inside the hub's pincode —
    both nearer that pincode than any other and within reach of its centre. */
+/* A short share link (maps.app.goo.gl, goo.gl/maps) — what the Google Maps app's
+   Share button gives. It carries no coordinates, only a redirect. */
+function isShortMapLink(link) {
+  return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps)\//i.test(String(link || "").trim());
+}
+
 function checkMapPin(link, pin) {
   link = String(link || "").trim();
   if (!link) return { ok:false, code:"empty", msg:ERR.mapLink };
   if (!V.mapLink(link)) return { ok:false, code:"format", msg:ERR.mapLink };
   var c = parseMapLink(link);
   if (!c) {
-    return { ok:false, code:"nocoords",
-             msg: /goo\.gl/i.test(link) ? ERR.mapShort : ERR.mapNoPin };
+    /* A short share link is accepted as it is. Resolving it to a pin needs a
+       server to follow the redirect, so this prototype can't preview it or
+       check it against the pincode — it opens in Google Maps instead. */
+    if (isShortMapLink(link)) return { ok:true, code:"shared", shared:true, msg:"" };
+    return { ok:false, code:"nocoords", msg:ERR.mapNoPin };
   }
   var out = { lat:c.lat, lng:c.lng };
   if (Math.abs(c.lat) > 90 || Math.abs(c.lng) > 180) {
@@ -1562,7 +1571,8 @@ function paintMapPreview(link, pin, loud, prefix, idle) {
       prev = document.getElementById(prefix + "-preview");
   if (!prev) return;
   var c = checkMapPin(link, pin);
-  var key = (c.lat == null ? "" : c.lat + "," + c.lng) + "|" + (pin || "") + "|" + c.code;
+  var key = (c.lat == null ? (c.shared ? String(link).trim() : "") : c.lat + "," + c.lng) + "|" +
+            (pin || "") + "|" + c.code;
   if (prev.getAttribute("data-key") !== key) {
     prev.innerHTML = mapPreviewHtml(link, pin);
     prev.setAttribute("data-key", key);
@@ -1581,6 +1591,12 @@ function gmapsUrl(c) { return "https://www.google.com/maps?q=" + c.lat + "," + c
    Nothing is drawn until the link yields a location to show. */
 function mapPreviewHtml(link, pin) {
   var c = checkMapPin(link, pin);
+  if (c.shared) {
+    return '<div class="map-prev" data-testid="map-preview-shared"><div class="map-meta">' +
+      '<span class="coords">Google Maps share link</span>' +
+      '<a href="' + esc(String(link).trim()) + '" target="_blank" rel="noopener">Open in Google Maps ↗</a>' +
+      '</div></div>';
+  }
   if (c.lat == null) return "";
   var area = pin && PIN_AREAS[pin];
   var badge = c.ok
@@ -1619,7 +1635,6 @@ var ERR = {
   gstRequired:   "GST registration is mandatory for FM captains.",
   mapLink:       "Paste a valid Google Maps link.",
   mapNoPin:      "This link has no pin location in it. Drop a pin on the hub in Google Maps and paste that link.",
-  mapShort:      "Short links can\u2019t be checked here. Open it in Google Maps and paste the full link from the address bar.",
   mapRange:      "Those map coordinates aren\u2019t valid.",
   mapIndia:      "This pin is outside India. Check the link points at the hub.",
   aadhaar:       "Enter a valid 12-digit Aadhaar number.",
@@ -1824,7 +1839,9 @@ function hubEditChanged(e) {
 function fmtArea(v) { return v ? Number(v).toLocaleString("en-IN") + " sq ft" : "—"; }
 function fmtPin(link) {
   var c = parseMapLink(link);
-  return c ? c.lat.toFixed(4) + ", " + c.lng.toFixed(4) : (link ? "No pin in the link" : "—");
+  if (c) return c.lat.toFixed(4) + ", " + c.lng.toFixed(4);
+  if (isShortMapLink(link)) return "Google Maps share link";
+  return link ? "No pin in the link" : "—";
 }
 function fmtPhone(p) {
   p = String(p || "").replace(/\D/g, "").slice(-10);
@@ -2966,7 +2983,8 @@ function hubCard(h) {
         '<div class="pr"><span class="pill-mute">Awaiting approval</span></div></div>';
     } else if (!editingDetails) {
       detailsRow = '<div class="prow"><div class="pl"><span class="k">Hub details</span>' +
-        '<span class="v">' + esc(fmtArea(h.areaSqft)) + ' · map pin ' + esc(fmtPin(h.mapLink)) + '</span></div>' +
+        '<span class="v">' + esc(fmtArea(h.areaSqft)) + ' · ' +
+          esc(parseMapLink(h.mapLink) ? "map pin " + fmtPin(h.mapLink) : fmtPin(h.mapLink)) + '</span></div>' +
         '<div class="pr"><button class="btn btn-ghost" data-hubedit="' + esc(h.id) + '">Edit hub details</button>' +
         '</div></div>';
     }
@@ -3466,7 +3484,10 @@ function apMapRow(r) {
       (c ? '<a href="' + esc(gmapsUrl(c)) + '" target="_blank" rel="noopener" ' +
            'style="color:var(--cyan-ink);text-decoration:none">' +
            c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ' ↗</a>'
-         : '<span class="mute">' + (link ? "No pin in the link" : "Not submitted") + '</span>') +
+         : isShortMapLink(link)
+           ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" ' +
+             'style="color:var(--cyan-ink);text-decoration:none">Google Maps share link ↗</a>'
+           : '<span class="mute">' + (link ? "No pin in the link" : "Not submitted") + '</span>') +
       (r.am.mapLink ? ' <span class="st amber" data-testid="ap-map-updated">AM updated</span>' : '') +
       (canEdit ? ' <button class="btn-link" id="ap-map-edit" style="font-size:12px;margin-left:6px">' +
                  'Edit</button>' : '') +
@@ -3989,11 +4010,18 @@ function apCentralDesignDetail(r) {
         row("City", esc(r.city || "—")) +
         row("Hub code", esc(r.hubCode || "—")) +
         row("Lat-Long / Map link", (function () {
-          var c = parseMapLink(apMapLink(r));
-          return c ? esc(c.lat.toFixed(4) + ", " + c.lng.toFixed(4)) + ' · <a href="' + esc(gmapsUrl(c)) +
-                     '" target="_blank" rel="noopener" style="color:var(--cyan-ink);text-decoration:none">' +
-                     'Open map ↗</a>' + (r.am.mapLink ? ' <span class="st amber">AM updated</span>' : '')
-                   : "—";
+          var link = apMapLink(r), c = parseMapLink(link);
+          var tag = r.am.mapLink ? ' <span class="st amber">AM updated</span>' : '';
+          if (c) {
+            return esc(c.lat.toFixed(4) + ", " + c.lng.toFixed(4)) + ' · <a href="' + esc(gmapsUrl(c)) +
+                   '" target="_blank" rel="noopener" style="color:var(--cyan-ink);text-decoration:none">' +
+                   'Open map ↗</a>' + tag;
+          }
+          if (isShortMapLink(link)) {
+            return 'Google Maps share link · <a href="' + esc(link) + '" target="_blank" rel="noopener" ' +
+                   'style="color:var(--cyan-ink);text-decoration:none">Open map ↗</a>' + tag;
+          }
+          return "—";
         })()) +
         row("Pincodes serving", esc((r.pincodesServing || []).join(", ") || "—")) +
         row("Max vehicle size", esc(amEffectiveVehicle(r) || "—")) +
@@ -5178,12 +5206,13 @@ function paintVehicleList() {
 }
 
 function mapRow(link) {
-  var c = parseMapLink(link);
+  var c = parseMapLink(link), shared = !c && isShortMapLink(link);
   return '<div class="row"><span class="k">Map location</span><span class="v">' +
-    (c ? '<a href="' + esc(gmapsUrl(c)) + '" target="_blank" rel="noopener" ' +
-         'style="color:var(--cyan-ink);text-decoration:none">' +
-         c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) + ' ↗</a>'
-       : '—') + '</span></div>';
+    (c || shared
+      ? '<a href="' + esc(c ? gmapsUrl(c) : String(link).trim()) + '" target="_blank" rel="noopener" ' +
+        'style="color:var(--cyan-ink);text-decoration:none">' +
+        (c ? c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) : 'Google Maps share link') + ' ↗</a>'
+      : '—') + '</span></div>';
 }
 
 function hubSpecRows(h) {
@@ -8058,6 +8087,7 @@ if (typeof window !== "undefined") {
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
       parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS, apMapLink: apMapLink,
+      isShortMapLink: isShortMapLink,
       hubEditOf: hubEditOf, hubEditById: hubEditById, hubEditChanged: hubEditChanged,
       rateUpdateById: rateUpdateById, rateUpdateFor: rateUpdateFor, rateHubs: rateHubs,
       captainNotes: captainNotes, cycleStart: cycleStart,
