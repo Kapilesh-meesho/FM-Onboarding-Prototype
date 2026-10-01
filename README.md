@@ -203,7 +203,8 @@ classification, not a mapping feature.)
 
 **The serviceable-pincode check opens hub details.** It used to sit on personal details,
 which now asks only about the person (name, email, alternate phone). The hub's pincode is
-picked from the serviceable results, right above the address — and an existing captain
+picked from the serviceable results, which sit between the hub area / estimated manpower
+row and max vehicle size — and an existing captain
 adding a hub now picks one too, which they previously never did. An older save that kept
 the picks on personal details is migrated onto hub details on load.
 
@@ -758,7 +759,8 @@ npm install && npm test
    activation and Captain Hub; and seeded requests whose address matches their pincode and
    whose serving pincodes include their own
 21. **Pincodes on hub details** — personal details asks only about the person; hub details
-   opens with the availability check ahead of the address; an unserviceable pincode cannot
+   carries the availability check after the address, map link, area and manpower and
+   before max vehicle size; an unserviceable pincode cannot
    be forced in; the pick survives a failed submit; an older save is migrated; an existing
    captain adding a hub picks one; and the availability notice counts properly
 22. **Map pin** — every link format parsed, every outcome of the check (inside, another

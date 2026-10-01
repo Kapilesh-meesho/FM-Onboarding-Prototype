@@ -261,7 +261,7 @@ async function testLM() {
         "LM accepted Non-GST as a complete GST answer (optional toggle)");
 
   check(exists(doc, '[data-testid="pincode-picker"]'),
-        "hub details opens with the serviceable-pincode check");
+        "hub details carries the serviceable-pincode check");
   doHubDetails(doc);
   eq(api.helpers.R().hub.selected, "560076", "serviceable pincode selected on hub details");
   eq(api.helpers.R().hub.pincode, "560076", "and recorded as the hub's pincode");
@@ -2908,13 +2908,20 @@ async function testPincodesOnHub() {
   eq(api.config.PHASES.FM[2].sub, "Pincode, address and facility",
      "it lists it under hub details instead");
 
-  /* --- hub details opens with the check --- */
+  /* --- hub details carries the check, between the facility size and the vehicle --- */
   doKyc(doc, "FM");
   eq(api.helpers.phaseId(), "hub", "KYC → hub details");
   const order = txt(doc);
   check(order.indexOf("Serviceable pincodes") >= 0, "hub details carries the pincode check");
-  check(order.indexOf("Serviceable pincodes") < order.indexOf("Hub address"),
-        "and it comes first, before the address");
+  const picker = sel(doc, '[data-testid="pincode-picker"]');
+  const isBefore = (a, b) => !!(a.compareDocumentPosition(b) & win.Node.DOCUMENT_POSITION_FOLLOWING);
+  check(isBefore($(doc, "hub-address"), picker) && isBefore($(doc, "hub-map"), picker),
+        "it comes after the address and map link");
+  check(isBefore($(doc, "hub-area"), picker) && isBefore($(doc, "hub-manpower"), picker),
+        "and after hub area and estimated manpower");
+  check(isBefore(picker, $(doc, "veh-toggle")), "and before max vehicle size");
+  check(txt(doc).indexOf("Choose it from the serviceable pincodes below.") >= 0,
+        "the hub pincode field points down to it");
   check($(doc, "hub-check").disabled, "Check availability waits for a pincode");
   type(doc, "hub-pins", "560076, 700001");
   click(doc, "hub-addpin");

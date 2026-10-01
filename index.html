@@ -5312,8 +5312,6 @@ function phaseHUB(r) {
       : "";
 
     inner = reconfirm +
-      pincodePicker(h) +
-      '<div style="height:1px;background:var(--line-soft);margin:22px 0 20px"></div>' +
       '<div class="fl"><label>Hub address</label>' +
         '<div class="box' + (e.address ? ' bad' : '') + '">' +
         '<input id="hub-address" placeholder="Full address of the proposed hub" ' +
@@ -5339,7 +5337,7 @@ function phaseHUB(r) {
         '<div class="fl"><label>Hub pincode</label>' +
           '<div class="box"><input id="hub-pin" value="' + esc(h.selected || "") + '" ' +
             'placeholder="Not selected yet" disabled></div>' +
-          '<div class="hint">Choose it from the available pincodes above.</div></div>' +
+          '<div class="hint">Choose it from the serviceable pincodes below.</div></div>' +
         '<div class="fl"><label>City / State</label>' +
           '<div class="box"><input id="hub-city" value="' + esc(cityFor(h.selected)) + '" disabled></div>' +
           '<div class="hint">Resolved from pincode.</div></div>' +
@@ -5358,6 +5356,11 @@ function phaseHUB(r) {
           '<div class="hint' + (e.manpower ? ' err' : '') + '">' +
             (e.manpower || "People you expect to employ at this hub.") + '</div></div>' +
       '</div>' +
+      /* the serviceable-pincode check sits between the facility size and the
+         max vehicle size, set apart from both */
+      '<div style="height:1px;background:var(--line-soft);margin:22px 0 20px"></div>' +
+      pincodePicker(h) +
+      '<div style="height:1px;background:var(--line-soft);margin:22px 0 20px"></div>' +
       vehicleField(maxVehicle, e.maxVehicle) +
       '<div class="cfoot">' + backBtn(r) +
         '<span class="note">Sensitive details are masked and used only for ' +
@@ -5367,9 +5370,9 @@ function phaseHUB(r) {
 
   return {
     left: phaseHeader(r, "Hub details",
-                      "Choose an available pincode, then add the hub address and map link.") +
+                      "Add the hub address and map link, describe the facility and pick its pincode.") +
           cardWrap("Hub details",
-                   "Check which of your pincodes VALMO is opening hubs in, then describe the facility.",
+                   "Describe the hub, and check which of your pincodes VALMO is opening hubs in.",
                    inner),
     side: sideDefault(r)
   };
