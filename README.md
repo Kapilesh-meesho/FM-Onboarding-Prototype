@@ -51,11 +51,17 @@ returns you to the picker mid-flow and resumes exactly where you left off.
 The dev panel's **Log in as** switch on the login screen decides which journey you get:
 
 - **New captain · no hubs yet** → role selection → full onboarding, as designed.
-- **Existing captain · 3 hubs** → straight into the **Captain Hub**, with the three hubs
-  from `HB-01` already seeded (two active, one inactive).
+- **Existing captain · 4 hubs** → straight into the **Captain Hub**, with the hubs from
+  `HB-01` already seeded — three LM hubs (two active, one inactive) and one live FM hub,
+  **KDG · Kudlu Gate Hub**, with an agreed rate card for the Area Manager to update.
 
 Onboarding always ends by creating a hub the captain then owns, so a new captain who
 completes a flow lands in the same Captain Hub with one hub.
+
+**Switching who signs in keeps what the others did.** Signing in as the Area Manager does
+not re-seed over a hub edit the captain just sent, and signing back in as the existing
+captain does not re-seed over the Area Manager's decision — so the captain ↔ Area Manager
+round trips below can be walked through the login switch. **Reset entire demo** starts over.
 
 ### LM Captain — 9 phases
 
@@ -195,6 +201,12 @@ classification, not a mapping feature.)
 
 ### Shared behaviour worth calling out
 
+**The serviceable-pincode check opens hub details.** It used to sit on personal details,
+which now asks only about the person (name, email, alternate phone). The hub's pincode is
+picked from the serviceable results, right above the address — and an existing captain
+adding a hub now picks one too, which they previously never did. An older save that kept
+the picks on personal details is migrated onto hub details on load.
+
 **Serviceable pincodes take a pasted list.** Rather than adding one at a time, a captain
 can type or paste several — separated by commas, semicolons, slashes or whitespace — and
 they are added in one action. Pasting a separated list adds it immediately without pressing
@@ -258,6 +270,74 @@ countdown is: a full `render()` would replace the search input and drop focus mi
 > collapsing stays visible and testable; if that second entry is genuinely a separate
 > vehicle, correct it there.
 
+**The map pin is previewed and checked against the hub's pincode.** Hub details reads the
+coordinates out of the pasted Google Maps link — `?q=lat,lng`, `/@lat,lng,zoom`, a place
+link's `!3d…!4d…` pin (which wins over where the map was scrolled), and
+`/place|search|dir/lat,lng` — and shows the pin on an embedded Google map with a link out.
+The pin is then checked against the pincode the captain picked:
+
+| Pin | Result |
+|---|---|
+| Nearest the hub's pincode and within 4 km of its centre | ✓ *Inside 560076 · BTM Layout* |
+| Nearer another pincode | ✗ *This pin is in 560034 (Koramangala), not the hub's pincode 560076.* |
+| More than 4 km from the pincode's area | ✗ names the distance |
+| Outside India, or impossible coordinates | ✗ |
+| A short `maps.app.goo.gl` link, or a text search | ✗ asks for the full link with the hub pinned |
+| No pincode picked yet | previewed, checked once one is picked |
+
+The check runs live once a link has coordinates (a half-typed link is left alone until the
+field is left), blocks submit with the same message, and the preview is patched in place so
+the field keeps focus. Reverse geocoding is **simulated** from pincode centroids
+(`PIN_AREAS`) so the prototype stays self-contained; the embed needs no API key.
+
+**A failed backend call says why, and resumes from the same step.** Every call a captain
+makes can fail the way the real service would — the email code, DigiLocker/UIDAI (at the
+OTP send or the fetch after it), the Income Tax PAN service, the bank's penny-drop, the GST
+portal, the pincode availability check, the background-check partner, and each activation
+system. The notice names what didn't go through, **the service's reason**, an error code
+with a reference and time for Support, and that nothing entered is lost. The card's own
+button becomes **Resume verification** (or *Resume*, *Resume check*, *Resume activation*)
+and re-runs the same call with the details already entered.
+
+The failure is saved with the application. After **Save & Exit** the role card says which
+step is waiting and offers **Resume onboarding**, and an existing captain's hub
+mid-onboarding is listed under *Onboarding in progress* with the reason. A resumed
+activation carries on from the system that failed rather than re-running the ones that
+finished. The dev panel arms a failure — timeout (504) or service down (503) — for the next
+call on the step the captain is on; background verification and activation fail in place.
+
+**GSTINs are verified, and the registered name matched to the bank account.** The KYC GST
+step, **Manage GSTIN** on an existing hub and a new GSTIN on *Add new hub* all run the same
+check: the GSTIN's format (state code, PAN, entity number, `Z`, check character — no longer
+just *15 characters*), a lookup on the GST portal (which can fail and be resumed like any
+call), the registration's status, and then a **fuzzy match** of its legal and trade names
+against the **bank account holder** — the name the penny-drop returned, not the profile
+name. On Manage GSTIN the portal's record and the name check are shown for the captain to
+save; nothing is applied on its own.
+
+The match ignores case, punctuation, word order, honorifics (*Mr*, *Shri*, *Smt*…) and
+legal-form words (*M/s*, *Pvt*, *Ltd*, *LLP*…). Each word of the shorter name pairs with its
+closest word in the other — exactly, as an initial (a weak match), or by Jaro-Winkler for
+spelling slips — and missing or extra words count against it:
+
+| Score | Result | Examples against *Karan Verma* |
+|---|---|---|
+| ≥ 95% | **Matches** | *KARAN VERMA*, *VERMA KARAN*, *Mr. Karan Verma*, *KARAN VERMAA* |
+| 78–95% | **Similar — accepted**, and labelled so | *VERMA KARAN KUMAR*, *K VERMA*, *KIRAN VERMA* |
+| < 78% | **Refused**, both names shown side by side | *KARAN SHARMA*, *KARAN*, *SHREE GANESH TRANSPORT CO* |
+
+The GST portal is **simulated**. A GSTIN carries its holder's PAN in characters 3–12, so a
+GSTIN on the captain's own PAN resolves to their proprietorship in their verified name, and
+the dev panel lists demo records for the other outcomes:
+
+| GSTIN | Record | Against *Karan Verma* |
+|---|---|---|
+| `29ABCDE1234F1Z5` | KARAN VERMA · Proprietorship | match |
+| `29ZZZZZ9999Z1Z9` | VERMA KARAN KUMAR · Proprietorship | similar (80%) |
+| `29AAJFS4321M1ZQ` | SHREE GANESH TRANSPORT CO · Partnership | refused |
+| `29AAGCV7788L1Z2` | VERMA FREIGHT PRIVATE LIMITED | cancelled 31 Mar 2025 — refused |
+| any other PAN | — | not registered — refused |
+
 ### LM behaviour worth calling out
 
 - **Area Manager two-strike rule** — one rejection sends the captain back to reconfirm hub
@@ -287,11 +367,37 @@ wrong code → lockout after three → new account form with account/IFSC/holder
 Onboarding in progress / Inactive. Each hub carries its own code, address, role and **its
 own GST registration** — one hub can be GST-registered while another is Non-GST. Per-hub
 GSTIN management is the designed flow (`HB-02`…`HB-06`): add, update, reject an invalid
-GSTIN, and remove behind a confirmation.
+GSTIN, and remove behind a confirmation — and adding or updating one now **verifies** it
+with the GST portal and the bank-name match before it can be saved (see above).
+
+A hub an existing captain is still onboarding is listed under *Onboarding in progress* with
+**Resume onboarding**, and with the reason when a backend call failed on it.
+
+**Edit hub details** on any active hub asks the Area Manager to change its address,
+pincode, map link or area. The form starts from the hub's current values; a changed
+pincode must be one VALMO serves (a hub keeping its own pincode is fine), the map pin is
+checked against the pincode being asked for with the same live preview as onboarding, the
+area is range-checked, and an unchanged form isn't sent. The hub keeps running on its
+current details while the request waits — the card says so, one request per hub at a time
+— and afterwards the card says which way it went, with the Area Manager's reason on a
+rejection, until dismissed.
+
+**The bell** sits at the top right of the Captain Hub, and of onboarding's top bar once the
+captain runs hubs, with a count. It carries **rate card updates** to agree to and decided
+hub edits. An FM hub's card shows its agreed rate card, and *Review update* while one is
+waiting. Opening a rate card update shows the current and updated cards side by side, when
+the change applies, the Area Manager's reason and the Combined rate card blurb, then a
+*"I have read the updated rate card"* tick and **one action: Agree**. There is deliberately
+**no reject or decline**; a captain with questions is pointed to call their Area Manager.
+Agreeing makes the update the hub's rate card, as its next version.
 
 **Add new hub** (`HB-07`) asks how the new hub is registered for GST — reuse an
 already-verified GSTIN, continue as Non-GST, or verify a new one — then hands off into the
 **original onboarding flow**.
+
+**A Captain Hub bank change whose bank doesn't answer** pauses with the bank's reason and
+**Resume verification**, which re-sends the same penny-drop — it is not reported as a failed
+account.
 
 Payments, Loss Management and Incentive Center are in the sidebar because the design has
 them, but they are explicitly marked out of scope rather than faked.
@@ -324,7 +430,7 @@ the panel picker from `panel-select`, with four consoles:
 
 | Panel | |
 |---|---|
-| **Area Manager** | Infra hard-gate checklist and VLS field pre-check |
+| **Area Manager** | Infra hard-gate checklist and VLS field pre-check; map pin corrections; captains' **hub edits**; **rate card updates** |
 | **Cluster Head** | Interview and the AM's rate card — approve within ceiling, raise above it, or send back |
 | **Zonal Head** | Monitoring only — AM and CH pendency. Approves nothing |
 | **FM Central Admin** | Design alignment and above-ceiling rate cards, plus user mapping |
@@ -374,6 +480,38 @@ approval opens. A failed review never forces rejection the way a hard gate does.
 The captain's declared size and the AM's correction are stored separately, so it stays
 visible that a correction happened — the context card shows the effective size with an
 *AM updated* flag.
+
+### The Area Manager corrects the map pin
+
+The context card shows where the captain's pin is — linking to Google Maps — and warns when
+it sits outside the request's pincode. For the **Area Manager** only, *Edit* opens the same
+live preview and pincode check the captain's link went through; saving applies the
+correction straight to the request, tags the row **AM updated** with the date, and keeps
+the captain's submission as it was. Nothing is sent back to the captain to verify: the
+request's desk, status and infra checks are untouched. Putting the captain's link back
+clears the correction, other desks see the pin read-only, and Central Admin's design inputs
+read their lat-long from the effective pin. `OBD-78240` is seeded with the captain's pin
+dropped in Koramangala for its HSR Layout pincode, for the Area Manager to fix.
+
+### Hub edits
+
+The Area Manager's **Hub edits** tab (with a pending count) lists captains' requests to
+change a live hub. Reviewing one shows each detail *now* against *requested*, the requested
+pin on a map with its pincode check, and the captain's note. **Approve** writes the new
+details onto the hub; **Reject** needs a reason, which the captain sees, and leaves the hub
+exactly as it was. A decided request stays listed, read-only.
+
+### Rate card updates
+
+The Area Manager's **Rate card updates** tab lists live FM hubs with the rate card each
+captain agreed to. Updating one starts from the agreed slabs and touchpoint; the Area
+Manager changes them, picks the payout cycle it applies from (the first of next month, or
+the month after) and says why. An unchanged card, an incomplete one, or one without a reason
+isn't sent, and a hub takes one update at a time. The agreed card stays in force until the
+captain agrees from their bell; the list shows *Waiting for the captain* meanwhile.
+
+Rate card updates go **straight from the Area Manager to the captain** — they do not run
+the Cluster Head / Central Admin ceiling chain that a new hub's rate card does.
 
 ### The approval chain
 
@@ -499,8 +637,13 @@ The panel is contextual to the current phase and exposes exactly those actors:
 | Area Manager (LM only) | approve / reject (two-strike counter shown) |
 | Agreements | mark agreement scrolled to end |
 | Activation | force failure / force success |
-| Login / OTP | log in as a new captain, or as an existing captain with hubs |
-| Captain Hub · bank change | penny-drop succeeded / failed |
+| Personal details, KYC cards, hub details | fail the next email code / Aadhaar / PAN / penny-drop / GSTIN / availability call — timeout (504) or service down (503) |
+| KYC GST step, Manage GSTIN, Add new hub | GST portal demo records — fill the GSTIN field with a matching, similar, mismatching, cancelled or unregistered GSTIN |
+| Background verification (pending) | partner times out / partner is down |
+| Login / OTP | log in as a new captain, an existing captain with hubs, or the admin panel — without re-seeding over what is there |
+| Captain Hub · bank change | penny-drop succeeded / failed / bank times out / IMPS down |
+| Captain Hub · hub edit pending | Area Manager approves / rejects it |
+| Captain Hub · live FM hub | Area Manager sends a sample rate card update |
 | Always | reset entire demo |
 
 Every reject path is reachable. For LM that routes the captain back to the right earlier
@@ -530,7 +673,7 @@ build from.
 npm install && npm test
 ```
 
-**1055 assertions across 20 groups:**
+**1411 assertions across 27 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -614,6 +757,41 @@ npm install && npm test
    Cluster Head is reviewing; the approval date as a day stamp; one default hub name across
    activation and Captain Hub; and seeded requests whose address matches their pincode and
    whose serving pincodes include their own
+21. **Pincodes on hub details** — personal details asks only about the person; hub details
+   opens with the availability check ahead of the address; an unserviceable pincode cannot
+   be forced in; the pick survives a failed submit; an older save is migrated; an existing
+   captain adding a hub picks one; and the availability notice counts properly
+22. **Map pin** — every link format parsed, every outcome of the check (inside, another
+   pincode, too far, abroad, impossible, short link, text search, no pincode yet), the
+   embedded map and badges, live checking that keeps the field, a half-typed link left alone
+   until the field is left, submit blocked with the same message, and the summary row
+23. **API failures and resume** — each failing call (email, Aadhaar at send and at fetch,
+   PAN, bank, GST, availability, BGV, activation) shows the reason, a reference and that
+   nothing is lost, keeps what was entered, and resumes from the same step; the failure
+   survives Save & Exit and a reload, shows on the role card and on an existing captain's
+   in-progress hub; resumed activation keeps the systems that finished; and a Captain Hub
+   bank change pauses rather than failing the account
+24. **GSTIN verification** — the fuzzy match (order, case, honorifics, legal-form words,
+   spelling slips, middle names, initials, wrong surnames, lone first names, other
+   businesses), the trade name counting when closer, the simulated GST portal, the stricter
+   format; Manage GSTIN refusing a mismatch, a cancelled and an unregistered GSTIN, resuming
+   a portal timeout, accepting a similar name only when saved, and checking against the
+   bank account rather than the profile; and the same check on *Add new hub* and in KYC
+25. **AM map pin correction** — seeded pins inside their pincodes (bar `OBD-78240`), the
+   context card's pin and warning, the editor's live preview, an out-of-pincode pin refused,
+   a correction saved with *AM updated*, the captain's submission and every captain-side
+   value untouched, the request's desk, status and checks unchanged, a reload, Cancel, and
+   no Edit for any other desk
+26. **Hub edits** — the form prefilled from the hub, every validation, one request at a
+   time, the Area Manager's tab, now-against-requested review, approve applying all four
+   changes, reject needing a reason and changing nothing, both outcomes shown to the captain
+   after signing back in through the login switch, and the dev panel shortcut
+27. **Rate card updates** — the FM hub's agreed card, the bell, the AM's tab and editor
+   (unchanged, unexplained and incomplete cards refused, slabs added and removed, the cycle
+   picked), one update at a time, the agreed card in force until agreed, the bell count and
+   notification, the agreement page with no reject or decline, Agree gated on the tick, the
+   card replaced as its next version, hub edit outcomes on the bell, the dev panel shortcut,
+   and the bell on onboarding's top bar
 
 Three notes on how the tests drive the app:
 
@@ -627,7 +805,7 @@ Three notes on how the tests drive the app:
 
 ### Bugs this suite was extended to cover
 
-Both were found by driving the deployed build in a real browser, not by the original suite:
+These were found by driving the build in a real browser, not by the original suite:
 
 1. **The resend countdown made the OTP field untypeable.** The 1-second tick called a full
    `render()`, replacing `app.innerHTML` and dropping focus to `<body>`. The tick now
@@ -644,6 +822,13 @@ Both were found by driving the deployed build in a real browser, not by the orig
    `<div role="radio">`, nested controls stop propagation, and selecting the already-selected
    choice no longer re-renders. The tests missed it because they called `addHubChoice()`
    directly instead of clicking the field; the regression test now clicks and types.
+4. **Long status lines ran off the card.** The admin panel's `.st` status-chip rule (inline,
+   padded, `nowrap`) also matched the text column of every captain status block, so
+   *"Activation in progress…"* and *"Background verification in progress…"* ran on one line
+   past the card. It is reset inside `.status-head`, and a test checks the computed style.
+5. **A hub outside the new-hub list couldn't be edited at all.** Indiranagar Hub runs in
+   560038, which isn't on the serviceable list for *new* hubs, so its own pincode failed the
+   check. A hub keeping its pincode is now accepted; only a changed one must be serviceable.
 
 ---
 
