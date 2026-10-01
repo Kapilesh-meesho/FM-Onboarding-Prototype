@@ -2023,7 +2023,8 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("FM Onboarding") >= 0, "the console is titled FM Onboarding");
   check(txt(doc).indexOf("Meesho Admin Console") >= 0, "with the admin breadcrumb");
   check(txt(doc).indexOf("Priya Sharma") >= 0, "and the signed-in Area Manager");
-  eq(api.config.ADMIN_TABS.am.map(t => t.id), ["mine"], "AM has only its own requests");
+  eq(api.config.ADMIN_TABS.am.map(t => t.id), ["mine", "edits"],
+     "AM has its own requests, plus captains\u2019 hub edits to decide");
 
   const amRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
   check(amRows.length === 3, "three AM-stage requests listed");
@@ -3570,6 +3571,154 @@ async function testAmMapEdit() {
   win.close();
 }
 
+/* =========================================================================
+   26. Editing a live hub — the captain asks, the Area Manager decides
+   ====================================================================== */
+
+async function testHubEdits() {
+  section("26. Hub edits — captain requests, Area Manager approves or rejects");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions;
+  const hub = (id) => H.hubById(id);
+
+  devClick(doc, "as:existing");
+  login(doc);
+  eq(api.state.screen, "panel", "the existing captain is on My Hubs");
+  check(exists(doc, '[data-hubedit="hub-aqt"]') && exists(doc, '[data-hubedit="hub-beu"]'),
+        "every active hub offers Edit hub details");
+  check(!exists(doc, '[data-hubedit="hub-jyp"]'), "an inactive hub does not");
+
+  /* --- the form starts from the hub's current details --- */
+  clickSel(doc, '[data-hubedit="hub-aqt"]');
+  check(exists(doc, '[data-testid="hub-edit"]'), "the editor opens on that hub");
+  eq($(doc, "he-address").value, "Koramangala, Bengaluru", "address prefilled");
+  eq($(doc, "he-pin").value, "560034", "pincode prefilled");
+  eq($(doc, "he-map").value, hub("hub-aqt").mapLink, "map link prefilled");
+  eq($(doc, "he-area").value, "4200", "area prefilled");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "and the current pin previews inside its pincode");
+
+  click(doc, "he-submit");
+  check(sel(doc, '[data-testid="hub-edit-error"]').textContent.indexOf("Nothing has changed yet") >= 0,
+        "an unchanged form is not sent");
+
+  type(doc, "he-pin", "700001");
+  click(doc, "he-submit");
+  check(txt(doc).indexOf("VALMO isn’t opening hubs in 700001 yet") >= 0, "an unserviceable pincode is refused");
+  type(doc, "he-pin", "560102");
+  type(doc, "he-area", "50");
+  click(doc, "he-submit");
+  check(txt(doc).indexOf("not the hub’s pincode 560102") >= 0,
+        "moving the pincode without moving the pin is caught");
+  check(txt(doc).indexOf(api.errors.hubArea) >= 0, "and an impossible area");
+  eq(api.state.hubEdits.length, 0, "nothing is sent while anything is wrong");
+
+  type(doc, "he-address", "Plot 21, 27th Main, HSR Layout, Bengaluru");
+  type(doc, "he-pin", "560102");
+  const mapIn = $(doc, "he-map");
+  type(doc, "he-map", mapFor(doc, "560102"));
+  check($(doc, "he-map") === mapIn, "the map preview patches in place while typing");
+  check(sel(doc, "#he-map-preview [data-testid=\"map-pin-ok\"]").textContent.indexOf("560102") >= 0,
+        "and shows the new pin inside the new pincode");
+  type(doc, "he-area", "5200");
+  type(doc, "he-note", "Moved to a bigger unit");
+  click(doc, "he-submit");
+
+  eq(api.state.hubEdits.length, 1, "a valid edit is sent");
+  const e1 = api.state.hubEdits[0];
+  eq(e1.status, "pending", "and waits with the Area Manager");
+  eq(H.hubEditChanged(e1).map(f => f.id), ["address", "pincode", "mapLink", "areaSqft"], "recording every change");
+  eq(hub("hub-aqt").address, "Koramangala, Bengaluru", "the hub keeps its current details meanwhile");
+  check(exists(doc, '[data-testid="hub-edit-pending"]'), "the hub card says the edit is awaiting approval");
+  check(!exists(doc, '[data-hubedit="hub-aqt"]'), "and takes one request at a time");
+  A.hubEditOpen("hub-aqt");
+  check(!exists(doc, '[data-testid="hub-edit"]'), "even through the action");
+  check(api.reload(), "the request is saved");
+  eq(H.hubEditOf("hub-aqt").status, "pending", "and survives a reload");
+
+  /* --- the Area Manager decides it in the admin panel --- */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  const editsTab = sel(doc, '[data-aptab="edits"]');
+  eq(editsTab && editsTab.textContent, "Hub edits (1)", "the Area Manager has a Hub edits tab with one pending");
+  clickSel(doc, '[data-aptab="edits"]');
+  eq(doc.querySelectorAll('[data-testid="ap-edit-row"]').length, 1, "listing the captain’s request");
+  check(txt(doc).indexOf("Hub AQT") >= 0 && txt(doc).indexOf("Karan Verma") >= 0, "with the hub and the captain");
+  clickSel(doc, '[data-apedit="' + e1.id + '"]');
+  check(exists(doc, '[data-testid="ap-edit-detail"]'), "Review opens the request");
+  eq(doc.querySelectorAll('[data-testid="ap-edit-changed"]').length, 4, "showing all four changes, now against requested");
+  check(txt(doc).indexOf("4,200 sq ft") >= 0 && txt(doc).indexOf("5,200 sq ft") >= 0, "area before and after");
+  check(exists(doc, '[data-testid="ap-edit-detail"] [data-testid="map-pin-ok"]'),
+        "the requested pin on a map, inside the requested pincode");
+  check(txt(doc).indexOf("Moved to a bigger unit") >= 0, "and the captain’s note");
+
+  click(doc, "ap-edit-approve");
+  eq(H.hubEditById(e1.id).status, "approved", "approving decides the request");
+  check(api.state.admin.toast.indexOf("approved") >= 0, "with a confirmation");
+  const aqt = hub("hub-aqt");
+  eq([aqt.address, aqt.pincode, aqt.city, aqt.mapLink, aqt.areaSqft],
+     ["Plot 21, 27th Main, HSR Layout, Bengaluru", "560102", "Bengaluru, Karnataka", mapFor(doc, "560102"), "5200"],
+     "and the hub now runs on the new details");
+  A.adminEditOpen(e1.id);
+  check(!exists(doc, "#ap-edit-approve") && txt(doc).indexOf("Approved on") >= 0,
+        "a decided request is read-only");
+  A.adminEditBack();
+
+  /* --- back on the captain's side --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  eq(hub("hub-aqt").pincode, "560102", "signing back in as the captain keeps the approved change");
+  login(doc);
+  check(exists(doc, '[data-testid="hub-edit-approved"]'), "the hub card says the edit was approved");
+  check(sel(doc, '[data-hub="hub-aqt"]').textContent.indexOf("Plot 21, 27th Main, HSR Layout") >= 0,
+        "and shows the new address");
+  clickSel(doc, '[data-hedismiss="' + e1.id + '"]');
+  check(!exists(doc, '[data-testid="hub-edit-approved"]'), "the notice can be dismissed");
+  check(exists(doc, '[data-hubedit="hub-aqt"]'), "and the hub can be edited again");
+
+  /* --- a rejected edit leaves the hub as it was --- */
+  clickSel(doc, '[data-hubedit="hub-beu"]');
+  type(doc, "he-area", "3500");
+  click(doc, "he-submit");
+  const e2 = H.hubEditOf("hub-beu");
+  check(!!e2, "a hub keeps its own pincode even where VALMO isn\u2019t opening new hubs (560038)");
+  eq(H.hubEditChanged(e2).map(f => f.id), ["areaSqft"], "an area-only edit records just the area");
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  A.adminTab("edits");
+  A.adminEditOpen(e2.id);
+  click(doc, "ap-edit-reject");
+  check(txt(doc).indexOf("Say why you’re rejecting it") >= 0, "rejecting needs a reason");
+  eq(H.hubEditById(e2.id).status, "pending", "so nothing is decided without one");
+  type(doc, "ap-edit-reason", "The extra area isn’t covered by the lease.");
+  click(doc, "ap-edit-reject");
+  eq(H.hubEditById(e2.id).status, "rejected", "with a reason it is rejected");
+  eq(hub("hub-beu").areaSqft, "3000", "and the hub keeps its area");
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
+  const rej = sel(doc, '[data-testid="hub-edit-rejected"]');
+  check(!!rej && rej.textContent.indexOf("The extra area isn’t covered by the lease.") >= 0 &&
+        rej.textContent.indexOf("Your hub details are unchanged.") >= 0,
+        "the captain sees the reason, and that nothing changed");
+  check(exists(doc, '[data-hubedit="hub-beu"]'), "and can send a new edit");
+
+  /* --- the dev panel can stand in for the Area Manager --- */
+  clickSel(doc, '[data-hubedit="hub-beu"]');
+  type(doc, "he-address", "Plot 14, 4th Cross, Indiranagar, Bengaluru");
+  click(doc, "he-submit");
+  const e3 = H.hubEditOf("hub-beu");
+  check(devText(doc).indexOf("Area Manager · hub edit " + e3.id) >= 0, "the dev panel offers the AM decision");
+  devClick(doc, "he:approve:" + e3.id);
+  eq(hub("hub-beu").address, "Plot 14, 4th Cross, Indiranagar, Bengaluru", "and approving it applies the edit");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -3600,6 +3749,7 @@ async function testAmMapEdit() {
     await testApiFailures();
     await testGstVerification();
     await testAmMapEdit();
+    await testHubEdits();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

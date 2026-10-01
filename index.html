@@ -1675,7 +1675,8 @@ function blankPanel() {
            draft:{ acc:"", ifsc:"", holder:"" } },
     gst:{ hubId:null, mode:"view", value:"", error:"", fail:null,      // view | edit | verified | confirmRemove
           result:null, savedHubId:null },
-    addHub:{ role:"LM", choice:"existing", gstin:"", existing:"", error:"" }
+    addHub:{ role:"LM", choice:"existing", gstin:"", existing:"", error:"" },
+    hubEdit:{ hubId:null, draft:null, errors:{} }    // the hub-details editor on My Hubs
   };
 }
 
@@ -1698,7 +1699,9 @@ function blankState() {
     panel: blankPanel(),
     admin: blankAdmin(),
     adminRequests: [],
-    failNext: {}               // dev panel: API → failure kind armed for its next call
+    failNext: {},              // dev panel: API → failure kind armed for its next call
+    hubEdits: [],              // captains' requested hub changes, decided by the Area Manager
+    seededExisting: false      // the dev panel's existing captain is loaded — don't re-seed over it
   };
 }
 
@@ -1710,7 +1713,7 @@ function makeHub(o) {
     address:"", pincode:"", city:"",
     status:"active",                       // active | inactive | in_progress
     gst:{ registered:false, gstin:"" },
-    areaSqft:"", manpower:"", maxVehicle:"", photo:"", photoName:"",
+    areaSqft:"", manpower:"", maxVehicle:"", photo:"", photoName:"", mapLink:"",
     category:null, activatedOn:"", deactivatedOn:""
   }, o || {});
 }
@@ -1728,19 +1731,62 @@ function seedExistingCaptain() {
               address:"Koramangala, Bengaluru", pincode:"560034", city:"Bengaluru, Karnataka",
               status:"active", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
               areaSqft:"4200", manpower:"14", maxVehicle:"7MT_20FT",
+              mapLink:"https://maps.google.com/?q=12.9349,77.6251",
               activatedOn:"12 Jan 2026" }),
     makeHub({ id:"hub-beu", code:"BEU", name:"Indiranagar Hub", role:"LM",
               address:"Indiranagar, Bengaluru", pincode:"560038", city:"Bengaluru, Karnataka",
               status:"active", gst:{ registered:false, gstin:"" },
               areaSqft:"3000", manpower:"9", maxVehicle:"2.2MT_4W_Bolero",
+              mapLink:"https://maps.google.com/?q=12.9779,77.6413",
               activatedOn:"03 Mar 2026" }),
     makeHub({ id:"hub-jyp", code:"JYP", name:"HSR Layout Hub", role:"LM",
               address:"HSR Layout, Bengaluru", pincode:"560102", city:"Bengaluru, Karnataka",
               status:"inactive", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
               areaSqft:"2600", manpower:"7", maxVehicle:"1.5MT_4W_Dost",
+              mapLink:"https://maps.google.com/?q=12.9112,77.6480",
               activatedOn:"20 Nov 2025", deactivatedOn:"12 Apr 2026" })
   ];
   S.activeHubId = "hub-aqt";
+  S.hubEdits = [];
+  S.seededExisting = true;
+}
+
+/* Hub edits ------------------------------------------------------------------
+   A captain asks to change a live hub's address, pincode, map pin or area. The
+   request waits with the Area Manager; approving applies it, rejecting leaves
+   the hub exactly as it was. */
+var HUB_EDIT_FIELDS = [
+  { id:"address",  label:"Hub address" },
+  { id:"pincode",  label:"Pincode" },
+  { id:"mapLink",  label:"Map pin" },
+  { id:"areaSqft", label:"Hub area" }
+];
+var HE_STATUS = { pending:{ label:"Pending", tone:"blue" }, approved:{ label:"Approved", tone:"green" },
+                  rejected:{ label:"Rejected", tone:"red" } };
+
+function hubEditOf(hubId) {               // the latest request for a hub
+  for (var i = S.hubEdits.length - 1; i >= 0; i--) if (S.hubEdits[i].hubId === hubId) return S.hubEdits[i];
+  return null;
+}
+function hubEditById(id) {
+  for (var i = 0; i < S.hubEdits.length; i++) if (S.hubEdits[i].id === id) return S.hubEdits[i];
+  return null;
+}
+function hubDetailsOf(h) {
+  return { address:h.address || "", pincode:h.pincode || "", mapLink:h.mapLink || "",
+           areaSqft:String(h.areaSqft == null ? "" : h.areaSqft) };
+}
+function hubEditChanged(e) {
+  return HUB_EDIT_FIELDS.filter(function (f) { return e.before[f.id] !== e.after[f.id]; });
+}
+function fmtArea(v) { return v ? Number(v).toLocaleString("en-IN") + " sq ft" : "—"; }
+function fmtPin(link) {
+  var c = parseMapLink(link);
+  return c ? c.lat.toFixed(4) + ", " + c.lng.toFixed(4) : (link ? "No pin in the link" : "—");
+}
+function fmtPhone(p) {
+  p = String(p || "").replace(/\D/g, "").slice(-10);
+  return p.length === 10 ? "+91 " + p.slice(0, 5) + " " + p.slice(5) : p;
 }
 
 function activeHub() {
@@ -2247,7 +2293,8 @@ var ADMIN_ROLE_ORDER = ["am","ch","zh","central"];
 
 /* Tabs per role. No area/cluster/zone binding screens — out of scope. */
 var ADMIN_TABS = {
-  am:      [{ id:"mine", label:"My requests" }],
+  am:      [{ id:"mine", label:"My requests" },
+            { id:"edits", label:"Hub edits" }],
   ch:      [{ id:"mine", label:"My requests" },
             { id:"am",   label:"AM requests" },
             { id:"users",label:"User mapping" }],
@@ -2503,7 +2550,8 @@ function mintHubCode() {
 
 function blankAdmin() {
   return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"",
-           amStep:"infra" };   // infra check, then carting design, then rate card
+           amStep:"infra",     // infra check, then carting design, then rate card
+           edit:null, editReason:"", editError:"" };   // an open hub-edit request
 }
 
 function apRole()  { return ADMIN_ROLES[S.admin.role] || ADMIN_ROLES.am; }
@@ -2755,6 +2803,40 @@ function hubCard(h) {
   var address = pending ? (rr.hub.address || "Address not added yet") : h.address;
   var pin = pending ? (rr.hub.selected || rr.hub.pincode) : h.pincode;
 
+  /* A live hub can ask its Area Manager for new details — one request at a time. */
+  var detailsRow = "";
+  if (!pending && !inactive) {
+    var he = hubEditOf(h.id), editingDetails = S.panel.hubEdit.hubId === h.id;
+    if (he && he.status === "pending") {
+      detailsRow = '<div class="prow" data-testid="hub-edit-pending"><div class="pl">' +
+        '<span class="k">Hub details</span>' +
+        '<span class="v">Edit sent to your Area Manager · ' + esc(he.submittedOn) + '</span>' +
+        '<span class="s" style="font-size:11px;color:var(--muted)">' +
+          esc(hubEditChanged(he).map(function (f) { return f.label; }).join(", ")) +
+          ' — your hub runs on its current details until it is approved.</span></div>' +
+        '<div class="pr"><span class="pill-mute">Awaiting approval</span></div></div>';
+    } else if (!editingDetails) {
+      detailsRow = '<div class="prow"><div class="pl"><span class="k">Hub details</span>' +
+        '<span class="v">' + esc(fmtArea(h.areaSqft)) + ' · map pin ' + esc(fmtPin(h.mapLink)) + '</span></div>' +
+        '<div class="pr"><button class="btn btn-ghost" data-hubedit="' + esc(h.id) + '">Edit hub details</button>' +
+        '</div></div>';
+    }
+    if (he && he.status !== "pending" && !he.seen && !editingDetails) {
+      detailsRow += he.status === "approved"
+        ? '<div style="padding:0 20px 16px"><div class="notice ok" data-testid="hub-edit-approved" style="margin:0">' +
+          '<b>Hub details updated</b>Your Area Manager approved the edit on ' + esc(he.decidedOn) +
+          ' — the new ' + esc(hubEditChanged(he).map(function (f) { return f.label.toLowerCase(); }).join(", ")) +
+          ' ' + (hubEditChanged(he).length > 1 ? "are" : "is") + ' live.' +
+          '<div style="margin-top:10px"><button class="btn btn-ghost" data-hedismiss="' + esc(he.id) + '">Dismiss</button></div>' +
+          '</div></div>'
+        : '<div style="padding:0 20px 16px"><div class="notice bad" data-testid="hub-edit-rejected" style="margin:0">' +
+          '<b>Your Area Manager didn’t approve the edit</b>' + esc(he.reason) +
+          ' Your hub details are unchanged.' +
+          '<div style="margin-top:10px"><button class="btn btn-ghost" data-hedismiss="' + esc(he.id) + '">Dismiss</button></div>' +
+          '</div></div>';
+    }
+  }
+
   return '<div class="hub-card' + (inactive ? " off" : "") + '" data-hub="' + esc(h.id) + '">' +
     '<div class="hh">' +
       '<span class="hcode">Hub ' + esc(h.code || "—") + '</span>' +
@@ -2769,8 +2851,44 @@ function hubCard(h) {
         '<b>GSTIN verified and saved</b>Invoices for this hub now carry ' + esc(h.gst.gstin) + '.</div></div>'
       : "") +
     (editing ? gstEditBlock(h) : "") +
+    detailsRow +
+    (S.panel.hubEdit.hubId === h.id ? hubEditBlock(h) : "") +
   '</div>';
 }
+
+/* The captain's edit form. Every field starts from the hub's current value;
+   the map pin is checked against the pincode being asked for. */
+function hubEditBlock(h) {
+  var he = S.panel.hubEdit, d = he.draft, e = he.errors || {};
+  var field = function (id, label, value, hint, err, attrs) {
+    return '<div class="fl"><label>' + label + '</label>' +
+      '<div class="box' + (err ? ' bad' : '') + '" id="' + id + '-box">' +
+        '<input id="' + id + '" value="' + esc(value) + '"' + (attrs || '') + '></div>' +
+      '<div class="hint' + (err ? ' err' : '') + '" id="' + id + '-hint">' + esc(err || hint) + '</div></div>';
+  };
+  return '<div style="padding:18px 20px;border-top:1px solid var(--line-soft);background:var(--sum-bg);' +
+      'border-radius:0 0 12px 12px" data-testid="hub-edit">' +
+    '<b style="display:block;font-size:14px;color:var(--ink);margin-bottom:4px">Edit hub details</b>' +
+    '<p style="margin:0 0 14px;font-size:12px;color:var(--muted);line-height:18px">Your Area Manager ' +
+      'reviews the change. Until they approve it, the hub keeps running on its current details.</p>' +
+    field("he-address", "Hub address", d.address, "The full address of the hub.", e.address) +
+    '<div class="grid2">' +
+      field("he-pin", "Pincode", d.pincode, cityFor(d.pincode) ? "Resolves to " + cityFor(d.pincode) + "."
+            : "A pincode VALMO is opening hubs in.", e.pincode, ' inputmode="numeric" maxlength="6"') +
+      field("he-area", "Hub area (sq ft)", d.areaSqft, "Usable floor area.", e.areaSqft, ' inputmode="numeric"') +
+    '</div>' +
+    field("he-map", "Google Maps link", d.mapLink, HE_MAP_HINT, e.mapLink) +
+    '<div id="he-map-preview">' + mapPreviewHtml(d.mapLink, d.pincode) + '</div>' +
+    '<div class="fl"><label>What changed? (optional)</label><div class="box">' +
+      '<input id="he-note" placeholder="e.g. Moved to a bigger unit on the same road" value="' + esc(d.note) + '">' +
+      '</div><div class="hint">Helps your Area Manager review it faster.</div></div>' +
+    (e.form ? '<div class="notice bad" data-testid="hub-edit-error" style="margin:0 0 14px">' + esc(e.form) + '</div>' : '') +
+    '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+      '<button class="btn btn-ghost" id="he-cancel">Cancel</button>' +
+      '<button class="btn btn-primary" id="he-submit">Send to Area Manager</button></div>' +
+  '</div>';
+}
+var HE_MAP_HINT = "The hub pinned on Google Maps. It must sit inside the pincode above.";
 
 /* HB-02 … HB-06 — per-hub GSTIN management. */
 function gstEditBlock(h) {
@@ -3015,8 +3133,10 @@ function apShell(body) {
 function apTabs() {
   var a = S.admin, tabs = ADMIN_TABS[a.role] || [];
   return '<div class="ap-tabs">' + tabs.map(function (t) {
+    var n = t.id === "edits"
+      ? S.hubEdits.filter(function (e) { return e.status === "pending"; }).length : 0;
     return '<button data-aptab="' + t.id + '"' + (a.tab === t.id ? ' class="on"' : '') + '>' +
-           esc(t.label) + '</button>';
+           esc(t.label) + (n ? ' (' + n + ')' : '') + '</button>';
   }).join("") + '</div>';
 }
 
@@ -3758,6 +3878,7 @@ function apCentralDetail(r) {
 
 function viewAdmin() {
   var a = S.admin, m = apRole();
+  if (a.edit && hubEditById(a.edit)) return apShell(apEditDetail(hubEditById(a.edit)));
   if (a.selected) {
     var r = apById(a.selected);
     if (r) {
@@ -3774,8 +3895,91 @@ function viewAdmin() {
     }
   }
   var body = '<h2>' + esc(m.title) + '</h2><p class="lede">' + esc(m.lede) + '</p>' +
-             apTabs() + (a.tab === "users" ? apUsers() : apList());
+             apTabs() + (a.tab === "users" ? apUsers() : a.tab === "edits" ? apEditList() : apList());
   return apShell(body);
+}
+
+/* Captains' requests to change a live hub, newest first. */
+function apEditList() {
+  var rows = S.hubEdits.slice().reverse();
+  var body = rows.length
+    ? rows.map(function (e) {
+        var m = HE_STATUS[e.status];
+        return '<tr data-testid="ap-edit-row"><td class="id">' + esc(e.id) + '</td>' +
+          '<td>' + esc(e.captain) + '<span style="display:block;font-size:11px;font-weight:500;' +
+            'color:var(--muted);margin-top:3px">' + esc(e.phone) + '</span></td>' +
+          '<td>Hub ' + esc(e.hubCode) + ' · ' + esc(e.hubName) + '<span style="display:block;font-size:11px;' +
+            'font-weight:500;color:var(--muted);margin-top:3px">' + esc(e.role) + ' hub</span></td>' +
+          '<td>' + esc(hubEditChanged(e).map(function (f) { return f.label; }).join(", ")) + '</td>' +
+          '<td><span class="st ' + m.tone + '">' + m.label + '</span></td>' +
+          '<td>' + esc(e.submittedOn) + '</td>' +
+          '<td style="text-align:right"><button class="btn btn-ghost" data-apedit="' + esc(e.id) + '">' +
+            (e.status === "pending" ? "Review" : "View") + '</button></td></tr>';
+      }).join("")
+    : '<tr><td class="empty" colspan="7">No hub edit requests yet. When a captain edits a live hub\u2019s ' +
+      'address, pincode, map pin or area, it lands here.</td></tr>';
+  return '<div class="ap-panel">' +
+      '<div class="ph"><div><b>Hub edits</b>' +
+        '<span>Captains asking to change a live hub. Approving applies the change; rejecting keeps the ' +
+        'hub as it is.</span></div></div>' +
+      '<table class="ap-table"><thead><tr>' +
+        '<th>Request</th><th>Captain</th><th>Hub</th><th>Changes</th><th>Status</th><th>Sent</th>' +
+        '<th style="text-align:right">Action</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table>' +
+    '</div>';
+}
+
+/* One hub edit: what the hub has now against what the captain asked for. */
+function apEditDetail(e) {
+  var m = HE_STATUS[e.status], changed = hubEditChanged(e).map(function (f) { return f.id; });
+  var show = function (id, v) {
+    return id === "areaSqft" ? fmtArea(v) : id === "mapLink" ? fmtPin(v) : (v || "—");
+  };
+  var rows = HUB_EDIT_FIELDS.map(function (f) {
+    var ch = changed.indexOf(f.id) >= 0;
+    return '<tr' + (ch ? ' data-testid="ap-edit-changed"' : '') + '>' +
+      '<td style="font-weight:600">' + f.label + '</td>' +
+      '<td>' + esc(show(f.id, e.before[f.id])) + '</td>' +
+      '<td style="' + (ch ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)') + '">' +
+        (ch ? esc(show(f.id, e.after[f.id])) : 'No change') + '</td></tr>';
+  }).join("");
+  var pinChk = checkMapPin(e.after.mapLink, e.after.pincode);
+
+  var decide = e.status === "pending"
+    ? '<div class="fl" style="margin-top:16px"><label>Reason (needed to reject)</label>' +
+        '<div class="box' + (S.admin.editError ? ' bad' : '') + '">' +
+        '<input id="ap-edit-reason" placeholder="e.g. The new unit failed the site visit" value="' +
+          esc(S.admin.editReason) + '"></div>' +
+        '<div class="hint' + (S.admin.editError ? ' err' : '') + '">' +
+          esc(S.admin.editError || "The captain sees this if you reject the edit.") + '</div></div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="ap-edit-reject" style="color:var(--err)">Reject edit</button>' +
+        '<button class="btn btn-primary" id="ap-edit-approve">Approve edit</button></div>'
+    : '<div class="notice ' + (e.status === "approved" ? 'ok' : 'bad') + '" style="margin:16px 0 0">' +
+        '<b>' + (e.status === "approved" ? "Approved on " : "Rejected on ") + esc(e.decidedOn) + '</b>' +
+        (e.status === "approved" ? "The hub now runs on the requested details."
+                                 : esc(e.reason) + " The hub kept its current details.") + '</div>';
+
+  return '<div class="ap-detail" data-testid="ap-edit-detail">' +
+    '<button class="btn-link" id="ap-edit-back" style="margin-bottom:12px">‹ Back to hub edits</button>' +
+    '<div class="ap-panel"><div class="ph"><div>' +
+      '<span class="hubcode">Hub ' + esc(e.hubCode) + '</span>' +
+      '<b>' + esc(e.hubName) + ' · hub edit ' + esc(e.id) + '</b>' +
+      '<span>' + esc(e.captain) + ' · ' + esc(e.phone) + ' · ' + esc(e.role) + ' hub · sent ' +
+        esc(e.submittedOn) + '</span></div>' +
+      '<span class="st ' + m.tone + '">' + m.label + '</span></div>' +
+    '<div class="ap-form">' +
+      '<table class="ap-table" style="margin-bottom:16px"><thead><tr><th>Detail</th><th>Now</th>' +
+        '<th>Requested</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      (changed.indexOf("mapLink") >= 0 || changed.indexOf("pincode") >= 0
+        ? '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);' +
+          'margin-bottom:8px">Requested map pin</span>' + mapPreviewHtml(e.after.mapLink, e.after.pincode) +
+          (pinChk.ok ? '' : '<div class="notice bad">' + esc(pinChk.msg) + '</div>')
+        : '') +
+      (e.note ? '<div class="notice info" style="margin-bottom:0"><b>Captain\u2019s note</b>' +
+                esc(e.note) + '</div>' : '') +
+      decide +
+    '</div></div></div>';
 }
 
 /* ------------------------------------------------------------------- flow */
@@ -5755,7 +5959,7 @@ var A = {
       code: r.hub.hubCode, name: defaultHubName(r), role: r.role,
       address: r.hub.address, pincode: r.hub.pincode, city: r.hub.city,
       status: "active", gst: gst,
-      areaSqft: r.hub.areaSqft, manpower: r.hub.manpower,
+      areaSqft: r.hub.areaSqft, manpower: r.hub.manpower, mapLink: r.hub.mapLink || "",
       maxVehicle: r.hub.maxVehicle || "",
       photo: r.hub.photo || "", photoName: r.hub.photoName || "",
       category: r.ch.category, activatedOn: r.act.activatedOn
@@ -5908,6 +6112,76 @@ var A = {
     save(); render();
   },
 
+  /* ---- hub edits: captain asks, Area Manager decides ---- */
+  hubEditOpen: function (hubId) {
+    var h = hubById(hubId), cur = hubEditOf(hubId);
+    if (!h || h.status !== "active" || (cur && cur.status === "pending")) return;
+    S.panel.gst = blankPanel().gst;                     // one editor per card at a time
+    S.panel.hubEdit = { hubId:hubId, draft:Object.assign(hubDetailsOf(h), { note:"" }), errors:{} };
+    save(); render();
+  },
+  hubEditCancel: function () { S.panel.hubEdit = blankPanel().hubEdit; save(); render(); },
+  hubEditField: function (k, v) {
+    var he = S.panel.hubEdit;
+    if (!he.draft) return;
+    he.draft[k] = v; save();
+  },
+  hubEditSubmit: function () {
+    var he = S.panel.hubEdit, h = hubById(he.hubId);
+    if (!h || !he.draft) return;
+    var d = he.draft, e = {};
+    d.address = String(d.address || "").trim(); d.pincode = String(d.pincode || "").trim();
+    d.mapLink = String(d.mapLink || "").trim(); d.areaSqft = String(d.areaSqft || "").trim();
+    if (!d.address) e.address = "Enter the hub address.";
+    if (!V.pincode(d.pincode)) e.pincode = ERR.pincodeFormat;
+    /* the serviceable list is where new hubs open — a hub keeping its own
+       pincode is fine, moving it needs one VALMO serves */
+    else if (d.pincode !== h.pincode && SERVICEABLE.indexOf(d.pincode) < 0)
+      e.pincode = "VALMO isn’t opening hubs in " + d.pincode + " yet. Use a serviceable pincode.";
+    var chk = checkMapPin(d.mapLink, V.pincode(d.pincode) ? d.pincode : null);
+    if (!chk.ok) e.mapLink = chk.msg;
+    if (!V.hubArea(d.areaSqft)) e.areaSqft = ERR.hubArea;
+    var before = hubDetailsOf(h), after = { address:d.address, pincode:d.pincode,
+                                            mapLink:d.mapLink, areaSqft:d.areaSqft };
+    if (!Object.keys(e).length &&
+        !HUB_EDIT_FIELDS.some(function (f) { return before[f.id] !== after[f.id]; })) {
+      e.form = "Nothing has changed yet — edit at least one detail to send a request.";
+    }
+    he.errors = e;
+    if (Object.keys(e).length) { save(); render(); return; }
+    S.hubEdits.push({
+      id:"HE-" + String(10000 + Math.floor(Math.random() * 90000)),
+      hubId:h.id, hubCode:h.code, hubName:h.name, role:h.role,
+      captain:S.profile.name || "Captain", phone:fmtPhone(S.phone),
+      before:before, after:after, note:String(d.note || "").trim(),
+      status:"pending", submittedOn:fmtDay(new Date()), decidedOn:"", reason:"", seen:false
+    });
+    S.panel.hubEdit = blankPanel().hubEdit;
+    save(); render();
+  },
+  hubEditDismiss: function (id) {
+    var e = hubEditById(id);
+    if (e) e.seen = true;
+    save(); render();
+  },
+  /* The Area Manager's decision. Approving writes the requested details onto
+     the hub; rejecting needs a reason and leaves the hub untouched. */
+  hubEditDecide: function (id, approve, reason) {
+    var e = hubEditById(id), h = e && hubById(e.hubId);
+    if (!e || e.status !== "pending") return false;
+    if (!approve && !String(reason || "").trim()) return false;
+    if (approve && h) {
+      h.address = e.after.address; h.pincode = e.after.pincode;
+      h.city = cityFor(e.after.pincode) || h.city;
+      h.mapLink = e.after.mapLink; h.areaSqft = e.after.areaSqft;
+    }
+    e.status = approve ? "approved" : "rejected";
+    e.reason = approve ? "" : String(reason).trim();
+    e.decidedOn = fmtDay(new Date()); e.seen = false;
+    save(); render();
+    return true;
+  },
+
   /* ---- HB-07: add a new hub, then hand off to onboarding ---- */
   addHubOpen: function () {
     var known = knownGstins();
@@ -6024,6 +6298,24 @@ var A = {
   },
   adminTab: function (tab) {
     S.admin.tab = tab; S.admin.selected = null; S.admin.toast = "";
+    save(); render();
+  },
+  adminEditOpen: function (id) {
+    if (!hubEditById(id)) return;
+    S.admin.edit = id; S.admin.editReason = ""; S.admin.editError = ""; S.admin.toast = "";
+    save(); render();
+  },
+  adminEditBack: function () { S.admin.edit = null; S.admin.editError = ""; save(); render(); },
+  adminEditDecide: function (decision) {
+    var id = S.admin.edit, approve = decision === "approve";
+    if (!approve && !S.admin.editReason.trim()) {
+      S.admin.editError = "Say why you’re rejecting it — the captain sees this reason.";
+      save(); render(); return;
+    }
+    if (!A.hubEditDecide(id, approve, S.admin.editReason)) return;
+    S.admin.edit = null; S.admin.editReason = ""; S.admin.editError = "";
+    S.admin.toast = approve ? id + " approved — the hub now runs on the new details."
+                            : id + " rejected — the hub keeps its current details.";
     save(); render();
   },
   adminOpen: function (id) {
@@ -6664,6 +6956,13 @@ function bindAdmin() {
   });
   on("ap-status", "change", function (e) { A.adminFilter("status", e.target.value); });
   on("ap-back", "click", A.adminBack);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-apedit]"), function (el) {
+    el.addEventListener("click", function () { A.adminEditOpen(el.getAttribute("data-apedit")); });
+  });
+  on("ap-edit-back", "click", A.adminEditBack);
+  on("ap-edit-reason", "input", function (e) { S.admin.editReason = e.target.value; save(); });
+  on("ap-edit-approve", "click", function () { A.adminEditDecide("approve"); });
+  on("ap-edit-reject", "click", function () { A.adminEditDecide("reject"); });
   on("ap-map-edit", "click", A.amMapEdit);
   on("ap-map-cancel", "click", A.amMapCancel);
   on("ap-map-save", "click", function () { A.amMapSave(val("ap-map")); });
@@ -6787,6 +7086,35 @@ function bindPanel() {
   on("gst-remove", "click", A.gstAskRemove);
   on("gst-remove-go", "click", A.gstRemove);
 
+  /* hub edits */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-hubedit]"), function (el) {
+    el.addEventListener("click", function () { A.hubEditOpen(el.getAttribute("data-hubedit")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-hedismiss]"), function (el) {
+    el.addEventListener("click", function () { A.hubEditDismiss(el.getAttribute("data-hedismiss")); });
+  });
+  on("he-cancel", "click", A.hubEditCancel);
+  on("he-submit", "click", A.hubEditSubmit);
+  on("he-address", "input", function (e) { A.hubEditField("address", e.target.value); });
+  on("he-area", "input", function (e) { A.hubEditField("areaSqft", e.target.value); });
+  on("he-note", "input", function (e) { A.hubEditField("note", e.target.value); });
+  var heRepaint = function (loud) {
+    var d = S.panel.hubEdit.draft;
+    if (d) paintMapPreview(d.mapLink, V.pincode(d.pincode) ? d.pincode : null, loud, "he-map", HE_MAP_HINT);
+  };
+  on("he-pin", "input", function (e) {
+    var v = e.target.value.replace(/\D/g, "").slice(0, 6);
+    if (v !== e.target.value) e.target.value = v;
+    A.hubEditField("pincode", v);
+    var hint = document.getElementById("he-pin-hint");
+    if (hint && !hint.classList.contains("err")) {
+      hint.textContent = cityFor(v) ? "Resolves to " + cityFor(v) + "." : "A pincode VALMO is opening hubs in.";
+    }
+    heRepaint(false);
+  });
+  on("he-map", "input", function (e) { A.hubEditField("mapLink", e.target.value); heRepaint(false); });
+  on("he-map", "change", function () { heRepaint(true); });
+
   /* hubs list */
   on("hub-add", "click", A.addHubOpen);
   Array.prototype.forEach.call(document.querySelectorAll("[data-resume]"), function (el) {
@@ -6883,6 +7211,14 @@ function devActions() {
       groups.push({ title: "Bank change", html:
         '<p class="dnone">Step: ' + esc(bk.step) + '. The penny-drop outcome is simulated ' +
         'once the new account is submitted.</p>' });
+    }
+    var heP = S.hubEdits.filter(function (e) { return e.status === "pending"; })[0];
+    if (heP) {
+      groups.push({ title: "Area Manager · hub edit " + heP.id, html:
+        devBtn("Approve edit", "he:approve:" + heP.id, "ok") +
+        devBtn("Reject edit", "he:reject:" + heP.id, "bad") +
+        '<p class="dnone">Or sign in to the admin panel as the Area Manager and decide it from ' +
+        'the Hub edits tab.</p>' });
     }
     var gstEntry = (S.panel.gst.hubId && S.panel.gst.mode === "edit") ||
                    (S.panel.section === "addhub" && S.panel.addHub.choice === "new");
@@ -7076,9 +7412,16 @@ function devDo(cmd) {
   switch (ns) {
     case "as":
       S.loginAs = arg;
-      if (arg === "existing") { seedExistingCaptain(); }
-      else if (arg === "admin") { S.adminRequests = seedAdminRequests(); S.admin = blankAdmin(); }
-      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null;
+      /* Switching who signs in keeps what the others did — a hub edit the
+         captain sent is still there when the Area Manager signs in, and the
+         decision is still there when the captain comes back. */
+      if (arg === "existing") { if (!S.seededExisting) seedExistingCaptain(); }
+      else if (arg === "admin") {
+        if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+        S.admin = blankAdmin();
+      }
+      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null; S.hubEdits = [];
+             S.seededExisting = false;
              S.roles = { LM: blankRole("LM"), FM: blankRole("FM") }; }
       save(); render();
       break;
@@ -7088,6 +7431,10 @@ function devDo(cmd) {
         "Name on the account did not match your KYC records.");
       break;
     case "fail": A.armFail(arg, parts[2]); break;
+    case "he":
+      A.hubEditDecide(parts[2], arg === "approve",
+        arg === "approve" ? "" : "The new location did not pass the Area Manager\u2019s site check.");
+      break;
     case "gstfill":
       var gf = document.getElementById("gst-input") || document.getElementById("addhub-gstin") ||
                document.getElementById("kyc-gstin");
@@ -7158,6 +7505,7 @@ if (typeof window !== "undefined") {
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
       parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS, apMapLink: apMapLink,
+      hubEditOf: hubEditOf, hubEditById: hubEditById, hubEditChanged: hubEditChanged,
       nameScore: nameScore, gstNameCheck: gstNameCheck, gstLookup: gstLookup,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
