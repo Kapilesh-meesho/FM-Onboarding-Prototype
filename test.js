@@ -1805,8 +1805,11 @@ async function testCaptainHub() {
   check(txt(doc).indexOf(E.gstin) >= 0, "an invalid GSTIN is rejected");
   check(!api.helpers.hubById("hub-beu").gst.registered, "the hub stays Non-GST on a bad GSTIN");
   api.actions.gstSave("29ZZZZZ9999Z1Z9");
+  check(!api.helpers.hubById("hub-beu").gst.registered, "verifying a GSTIN does not save it on its own");
+  check(exists(doc, '[data-testid="gst-check"]'), "the GST portal’s record is shown to review first");
+  click(doc, "gst-confirm");
   eq(api.helpers.hubById("hub-beu").gst,
-     { registered:true, gstin:"29ZZZZZ9999Z1Z9" }, "a valid GSTIN is added to that hub only");
+     { registered:true, gstin:"29ZZZZZ9999Z1Z9" }, "a verified GSTIN is saved to that hub only");
   eq(api.helpers.hubById("hub-aqt").gst.gstin, "29ABCDE1234F1Z5",
      "the other hub's GSTIN is untouched");
 
@@ -1817,6 +1820,7 @@ async function testCaptainHub() {
   eq(api.helpers.hubById("hub-aqt").gst, { registered:false, gstin:"" }, "the GSTIN is removed");
   api.actions.gstOpen("hub-aqt");
   api.actions.gstSave("29ABCDE1234F1Z5");
+  click(doc, "gst-confirm");
   check(api.helpers.hubById("hub-aqt").gst.registered, "and can be added back");
 
   /* --- HB-07: add a new hub --- */
@@ -3305,6 +3309,167 @@ async function testApiFailures() {
   e.win.close();
 }
 
+/* =========================================================================
+   24. GSTIN verification — the GST portal and the name on the bank account
+   ====================================================================== */
+
+async function testGstVerification() {
+  section("24. GSTIN verification — portal record and fuzzy name match");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, E = api.errors, C = api.config, A = api.actions;
+  const level = (a, b) => {
+    const s = H.nameScore(a, b);
+    return s >= C.NAME_MATCH ? "match" : (s >= C.NAME_SIMILAR ? "similar" : "mismatch");
+  };
+
+  /* --- the fuzzy match --- */
+  eq(H.nameScore("KARAN VERMA", "Karan Verma"), 1, "case does not matter");
+  eq(H.nameScore("VERMA KARAN", "Karan Verma"), 1, "nor does word order");
+  eq(H.nameScore("Mr. Karan Verma", "KARAN VERMA"), 1, "nor honorifics");
+  eq(H.nameScore("M/s Verma Logistics Pvt Ltd", "VERMA LOGISTICS"), 1, "nor legal-form words");
+  eq(level("KARAN VERMAA", "Karan Verma"), "match", "a spelling slip still matches");
+  eq(level("KARN VERMA", "Karan Verma"), "match", "so does a dropped letter");
+  eq(level("VERMA KARAN KUMAR", "Karan Verma"), "similar", "an extra middle name is similar");
+  eq(level("K VERMA", "Karan Verma"), "similar", "an initial is similar");
+  eq(level("KIRAN VERMA", "Karan Verma"), "similar", "a one-letter name variant is similar, not a match");
+  eq(level("KARAN SHARMA", "Karan Verma"), "mismatch", "a different surname does not match");
+  eq(level("RAVI VERMA", "Karan Verma"), "mismatch", "nor a different first name");
+  eq(level("KARAN", "Karan Verma"), "mismatch", "nor a first name alone");
+  eq(level("SHREE GANESH TRANSPORT CO", "Karan Verma"), "mismatch", "nor another business");
+  eq(H.gstNameCheck({ legal:"SHREE GANESH TRANSPORT CO", trade:"KARAN VERMA" }, "Karan Verma").on,
+     "trade", "the trade name counts when it is the closer one");
+
+  /* --- the GST portal --- */
+  const own = H.gstLookup("29BBBBB2222B1Z5", { pan:"BBBBB2222B", name:"Priya Sharma" });
+  eq(own.legal, "PRIYA SHARMA", "a GSTIN on the captain’s own PAN is in their own name");
+  eq(own.state, "Karnataka", "registered in the state its first two digits name");
+  eq(H.gstLookup("29ZZZZZ9999Z1Z9", null).legal, "VERMA KARAN KUMAR", "other PANs come from the registry");
+  eq(H.gstLookup("29QQQQQ1111Q1Z1", null), null, "an unknown PAN has no registration");
+  check(!api.validate.gstin("29ABCDE1234F1ZZ5") && !api.validate.gstin("2XABCDE1234F1Z5") &&
+        !api.validate.gstin("29ABCDE1234F0Z5"), "the GSTIN format is checked, not just its length");
+
+  /* --- Captain Hub: Manage GSTIN now verifies --- */
+  api.state.loginAs = "existing";
+  H.seedExistingCaptain();
+  login(doc);
+  A.openPanel("hubs", "hubs");
+  clickSel(doc, '[data-gst="hub-aqt"]');
+  check(devText(doc).indexOf("Fail next GSTIN check") >= 0, "the dev panel can fail the GST portal here");
+  check(devText(doc).indexOf("GST portal · demo records") >= 0, "and lists the demo records");
+  devClick(doc, "gstfill:29AAJFS4321M1ZQ");
+  eq($(doc, "gst-input").value, "29AAJFS4321M1ZQ", "a demo record fills the field");
+  eq($(doc, "gst-save").textContent, "Verify new GSTIN", "the editor verifies before anything is saved");
+
+  click(doc, "gst-save");
+  check(txt(doc).indexOf(E.gstName) >= 0, "a GSTIN in another name is refused");
+  const chk = sel(doc, '[data-testid="gst-check"]');
+  eq(chk && chk.getAttribute("data-level"), "mismatch", "with the name check shown");
+  check(chk.textContent.indexOf("SHREE GANESH TRANSPORT CO") >= 0 && chk.textContent.indexOf("Karan Verma") >= 0,
+        "naming the GST legal name and the bank account name side by side");
+  check(chk.textContent.indexOf("Doesn’t match your bank account name") >= 0, "and the verdict");
+  eq(H.hubById("hub-aqt").gst.gstin, "29ABCDE1234F1Z5", "the hub keeps its GSTIN");
+
+  A.gstSave("29AAGCV7788L1Z2");
+  check(txt(doc).indexOf("This GSTIN was cancelled on 31 Mar 2025. Use an active GSTIN.") >= 0,
+        "a cancelled registration is refused, with its date");
+  A.gstSave("29QQQQQ1111Q1Z1");
+  check(txt(doc).indexOf(E.gstNotFound) >= 0, "an unregistered GSTIN is refused");
+  A.gstSave("29ABCDE1234F1Z");
+  check(txt(doc).indexOf(E.gstin) >= 0, "a malformed GSTIN is refused before the portal is asked");
+  A.gstSave("29ABCDE1234F1Z5");
+  check(txt(doc).indexOf("already the hub’s GSTIN") >= 0, "and re-entering the current GSTIN says so");
+
+  /* the GST portal failing is resumable, like any backend call */
+  A.armFail("gst", "timeout");
+  type(doc, "gst-input", "29ZZZZZ9999Z1Z9");
+  click(doc, "gst-save");
+  check(sel(doc, '[data-testid="api-fail"]').textContent.indexOf(C.API_FAIL.gst.timeout) >= 0,
+        "a GST portal timeout is explained");
+  eq($(doc, "gst-save").textContent, "Resume verification", "and resumable");
+  click(doc, "gst-save");
+  eq(api.state.panel.gst.mode, "verified", "resuming runs the verification");
+  check(!exists(doc, '[data-testid="api-fail"]'), "and clears the failure");
+
+  /* a similar name is accepted, labelled so, and still has to be saved */
+  check(txt(doc).indexOf("GSTIN verified") >= 0, "the verified record is shown");
+  eq(sel(doc, '[data-testid="gst-check"]').getAttribute("data-level"), "similar", "as a similar name");
+  check(txt(doc).indexOf("Similar to your bank account name — accepted · 80%") >= 0,
+        "with its score");
+  eq(H.hubById("hub-aqt").gst.gstin, "29ABCDE1234F1Z5", "nothing is saved until the captain saves it");
+  click(doc, "gst-again");
+  eq(api.state.panel.gst.mode, "edit", "another GSTIN can be tried instead");
+  type(doc, "gst-input", "29ABCDE1234F2Z4");
+  click(doc, "gst-save");
+  eq(sel(doc, '[data-testid="gst-check"]').getAttribute("data-level"), "match",
+     "a second registration on the captain’s own PAN matches outright");
+  click(doc, "gst-confirm");
+  eq(H.hubById("hub-aqt").gst, { registered:true, gstin:"29ABCDE1234F2Z4" }, "saving applies it to the hub");
+  check(exists(doc, '[data-testid="gst-saved"]'), "and the hub card confirms it");
+
+  /* the name is checked against the bank account, not the profile */
+  api.state.profile.bank.holder = "Priya Sharma";
+  A.gstOpen("hub-beu");
+  A.gstSave("29ABCDE1234F1Z5");
+  check(txt(doc).indexOf(E.gstName) >= 0,
+        "once the bank account is in another name, the captain’s own GSTIN no longer matches it");
+  api.state.profile.bank.holder = "Karan Verma";
+
+  /* --- Add a new hub: a new GSTIN is verified too --- */
+  A.addHubOpen();
+  A.addHubRole("FM");
+  A.addHubChoice("new");
+  type(doc, "addhub-gstin", "29AAJFS4321M1ZQ");
+  click(doc, "addhub-go");
+  eq(api.state.screen, "panel", "add a hub: a GSTIN in another name stops the hand-off");
+  eq(sel(doc, '[data-testid="gst-check"]').getAttribute("data-level"), "mismatch", "showing the name check");
+  A.armFail("gst", "down");
+  type(doc, "addhub-gstin", "29ZZZZZ9999Z1Z9");
+  click(doc, "addhub-go");
+  check(sel(doc, '[data-testid="api-fail"]').textContent.indexOf(C.API_FAIL.gst.down) >= 0,
+        "a GST portal outage is explained");
+  eq($(doc, "addhub-go").textContent, "Resume verification →", "and resumable");
+  click(doc, "addhub-go");
+  eq(api.state.screen, "flow", "a verified new GSTIN continues to hub details");
+  eq(H.R().kyc.gst.gstin, "29ZZZZZ9999Z1Z9", "carrying the GSTIN");
+  api.stopTimers();
+  win.close();
+
+  /* --- KYC: the GST step runs the same check --- */
+  const b = await boot();
+  login(b.doc);
+  pickRole(b.doc, "FM");
+  doPersonalDetails(b.doc, { name: "Priya Sharma" });
+  type(b.doc, "kyc-aadhaar", "123412341234");
+  click(b.doc, "kyc-aadhaar-go");
+  type(b.doc, "kyc-aadhaar-otp", "000000");
+  click(b.doc, "kyc-aadhaar-confirm");
+  click(b.doc, "kyc-ack-aadhaar");
+  type(b.doc, "kyc-pan", "BBBBB2222B");
+  type(b.doc, "kyc-pan-father", "Mohan Sharma");
+  click(b.doc, "kyc-pan-go");
+  click(b.doc, "kyc-ack-pan");
+  type(b.doc, "kyc-acc", "123456789012");
+  type(b.doc, "kyc-ifsc", "HDFC0001234");
+  click(b.doc, "kyc-bank-go");
+  click(b.doc, "kyc-ack-bank");
+  clickSel(b.doc, '[data-gstchoice="registered"]');
+  check(devText(b.doc).indexOf("GST portal · demo records") >= 0, "KYC: the demo records are listed");
+  type(b.doc, "kyc-gstin", "29ZZZZZ9999Z1Z9");
+  click(b.doc, "kyc-gst-go");
+  check(txt(b.doc).indexOf(b.api.errors.gstName) >= 0, "a GSTIN in someone else’s name is refused");
+  check(sel(b.doc, '[data-testid="gst-check"]').textContent.indexOf("Priya Sharma") >= 0,
+        "against the name the penny-drop returned for the bank account");
+  check(!b.api.helpers.R().kyc.gst.done, "and GST is not marked verified");
+  type(b.doc, "kyc-gstin", "29BBBBB2222B1Z5");
+  click(b.doc, "kyc-gst-go");
+  check(b.api.helpers.R().kyc.gst.done, "a GSTIN on the captain’s own PAN verifies");
+  const nameRow = sel(b.doc, '[data-testid="kyc-gst-name"]');
+  check(!!nameRow && nameRow.textContent.indexOf("Matches your bank account name · 100%") >= 0,
+        "and the KYC summary records the name check");
+  b.api.stopTimers();
+  b.win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -3333,6 +3498,7 @@ async function testApiFailures() {
     await testPincodesOnHub();
     await testMapPin();
     await testApiFailures();
+    await testGstVerification();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

@@ -478,6 +478,8 @@ img{max-width:100%}
 .kv .row .v{font-size:13px;font-weight:700;color:var(--ink);text-align:right}
 .kv .row .v.ok{color:var(--ok-ink)}
 .kv .row .v.mute{color:var(--muted)}
+.kv .row .v.warn{color:var(--warn-ink)}
+.kv .row .v.bad{color:var(--err)}
 
 .side-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
 .side-card > b{display:block;font-size:14px;font-weight:700;color:var(--ink);line-height:20px}
@@ -1198,6 +1200,154 @@ function failNotice(f, resumeId, resumeLabel) {
   '</div>';
 }
 
+/* GSTIN verification -------------------------------------------------------
+   A simulated GST portal (Cashfree's GSTIN lookup in production). A GSTIN
+   carries its holder's PAN in characters 3–12, so the lookup keys off that:
+   a GSTIN on the captain's own PAN is their proprietorship, registered in
+   their verified name; a few other businesses are on file to show the other
+   outcomes; any other PAN has no registration. */
+var GST_STATES = { "07":"Delhi", "09":"Uttar Pradesh", "19":"West Bengal", "24":"Gujarat",
+                   "27":"Maharashtra", "29":"Karnataka", "32":"Kerala", "33":"Tamil Nadu",
+                   "36":"Telangana" };
+var GST_REGISTRY = {
+  ABCDE1234F: { legal:"KARAN VERMA", trade:"VERMA LOGISTICS", type:"Proprietorship", status:"Active" },
+  ZZZZZ9999Z: { legal:"VERMA KARAN KUMAR", trade:"KKV TRANSPORTS", type:"Proprietorship", status:"Active" },
+  AAJFS4321M: { legal:"SHREE GANESH TRANSPORT CO", trade:"SHREE GANESH TRANSPORT",
+                type:"Partnership", status:"Active" },
+  AAGCV7788L: { legal:"VERMA FREIGHT PRIVATE LIMITED", trade:"VERMA FREIGHT",
+                type:"Private limited company", status:"Cancelled", cancelledOn:"31 Mar 2025" }
+};
+
+function gstLookup(gstin, own) {
+  var pan = gstin.slice(2, 12);
+  var rec = own && own.pan && own.name && pan === String(own.pan).toUpperCase()
+    ? { legal:String(own.name).toUpperCase(), trade:"", type:"Proprietorship", status:"Active" }
+    : GST_REGISTRY[pan];
+  return rec ? Object.assign({ gstin:gstin, state:GST_STATES[gstin.slice(0, 2)] || "—" }, rec) : null;
+}
+
+/* Fuzzy name match. Names are compared word by word in any order ("VERMA
+   KARAN" is "Karan Verma"), after dropping case, punctuation, honorifics and
+   legal-form words (Mr, Shri, M/s, Pvt, Ltd, LLP…). Each word of the shorter
+   name pairs with its closest unused word in the other — exact, an initial
+   ("K" for "Karan", a weak match), or by Jaro-Winkler for spelling slips —
+   and the total is scored against both names' lengths, so a missing or
+   extra word costs as much as a wrong one. */
+var NAME_NOISE = ["mr","mrs","ms","miss","shri","sri","smt","kumari","dr","messrs",
+                  "pvt","private","ltd","limited","llp","co","company","and","the"];
+var NAME_MATCH = 0.95, NAME_SIMILAR = 0.78;
+
+function nameTokens(n) {
+  return String(n || "").toLowerCase().replace(/m\/s\.?/g, " ").replace(/&/g, " and ")
+    .replace(/[^a-z\s]/g, " ").split(/\s+/)
+    .filter(function (t) { return t && NAME_NOISE.indexOf(t) < 0; });
+}
+function jaro(a, b) {
+  if (a === b) return 1;
+  var la = a.length, lb = b.length;
+  if (!la || !lb) return 0;
+  var win = Math.max(0, Math.floor(Math.max(la, lb) / 2) - 1);
+  var ma = [], mb = [], m = 0, t = 0, i, j, k;
+  for (i = 0; i < la; i++) {
+    for (j = Math.max(0, i - win); j < Math.min(lb, i + win + 1); j++) {
+      if (mb[j] || a.charAt(i) !== b.charAt(j)) continue;
+      ma[i] = mb[j] = true; m++; break;
+    }
+  }
+  if (!m) return 0;
+  for (i = 0, k = 0; i < la; i++) {
+    if (!ma[i]) continue;
+    while (!mb[k]) k++;
+    if (a.charAt(i) !== b.charAt(k)) t++;
+    k++;
+  }
+  return (m / la + m / lb + (m - t / 2) / m) / 3;
+}
+function jaroWinkler(a, b) {
+  var j = jaro(a, b), p = 0;
+  while (p < 4 && p < a.length && p < b.length && a.charAt(p) === b.charAt(p)) p++;
+  return j + p * 0.1 * (1 - j);
+}
+function nameScore(a, b) {
+  var x = nameTokens(a), y = nameTokens(b);
+  if (!x.length || !y.length) return 0;
+  if (x.length > y.length) { var tmp = x; x = y; y = tmp; }
+  var used = [], total = 0;
+  x.forEach(function (w) {
+    var best = 0, bi = -1;
+    y.forEach(function (v, i) {
+      if (used[i]) return;
+      var sc = w === v ? 1
+        : (w.length === 1 && v.charAt(0) === w) || (v.length === 1 && w.charAt(0) === v) ? 0.75
+        : jaroWinkler(w, v);
+      if (sc > best) { best = sc; bi = i; }
+    });
+    if (bi >= 0) used[bi] = true;
+    total += best;
+  });
+  return 2 * total / (x.length + y.length);
+}
+
+/* The registration's legal and trade names, each against the bank account
+   holder; the closer one counts. */
+function gstNameCheck(rec, bankName) {
+  var best = { score:0, on:"legal", gstName:rec.legal };
+  [["legal", rec.legal], ["trade", rec.trade]].forEach(function (p) {
+    if (!p[1]) return;
+    var sc = nameScore(p[1], bankName);
+    if (sc > best.score) best = { score:sc, on:p[0], gstName:p[1] };
+  });
+  best.bankName = bankName || "";
+  best.pct = Math.round(best.score * 100);
+  best.level = best.score >= NAME_MATCH ? "match" : (best.score >= NAME_SIMILAR ? "similar" : "mismatch");
+  return best;
+}
+
+/* The whole check, shared by KYC, Manage GSTIN and Add a new hub: the format,
+   the GST portal (which can fail like any backend call — `holder` keeps the
+   failure for Resume), the registration's status, then its name against the
+   bank account payouts go to. A similar name is accepted and labelled so. */
+function verifyGstin(holder, gstin, bankName, own) {
+  gstin = String(gstin || "").toUpperCase().trim();
+  if (!V.gstin(gstin)) return { ok:false, code:"format", error:ERR.gstin };
+  if (!apiCall(holder, "gst")) return { ok:false, code:"api" };
+  var rec = gstLookup(gstin, own);
+  if (!rec) return { ok:false, code:"notfound", error:ERR.gstNotFound };
+  if (rec.status !== "Active") {
+    return { ok:false, code:"inactive", record:rec,
+             error:"This GSTIN was " + rec.status.toLowerCase() +
+                   (rec.cancelledOn ? " on " + rec.cancelledOn : "") + ". Use an active GSTIN." };
+  }
+  var m = gstNameCheck(rec, bankName);
+  if (m.level === "mismatch") return { ok:false, code:"name", record:rec, match:m, error:ERR.gstName };
+  return { ok:true, code:m.level, record:rec, match:m };
+}
+
+var GST_VERDICT = { match:"Matches your bank account name",
+                    similar:"Similar to your bank account name — accepted",
+                    mismatch:"Doesn’t match your bank account name" };
+var GST_TONE = { match:"ok", similar:"warn", mismatch:"bad" };
+
+/* What the GST portal returned, and how its name compares with the bank's. */
+function gstCheckHtml(res) {
+  if (!res || !res.record) return "";
+  var rec = res.record, m = res.match;
+  var row = function (k, v, cls) {
+    return '<div class="row"><span class="k">' + k + '</span><span class="v' + (cls ? " " + cls : "") +
+           '">' + esc(v) + '</span></div>';
+  };
+  return '<div class="kv" style="margin:0 0 16px" data-testid="gst-check" data-level="' +
+      esc(m ? m.level : res.code) + '">' +
+    row("GST legal name", rec.legal) +
+    (rec.trade ? row("Trade name", rec.trade) : "") +
+    row("Registered in", rec.state + " · " + rec.type) +
+    row("Status", rec.status, rec.status === "Active" ? "ok" : "bad") +
+    (m ? row("Bank account name", m.bankName || "—") +
+         row("Name check", GST_VERDICT[m.level] + " · " + m.pct + "%", GST_TONE[m.level])
+       : "") +
+  '</div>';
+}
+
 /* Pincode availability — deterministic so the demo and the tests agree. */
 var SERVICEABLE = ["560076","560034","560102","110017","400059","560001"];
 
@@ -1264,7 +1414,8 @@ var V = {
   pincode: function(s){ return /^[1-9]\d{5}$/.test(s || ""); },
   pan:     function(s){ return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test((s || "").toUpperCase()); },
   ifsc:    function(s){ return /^[A-Z]{4}0[A-Z0-9]{6}$/.test((s || "").toUpperCase()); },
-  gstin:   function(s){ return (s || "").length === 15; },
+  /* state code, the holder's PAN, entity number, Z, check character */
+  gstin:   function(s){ return /^[0-3][0-9][A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(s || ""); },
   account: function(s){ return /^\d{9,18}$/.test(s || ""); },
   aadhaar: function(s){ return /^\d{12}$/.test(s || ""); },
   hubArea:     function(s){ var t = String(s == null ? "" : s).trim();
@@ -1430,7 +1581,10 @@ var ERR = {
   panFather:     "Father's name is required for PAN verification.",
   ifsc:          "Enter a valid IFSC (e.g. HDFC0001234).",
   account:       "Enter a valid account number (9–18 digits).",
-  gstin:         "GSTIN must be 15 characters.",
+  gstin:         "Enter a valid 15-character GSTIN, e.g. 29ABCDE1234F1Z5.",
+  gstNotFound:   "No GST registration was found for this GSTIN. Check it against your GST certificate.",
+  gstName:       "The name on this GSTIN doesn’t match the name on your bank account. Use a GSTIN " +
+                 "registered in your name, or in the business name your bank account is in.",
   gstRequired:   "GST registration is mandatory for FM captains.",
   mapLink:       "Paste a valid Google Maps link.",
   mapNoPin:      "This link has no pin location in it. Drop a pin on the hub in Google Maps and paste that link.",
@@ -1515,7 +1669,8 @@ function blankPanel() {
     tab:"hubs",                // personal | hubs
     bank:{ open:false, step:"otp", otp:"", attempts:0, locked:false, error:"", fail:null,
            draft:{ acc:"", ifsc:"", holder:"" } },
-    gst:{ hubId:null, mode:"view", value:"", error:"", fail:null },   // view | edit | confirmRemove
+    gst:{ hubId:null, mode:"view", value:"", error:"", fail:null,      // view | edit | verified | confirmRemove
+          result:null, savedHubId:null },
     addHub:{ role:"LM", choice:"existing", gstin:"", existing:"", error:"" }
   };
 }
@@ -2589,6 +2744,10 @@ function hubCard(h) {
       right +
     '</div>' +
     gstRow +
+    (!editing && S.panel.gst.savedHubId === h.id
+      ? '<div style="padding:0 20px 16px"><div class="notice ok" data-testid="gst-saved" style="margin:0">' +
+        '<b>GSTIN verified and saved</b>Invoices for this hub now carry ' + esc(h.gst.gstin) + '.</div></div>'
+      : "") +
     (editing ? gstEditBlock(h) : "") +
   '</div>';
 }
@@ -2606,17 +2765,31 @@ function gstEditBlock(h) {
         '<button class="btn btn-ghost" id="gst-cancel">Keep GSTIN</button>' +
         '<button class="btn btn-primary" id="gst-remove-go" ' +
           'style="background:var(--err);box-shadow:none">Remove GSTIN</button></div>';
+  } else if (g.mode === "verified") {
+    var sim = g.result.match && g.result.match.level === "similar";
+    inner = statusBlock("ok", "GSTIN verified",
+        "The GST portal confirmed " + g.result.record.gstin + " is active" +
+        (sim ? ", and its name is close enough to your bank account’s." : " and in your bank account’s name.")) +
+      gstCheckHtml(g.result) +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="gst-again">Use a different GSTIN</button>' +
+        '<button class="btn btn-primary" id="gst-confirm">Save GSTIN to ' + esc(h.name) + '</button></div>';
   } else {
+    var gFail = failOf(g, "gst");
     inner = '<div class="fl" style="max-width:320px"><label>GSTIN</label>' +
         '<div class="box' + (g.error ? ' bad' : '') + '">' +
         '<input id="gst-input" maxlength="15" style="text-transform:uppercase" ' +
           'placeholder="15-character GSTIN" value="' + esc(g.value) + '"></div>' +
         '<div class="hint' + (g.error ? ' err' : '') + '">' +
-          (g.error || "Verified via Cashfree before it is saved.") + '</div></div>' +
+          esc(g.error || "Verified with the GST portal via Cashfree, and its name checked " +
+                         "against your bank account, before it is saved.") + '</div></div>' +
+      (g.error ? gstCheckHtml(g.result) : '') +
+      failNotice(gFail) +
       '<div style="display:flex;gap:10px">' +
         '<button class="btn btn-ghost" id="gst-cancel">Cancel</button>' +
         '<button class="btn btn-primary" id="gst-save">' +
-          (h.gst.registered ? "Update GSTIN" : "Verify and add GSTIN") + '</button>' +
+          (gFail ? "Resume verification" : (h.gst.registered ? "Verify new GSTIN" : "Verify GSTIN")) +
+        '</button>' +
         (h.gst.registered
           ? '<button class="btn-link" id="gst-remove" style="color:var(--err);margin-left:6px">' +
             'Remove GSTIN</button>'
@@ -2725,9 +2898,13 @@ function panelAddHub() {
               (a.error ? '<span class="hint err" style="display:block">' + esc(a.error) + '</span>' : '') +
               '</span>'
             : "") +
+      (a.choice === "new" && a.error ? gstCheckHtml(a.result) : "") +
+      (a.choice === "new" ? failNotice(failOf(a, "gst")) : "") +
 
       '<div style="margin-top:20px">' +
-        '<button class="btn btn-primary" id="addhub-go">Continue to hub details →</button>' +
+        '<button class="btn btn-primary" id="addhub-go">' +
+          (a.choice === "new" && failOf(a, "gst") ? "Resume verification →" : "Continue to hub details →") +
+        '</button>' +
         '<div style="margin-top:10px;font-size:11px;color:var(--muted)">' +
           'Personal details, KYC and background verification carry over — you start at ' +
           'hub details.</div>' +
@@ -3972,7 +4149,9 @@ function phaseKYC(r) {
           '<input id="kyc-gstin" maxlength="15" style="text-transform:uppercase" ' +
             'placeholder="15-character GSTIN" value="' + esc(k.gst.gstin) + '"></div>' +
           '<div class="hint' + (e.gstin ? ' err' : '') + '">' +
-            (e.gstin || "15 characters, as printed on your GST certificate.") + '</div></div>'
+            (e.gstin || "15 characters, as printed on your GST certificate. We check its name " +
+                        "against your bank account.") + '</div></div>' +
+          (e.gstin && k.gst.check ? gstCheckHtml(k.gst.check) : '')
         : '') +
       (reg ? failNotice(failOf(r, "gst")) : "") +
       kycFoot(r, "kyc-gst-go",
@@ -3999,6 +4178,12 @@ function phaseKYC(r) {
         '<div class="row"><span class="k">GST' + (fm ? '' : ' status') + '</span><span class="v' +
           (k.gst.registered ? ' ok' : ' mute') + '">' +
           (k.gst.registered ? "Verified" : "Non-GST") + kycEditBtn("gst") + '</span></div>' +
+        (k.gst.registered && k.gst.check && k.gst.check.match
+          ? '<div class="row" data-testid="kyc-gst-name"><span class="k">GST name check</span>' +
+            '<span class="v ' + GST_TONE[k.gst.check.match.level] + '">' +
+            esc(GST_VERDICT[k.gst.check.match.level] + " · " + k.gst.check.match.pct + "%") +
+            '</span></div>'
+          : '') +
         (fm ? '<div class="row"><span class="k">MSME certificate</span><span class="v' +
               (k.msme.done ? ' ok">Uploaded' : ' mute">Not provided') + '</span></div>' : '') +
       '</div>' +
@@ -5044,9 +5229,12 @@ var A = {
       k.gst.done = true; k.editing = null; save(); render(); return;
     }
     gstin = (gstin || "").toUpperCase().trim();
-    if (!V.gstin(gstin)) { k.errors.gstin = ERR.gstin; k.gst.gstin = gstin; save(); render(); return; }
-    k.gst.gstin = gstin;
-    if (!apiCall(r, "gst")) { save(); render(); return; }
+    k.gst.gstin = gstin; k.gst.check = null;
+    var res = verifyGstin(r, gstin, k.bank.holder || r.pd.name,
+                          { pan:k.pan.value, name:(k.aadhaar.data && k.aadhaar.data.name) || r.pd.name });
+    if (res.code === "api") { save(); render(); return; }
+    k.gst.check = res;
+    if (!res.ok) { k.errors.gstin = res.error; save(); render(); return; }
     k.gst.registered = true; k.gst.done = true;
     k.editing = null;
     save(); render();
@@ -5584,18 +5772,38 @@ var A = {
   gstOpen: function (hubId) {
     var h = hubById(hubId);
     if (!h) return;
-    S.panel.gst = { hubId:hubId, mode:"edit", value:h.gst.gstin || "", error:"" };
+    S.panel.gst = Object.assign(blankPanel().gst, { hubId:hubId, mode:"edit", value:h.gst.gstin || "" });
     save(); render();
   },
   gstCancel: function () { S.panel.gst = blankPanel().gst; save(); render(); },
+  /* Verify first — the GST portal's record and the name check are shown for
+     the captain to save, never applied straight away. */
   gstSave: function (value) {
     var g = S.panel.gst, h = hubById(g.hubId);
     if (!h) return;
     value = (value || "").toUpperCase().trim();
-    g.value = value;
-    if (!V.gstin(value)) { g.error = ERR.gstin; save(); render(); return; }
-    h.gst = { registered:true, gstin:value };
-    S.panel.gst = blankPanel().gst;
+    g.value = value; g.error = ""; g.result = null;
+    if (value === h.gst.gstin && h.gst.registered) {
+      g.error = "This is already the hub’s GSTIN."; save(); render(); return;
+    }
+    var pr = S.profile;
+    var res = verifyGstin(g, value, pr.bank && pr.bank.holder, { pan:pr.pan, name:pr.name });
+    if (res.code === "api") { save(); render(); return; }
+    g.result = res;
+    if (!res.ok) { g.error = res.error; save(); render(); return; }
+    g.mode = "verified";
+    save(); render();
+  },
+  gstConfirm: function () {
+    var g = S.panel.gst, h = hubById(g.hubId);
+    if (!h || g.mode !== "verified" || !g.result || !g.result.ok) return;
+    h.gst = { registered:true, gstin:g.result.record.gstin };
+    S.panel.gst = Object.assign(blankPanel().gst, { savedHubId:h.id });
+    save(); render();
+  },
+  gstEditAgain: function () {
+    var g = S.panel.gst;
+    g.mode = "edit"; g.result = null; g.error = "";
     save(); render();
   },
   gstAskRemove: function () { S.panel.gst.mode = "confirmRemove"; save(); render(); },
@@ -5630,7 +5838,7 @@ var A = {
     if (choice === "none" && a.role === "FM") return;     // not offered for FM
     if (choice === "existing" && !knownGstins().length) return;
     if (a.choice === choice) return;                      // no needless re-render
-    a.choice = choice; a.error = "";
+    a.choice = choice; a.error = ""; a.result = null; a.fail = null;
     save(); render();
   },
   addHubExisting: function (g) { S.panel.addHub.existing = g; save(); },
@@ -5649,7 +5857,10 @@ var A = {
       gst = { registered:true, gstin:a.existing };
     } else if (a.choice === "new") {
       var g = (a.gstin || "").toUpperCase().trim();
-      if (!V.gstin(g)) { a.error = ERR.gstin; save(); render(); return; }
+      a.result = null;
+      var res = verifyGstin(a, g, pr.bank && pr.bank.holder, { pan:pr.pan, name:pr.name });
+      if (res.code === "api") { save(); render(); return; }
+      if (!res.ok) { a.error = res.error; a.result = res; save(); render(); return; }
       gst = { registered:true, gstin:g };
     } else {
       if (a.role === "FM") { a.error = ERR.gstRequired; save(); render(); return; }
@@ -6456,6 +6667,8 @@ function bindPanel() {
   });
   on("bank-retry", "click", A.bankBackToForm);
   on("bank-resume", "click", A.bankResume);
+  on("gst-confirm", "click", A.gstConfirm);
+  on("gst-again", "click", A.gstEditAgain);
   on("bank-done", "click", A.bankCancel);
 
   /* per-hub GSTIN */
@@ -6563,7 +6776,11 @@ function devActions() {
       groups.push({ title: "Bank change", html:
         '<p class="dnone">Step: ' + esc(bk.step) + '. The penny-drop outcome is simulated ' +
         'once the new account is submitted.</p>' });
-    } else {
+    }
+    var gstEntry = (S.panel.gst.hubId && S.panel.gst.mode === "edit") ||
+                   (S.panel.section === "addhub" && S.panel.addHub.choice === "new");
+    if (gstEntry) groups.push(failGroup(["gst"]), gstRegistryGroup());
+    if (!groups.length) {
       groups.push({ title: "Captain Hub", html:
         '<p class="dnone">No backend actors act here — profile and hub edits are ' +
         'captain-driven. Add a hub to re-enter onboarding.</p>' });
@@ -6596,20 +6813,8 @@ function devActions() {
 
   /* The calls the captain makes on this step that can fail. */
   var armable = armableApis(r, id);
-  if (armable.length) {
-    groups.push({ title: "Simulate an API failure", html:
-      armable.map(function (api) {
-        return Object.keys(FAIL_CODE).filter(function (kind) { return !!API_FAIL[api][kind]; })
-          .map(function (kind) {
-            var armed = S.failNext && S.failNext[api] === kind;
-            return devBtn((armed ? "Armed · " : "") + "Fail next " + API_FAIL[api].call + " · " +
-                          FAIL_KIND[kind] + " (" + FAIL_CODE[kind] + ")",
-                          "fail:" + api + ":" + kind, armed ? "warn" : "");
-          }).join("");
-      }).join("") +
-      '<p class="dnone">The next call fails with that service’s reason; the captain resumes ' +
-      'it from the same step. Click an armed one again to disarm it.</p>' });
-  }
+  if (armable.length) groups.push(failGroup(armable));
+  if (id === "kyc" && kycStep(r) === "gst") groups.push(gstRegistryGroup());
 
   if (id === "ch") {
     if (fm) {
@@ -6687,6 +6892,36 @@ function devActions() {
   return { ctx: ctx, groups: groups };
 }
 
+function failGroup(apis) {
+  return { title: "Simulate an API failure", html:
+    apis.map(function (api) {
+      return Object.keys(FAIL_CODE).filter(function (kind) { return !!API_FAIL[api][kind]; })
+        .map(function (kind) {
+          var armed = S.failNext && S.failNext[api] === kind;
+          return devBtn((armed ? "Armed · " : "") + "Fail next " + API_FAIL[api].call + " · " +
+                        FAIL_KIND[kind] + " (" + FAIL_CODE[kind] + ")",
+                        "fail:" + api + ":" + kind, armed ? "warn" : "");
+        }).join("");
+    }).join("") +
+    '<p class="dnone">The next call fails with that service’s reason; the captain resumes ' +
+    'it from the same step. Click an armed one again to disarm it.</p>' };
+}
+
+/* The demo GST portal's records, each a button that fills the GSTIN field. */
+var GST_DEMO = [
+  { gstin:"29ABCDE1234F1Z5", note:"KARAN VERMA · on PAN ABCDE1234F" },
+  { gstin:"29ZZZZZ9999Z1Z9", note:"VERMA KARAN KUMAR · similar name" },
+  { gstin:"29AAJFS4321M1ZQ", note:"SHREE GANESH TRANSPORT CO · no match" },
+  { gstin:"29AAGCV7788L1Z2", note:"Cancelled registration" },
+  { gstin:"29QQQQQ1111Q1Z1", note:"Not registered" }
+];
+function gstRegistryGroup() {
+  return { title: "GST portal · demo records", html:
+    GST_DEMO.map(function (d) { return devBtn(d.gstin + " · " + d.note, "gstfill:" + d.gstin); }).join("") +
+    '<p class="dnone">A GSTIN on the captain’s own PAN (characters 3–12) is registered in their ' +
+    'own name. Its name is matched against the bank account holder’s.</p>' };
+}
+
 /* The backend calls a captain can trigger from where they are. */
 function armableApis(r, id) {
   if (id === "pd")  return r.pd.emailVerified || r.pd.emailLocked ? [] : ["email"];
@@ -6746,6 +6981,11 @@ function devDo(cmd) {
         "Name on the account did not match your KYC records.");
       break;
     case "fail": A.armFail(arg, parts[2]); break;
+    case "gstfill":
+      var gf = document.getElementById("gst-input") || document.getElementById("addhub-gstin") ||
+               document.getElementById("kyc-gstin");
+      if (gf) { gf.value = arg; gf.dispatchEvent(new Event("input", { bubbles:true })); }
+      break;
     case "bgvfail": A.bgvApiFail(arg); break;
     case "bgv": A.bgvSet(arg); break;
     case "cat":
@@ -6804,12 +7044,14 @@ if (typeof window !== "undefined") {
               KNOWN_HUB_CODES: KNOWN_HUB_CODES, ONBOARDING_TYPES: ONBOARDING_TYPES,
               SERVICEABLE: SERVICEABLE, VEHICLE_TYPES: VEHICLE_TYPES,
               VEHICLE_TYPES_RAW: VEHICLE_TYPES_RAW,
-              API_FAIL: API_FAIL, FAIL_CODE: FAIL_CODE, FAIL_SAVED: FAIL_SAVED },
+              API_FAIL: API_FAIL, FAIL_CODE: FAIL_CODE, FAIL_SAVED: FAIL_SAVED,
+              GST_REGISTRY: GST_REGISTRY, NAME_MATCH: NAME_MATCH, NAME_SIMILAR: NAME_SIMILAR },
     helpers: {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
       parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS,
+      nameScore: nameScore, gstNameCheck: gstNameCheck, gstLookup: gstLookup,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
       phaseId: phaseId, progressPct: progressPct, R: R, goPhase: goPhase,
