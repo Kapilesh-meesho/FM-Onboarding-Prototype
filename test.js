@@ -3240,6 +3240,10 @@ async function testApiFailures() {
   check(failText(b.doc).indexOf(failedSys.label + " did not respond in time.") >= 0,
         "activation names the system that failed (" + failedSys.label + ")");
   check(txt(b.doc).indexOf("Activation paused") >= 0, "and calls activation paused");
+  /* the admin status chip shares the .st class — it must not stop a status line wrapping */
+  const stBox = b.win.getComputedStyle(sel(b.doc, ".status-head .st"));
+  check(stBox.whiteSpace !== "nowrap" && stBox.display === "block",
+        "a long status line wraps inside the card (white-space " + stBox.whiteSpace + ")");
   eq(b.doc.querySelectorAll(".tl .tlrow.bad, .tl .bad").length >= 1, true, "the failed system is marked");
   eq($(b.doc, "act-retry").textContent, "Resume activation", "the button is Resume activation");
   click(b.doc, "act-retry");

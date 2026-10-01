@@ -441,7 +441,10 @@ img{max-width:100%}
 .status-head .ico.run{background:#eef3fa;color:var(--navy)}
 .status-head .ico.bad{background:var(--err-bg);color:var(--err)}
 .status-head .ico.wait{background:var(--warn-bg);color:var(--warn-ink)}
-.status-head .st{flex:1;min-width:0}
+/* `.st` is also the admin status chip (inline, padded, nowrap) — reset it here
+   so a long status line wraps inside the card instead of running off it */
+.status-head .st{flex:1;min-width:0;display:block;padding:0;border-radius:0;
+  white-space:normal;font-size:inherit;font-weight:inherit}
 .status-head h3{margin:0 0 5px;font-size:17px;font-weight:700;color:var(--ink);line-height:22px}
 .status-head p{margin:0;font-size:13px;font-weight:500;color:var(--muted);line-height:20px}
 
