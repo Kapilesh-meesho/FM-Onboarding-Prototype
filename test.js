@@ -1719,14 +1719,15 @@ async function testCaptainHub() {
   /* --- existing captain lands in the Captain Hub --- */
   api.reset();
   devClick(doc, "as:existing");
-  eq(api.state.hubs.length, 3, "existing captain is seeded with 3 hubs");
+  eq(api.state.hubs.length, 4, "existing captain is seeded with 4 hubs");
+  eq(api.state.hubs.map(h => h.role).join(","), "LM,LM,LM,FM", "three LM hubs and one live FM hub");
   login(doc);
   eq(api.state.screen, "panel", "an existing captain lands in the Captain Hub, not onboarding");
   eq(api.state.panel.section, "hubs", "and lands on My Hubs");
 
   /* --- HB-01 --- */
   let body = txt(doc);
-  check(body.indexOf("Active hubs (2)") >= 0, "HB-01 groups two active hubs");
+  check(body.indexOf("Active hubs (3)") >= 0, "HB-01 groups three active hubs");
   check(body.indexOf("Inactive hubs (1)") >= 0, "HB-01 groups one inactive hub");
   ["AQT","BEU","JYP"].forEach(c =>
     check(body.indexOf("Hub " + c) >= 0, "hub code " + c + " listed"));
@@ -1948,7 +1949,7 @@ async function testCaptainHub() {
 
   click(doc, "act-panel");
   eq(api.state.screen, "panel", "Open Captain Panel now goes to the Captain Hub");
-  check(txt(doc).indexOf("Active hubs (3)") >= 0, "My Hubs shows the new hub alongside the others");
+  check(txt(doc).indexOf("Active hubs (4)") >= 0, "My Hubs shows the new hub alongside the others");
 
   /* --- a first-time captain also ends up with a hub --- */
   api.reset();
@@ -1970,6 +1971,8 @@ async function testCaptainHub() {
   api.actions.finishActivation();
   eq(api.state.hubs.length, 1, "a first-time captain's onboarding produces their first hub");
   eq(api.state.hubs[0].role, "FM", "recorded against the right role");
+  eq(api.state.hubs[0].rateCard && api.state.hubs[0].rateCard.slabs, api.helpers.R().ch.slabs,
+     "carrying the rate card approved in onboarding, for later updates");
   check(!!api.state.profile.name, "and fills in the captain record the Captain Hub reads");
   click(doc, "act-panel");
   check(txt(doc).indexOf("Active hubs (1)") >= 0, "which then shows in My Hubs");
@@ -2023,8 +2026,8 @@ async function testAdminPanel() {
   check(txt(doc).indexOf("FM Onboarding") >= 0, "the console is titled FM Onboarding");
   check(txt(doc).indexOf("Meesho Admin Console") >= 0, "with the admin breadcrumb");
   check(txt(doc).indexOf("Priya Sharma") >= 0, "and the signed-in Area Manager");
-  eq(api.config.ADMIN_TABS.am.map(t => t.id), ["mine", "edits"],
-     "AM has its own requests, plus captains\u2019 hub edits to decide");
+  eq(api.config.ADMIN_TABS.am.map(t => t.id), ["mine", "edits", "rates"],
+     "AM has its own requests, captains\u2019 hub edits, and rate card updates");
 
   const amRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
   check(amRows.length === 3, "three AM-stage requests listed");
@@ -3719,6 +3722,166 @@ async function testHubEdits() {
   win.close();
 }
 
+/* =========================================================================
+   27. Rate card updates — the AM changes an agreed card, the captain agrees
+   ====================================================================== */
+
+async function testRateUpdates() {
+  section("27. Rate card updates — bell notification, Agree only");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions;
+  const kdg = () => H.hubById("hub-kdg");
+
+  devClick(doc, "as:existing");
+  login(doc);
+
+  /* --- the agreed card, and the bell --- */
+  const rateRow = sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate"]');
+  check(!!rateRow && rateRow.textContent.indexOf("₹4.50 (0–500 orders) · ₹4.00 (501+ orders) · touchpoint ₹5.00") >= 0,
+        "the FM hub card shows its agreed rate card");
+  check(rateRow.textContent.indexOf("Agreed 14 Feb 2026") >= 0, "and when it was agreed");
+  check(!exists(doc, '[data-hub="hub-aqt"] [data-testid="hub-rate"]'), "LM hubs have no rate card row");
+  check(!!sel(doc, ".hub-topbar #bell"), "the Captain Hub has a bell at the top right");
+  check(!exists(doc, '[data-testid="bell-count"]'), "with nothing to show yet");
+  click(doc, "bell");
+  check(sel(doc, '[data-testid="bell-menu"]').textContent.indexOf("You’re all caught up.") >= 0,
+        "opening it says so");
+  click(doc, "bell");
+
+  /* --- the Area Manager updates it --- */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  const rows = [...doc.querySelectorAll('[data-testid="ap-rate-row"]')];
+  eq(rows.length, 1, "the Area Manager sees the live FM hub with an agreed card");
+  check(rows[0].textContent.indexOf("Hub KDG") >= 0 && rows[0].textContent.indexOf("Agreed 14 Feb 2026") >= 0,
+        "with its code and agreement date");
+  clickSel(doc, '[data-aprate="hub-kdg"]');
+  check(exists(doc, '[data-testid="ap-rate-editor"]'), "Update rate card opens the editor");
+  eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value), ["4.50", "4.00"],
+     "starting from the agreed slab rates");
+  eq($(doc, "ap-rate-tp").value, "5.00", "and touchpoint");
+  eq($(doc, "ap-rate-eff").value, H.cycleStart(1), "applying from the next payout cycle by default");
+
+  click(doc, "ap-rate-send");
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("already agreed") >= 0,
+        "an unchanged card is not sent");
+  const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
+  r0.value = "4.80"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  type(doc, "ap-rate-tp", "5.20");
+  click(doc, "ap-rate-send");
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Say why the rates are changing") >= 0,
+        "a change needs a reason the captain will see");
+  click(doc, "ap-rate-add");
+  eq(doc.querySelectorAll('[data-rslabrow]').length, 3, "slabs can be added");
+  clickSel(doc, '[data-rslabdel="2"]');
+  eq(doc.querySelectorAll('[data-rslabrow]').length, 2, "and removed");
+  const bad = sel(doc, '[data-rslab="1"][data-rfield="rate"]');
+  bad.value = "four"; bad.dispatchEvent(new win.Event("input", { bubbles: true }));
+  type(doc, "ap-rate-reason", "Diesel costs on the Hosur Road lane went up.");
+  click(doc, "ap-rate-send");
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Every slab needs") >= 0,
+        "an incomplete slab is caught");
+  const fix = sel(doc, '[data-rslab="1"][data-rfield="rate"]');
+  fix.value = "4.30"; fix.dispatchEvent(new win.Event("input", { bubbles: true }));
+  const eff = $(doc, "ap-rate-eff");
+  eff.value = H.cycleStart(2); eff.dispatchEvent(new win.Event("change", { bubbles: true }));
+  click(doc, "ap-rate-send");
+
+  eq(api.state.rateUpdates.length, 1, "a valid update is sent");
+  const u = api.state.rateUpdates[0];
+  eq(u.status, "pending", "and waits for the captain");
+  eq(u.to, { slabs:[{ from:"0", to:"500", rate:"4.80" }, { from:"501", to:"", rate:"4.30" }], touchpoint:"5.20" },
+     "carrying the new card");
+  eq(u.effective, H.cycleStart(2), "from the cycle the AM chose");
+  eq(kdg().rateCard.slabs[0].rate, "4.50", "the agreed card stays in force until the captain agrees");
+  check(api.state.admin.toast.indexOf("sent to Karan Verma to agree") >= 0, "the AM is told it went to the captain");
+  check(sel(doc, '[data-testid="ap-rate-row"]').textContent.indexOf("Waiting for the captain") >= 0,
+        "and the list says it is waiting on them");
+  clickSel(doc, '[data-aprate="hub-kdg"]');
+  check(!exists(doc, '[data-testid="ap-rate-editor"]'), "one update at a time — no second one while it waits");
+  check(txt(doc).indexOf("waiting for the captain to agree") >= 0, "the AM sees what was sent");
+  A.adminRateBack();
+
+  /* --- the captain is notified, and can only agree --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "the bell shows one notification");
+  check(exists(doc, '[data-hub="hub-kdg"] [data-rateopen]'), "and the hub card offers to review it");
+  click(doc, "bell");
+  const note = sel(doc, '[data-note^="rate:"]');
+  check(!!note && note.textContent.indexOf("Rate card update · Kudlu Gate Hub (KDG)") >= 0,
+        "the notification names the hub");
+  check(note.textContent.indexOf("Review and agree") >= 0, "and leads to the agreement");
+  note.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  eq(api.state.panel.section, "rateupdate", "clicking it opens the rate card update");
+  check(!exists(doc, '[data-testid="bell-menu"]'), "and closes the bell");
+  const page = () => sel(doc, '[data-testid="rate-update"]');
+  check(sel(doc, '[data-testid="rate-current"]').textContent.indexOf("₹4.50") >= 0 &&
+        sel(doc, '[data-testid="rate-new"]').textContent.indexOf("₹4.80") >= 0,
+        "current and updated rate cards side by side");
+  check(page().textContent.indexOf("Diesel costs on the Hosur Road lane went up.") >= 0, "with the AM’s reason");
+  check(page().textContent.indexOf(H.cycleStart(2)) >= 0, "and when it applies");
+  const buttons = [...page().querySelectorAll("button")].map(b => b.textContent);
+  check(!buttons.some(b => /reject|decline|disagree/i.test(b)), "there is no reject or decline — by design");
+  check(sel(doc, '[data-testid="rate-questions"] a[href^="tel:"]').textContent.length > 0,
+        "a captain with questions is pointed to call their Area Manager");
+  check($(doc, "rate-agree").disabled, "Agree waits for the captain to confirm they read it");
+  A.rateAgree();
+  eq(kdg().rateCard.slabs[0].rate, "4.50", "and nothing changes without that confirmation");
+  setCheck(doc, "rate-agree-check", true);
+  check(!$(doc, "rate-agree").disabled, "ticking it enables Agree");
+  click(doc, "rate-agree");
+
+  eq(H.rateUpdateById(u.id).status, "agreed", "agreeing settles the update");
+  eq(kdg().rateCard.slabs.map(sl => sl.rate), ["4.80", "4.30"], "the hub’s rate card is now the updated one");
+  eq(kdg().rateCard.touchpoint, "5.20", "touchpoint included");
+  eq(kdg().rateCard.version, 2, "as the card’s second version");
+  check(txt(doc).indexOf("Rate card updated") >= 0, "the captain sees it took effect");
+  check(!exists(doc, '[data-testid="bell-count"]'), "and the bell clears");
+  click(doc, "hub-back-hubs-2");
+  check(sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate"]').textContent.indexOf("₹4.80") >= 0,
+        "My Hubs shows the new rates");
+
+  /* --- the bell also carries hub edit outcomes --- */
+  clickSel(doc, '[data-hubedit="hub-aqt"]');
+  type(doc, "he-area", "4600");
+  click(doc, "he-submit");
+  const he = H.hubEditOf("hub-aqt");
+  devClick(doc, "he:approve:" + he.id);
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "a decided hub edit shows on the bell");
+  click(doc, "bell");
+  check(sel(doc, '[data-note^="edit:"]').textContent.indexOf("Hub edit approved · Koramangala Hub") >= 0,
+        "saying which way it went");
+  clickSel(doc, '[data-note^="edit:"]');
+  eq(api.state.panel.section, "hubs", "and leading to My Hubs");
+  clickSel(doc, '[data-hedismiss="' + he.id + '"]');
+  check(!exists(doc, '[data-testid="bell-count"]'), "dismissing it on the hub card clears the bell");
+
+  /* --- the dev panel can send one too; the bell rides on onboarding's top bar --- */
+  check(devText(doc).indexOf("Send a rate card update for KDG") >= 0, "the dev panel offers a quick update");
+  devClick(doc, "rate:send:hub-kdg");
+  eq(H.rateUpdateFor("hub-kdg").status, "pending", "which lands with the captain");
+  check(api.reload(), "a pending update is saved");
+  check(!!H.rateUpdateFor("hub-kdg"), "and survives a reload");
+  A.addHubOpen();
+  A.addHubRole("LM");
+  A.addHubChoice("none");
+  A.addHubContinue();
+  eq(api.state.screen, "flow", "adding a hub opens onboarding");
+  check(!!sel(doc, ".topbar #bell"), "whose top bar carries the bell for a captain who runs hubs");
+  click(doc, "bell");
+  clickSel(doc, '[data-note^="rate:"]');
+  eq([api.state.screen, api.state.panel.section], ["panel", "rateupdate"],
+     "and a rate notification there still opens the agreement");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -3750,6 +3913,7 @@ async function testHubEdits() {
     await testGstVerification();
     await testAmMapEdit();
     await testHubEdits();
+    await testRateUpdates();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

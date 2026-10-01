@@ -1024,6 +1024,32 @@ img{max-width:100%}
 .map-meta .coords{color:var(--muted);font-weight:600}
 .map-meta a{margin-left:auto;color:var(--cyan-ink);font-weight:700;text-decoration:none}
 
+/* Captain's notification bell, top right of the Captain Hub (and of onboarding
+   once the captain runs hubs) */
+.hub-topbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:-10px 0 8px}
+.bell-wrap{position:relative}
+.bell{position:relative;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);
+  background:#fff;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.bell:hover{border-color:var(--cyan-br)}
+.bell .badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--err);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.bell-menu{position:absolute;right:0;top:48px;width:340px;max-width:calc(100vw - 32px);background:#fff;
+  border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(15,30,60,.16);z-index:60;
+  overflow:hidden;text-align:left}
+.bell-menu .bh{padding:12px 16px;font-size:13px;font-weight:700;color:var(--ink);border-bottom:1px solid var(--line-soft)}
+.bell-item{display:block;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid var(--line-soft);
+  background:#fff;cursor:pointer;font:inherit}
+.bell-item:last-child{border-bottom:0}
+.bell-item.act{background:var(--cyan-bg)}
+.bell-item b{display:block;font-size:13px;font-weight:700;color:var(--ink);line-height:18px}
+.bell-item span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:3px;line-height:17px}
+.bell-item i{display:block;font-style:normal;font-size:11px;font-weight:700;color:var(--cyan-ink);margin-top:6px}
+.bell-empty{padding:18px 16px;font-size:12px;color:var(--muted)}
+.rate-cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+@media (max-width:700px){.rate-cmp{grid-template-columns:1fr}}
+.rate-cmp .kv{margin:0}
+.rate-cmp .cap{display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin-bottom:8px}
+
 /* an API failure: what failed, the service's reason, and that nothing is lost */
 .api-fail .why{display:block;color:var(--ink);font-weight:600;margin:2px 0 6px}
 .api-fail .why i{font-style:normal;font-weight:700;color:var(--err);margin-right:6px}
@@ -1445,6 +1471,7 @@ var PIN_AREAS = {
   "560076": { name:"BTM Layout",          lat:12.9081, lng:77.6040 },
   "560099": { name:"Bommasandra",         lat:12.8156, lng:77.6982 },
   "560102": { name:"HSR Layout",          lat:12.9116, lng:77.6474 },
+  "560068": { name:"Kudlu Gate",          lat:12.8890, lng:77.6380 },
   "110017": { name:"Malviya Nagar",       lat:28.5355, lng:77.2167 },
   "400059": { name:"Marol, Andheri East", lat:19.1176, lng:72.8790 }
 };
@@ -1676,7 +1703,9 @@ function blankPanel() {
     gst:{ hubId:null, mode:"view", value:"", error:"", fail:null,      // view | edit | verified | confirmRemove
           result:null, savedHubId:null },
     addHub:{ role:"LM", choice:"existing", gstin:"", existing:"", error:"" },
-    hubEdit:{ hubId:null, draft:null, errors:{} }    // the hub-details editor on My Hubs
+    hubEdit:{ hubId:null, draft:null, errors:{} },   // the hub-details editor on My Hubs
+    bellOpen:false,            // the notification list under the bell
+    rateUpdateId:null, rateAgreeChecked:false        // the rate-card update being agreed
   };
 }
 
@@ -1701,6 +1730,7 @@ function blankState() {
     adminRequests: [],
     failNext: {},              // dev panel: API → failure kind armed for its next call
     hubEdits: [],              // captains' requested hub changes, decided by the Area Manager
+    rateUpdates: [],           // Area Manager rate card changes, waiting for the captain to agree
     seededExisting: false      // the dev panel's existing captain is loaded — don't re-seed over it
   };
 }
@@ -1714,6 +1744,7 @@ function makeHub(o) {
     status:"active",                       // active | inactive | in_progress
     gst:{ registered:false, gstin:"" },
     areaSqft:"", manpower:"", maxVehicle:"", photo:"", photoName:"", mapLink:"",
+    rateCard:null,                         // FM: the agreed slabs + touchpoint, and when
     category:null, activatedOn:"", deactivatedOn:""
   }, o || {});
 }
@@ -1744,10 +1775,20 @@ function seedExistingCaptain() {
               status:"inactive", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
               areaSqft:"2600", manpower:"7", maxVehicle:"1.5MT_4W_Dost",
               mapLink:"https://maps.google.com/?q=12.9112,77.6480",
-              activatedOn:"20 Nov 2025", deactivatedOn:"12 Apr 2026" })
+              activatedOn:"20 Nov 2025", deactivatedOn:"12 Apr 2026" }),
+    makeHub({ id:"hub-kdg", code:"KDG", name:"Kudlu Gate Hub", role:"FM",
+              address:"Survey No. 12, Hosur Road, Kudlu Gate, Bengaluru", pincode:"560068",
+              city:"Bengaluru, Karnataka",
+              status:"active", gst:{ registered:true, gstin:"29ABCDE1234F1Z5" },
+              areaSqft:"6000", manpower:"18", maxVehicle:"7MT_20FT",
+              mapLink:"https://maps.google.com/?q=12.8887,77.6391", category:"standalone",
+              rateCard:{ slabs:[ { from:"0", to:"500", rate:"4.50" }, { from:"501", to:"", rate:"4.00" } ],
+                         touchpoint:"5.00", agreedOn:"14 Feb 2026", version:1 },
+              activatedOn:"14 Feb 2026" })
   ];
   S.activeHubId = "hub-aqt";
   S.hubEdits = [];
+  S.rateUpdates = [];
   S.seededExisting = true;
 }
 
@@ -1787,6 +1828,98 @@ function fmtPin(link) {
 function fmtPhone(p) {
   p = String(p || "").replace(/\D/g, "").slice(-10);
   return p.length === 10 ? "+91 " + p.slice(0, 5) + " " + p.slice(5) : p;
+}
+
+/* Rate card updates -----------------------------------------------------------
+   The Area Manager changes an agreed rate card on a live FM hub; the captain
+   agrees to it from the bell. There is deliberately no decline — a captain with
+   questions calls their Area Manager. */
+function rateUpdateById(id) {
+  for (var i = 0; i < S.rateUpdates.length; i++) if (S.rateUpdates[i].id === id) return S.rateUpdates[i];
+  return null;
+}
+function rateUpdateFor(hubId) {          // the update still waiting on a hub, if any
+  for (var i = 0; i < S.rateUpdates.length; i++) {
+    var u = S.rateUpdates[i];
+    if (u.hubId === hubId && u.status === "pending") return u;
+  }
+  return null;
+}
+function rateHubs() {                    // live FM hubs with a rate card the AM can change
+  return S.hubs.filter(function (h) { return h.status === "active" && h.role === "FM" && h.rateCard; });
+}
+function rateSummary(rc) {
+  if (!rc) return "—";
+  return (rc.slabs || []).map(function (sl) { return "₹" + sl.rate + " (" + slabLabel(sl) + ")"; })
+    .join(" · ") + (rc.touchpoint ? " · touchpoint ₹" + rc.touchpoint : "");
+}
+function rateCardRowsHtml(rc, testid) {
+  return '<div class="kv"' + (testid ? ' data-testid="' + testid + '"' : '') + '>' +
+    (rc.slabs || []).map(function (sl) {
+      return '<div class="row"><span class="k">' + esc(slabLabel(sl)) + '</span>' +
+             '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
+    }).join("") +
+    '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
+      esc(rc.touchpoint || "—") + ' / shipment</span></div></div>';
+}
+function sameRateCard(a, b) {
+  var norm = function (rc) {
+    return JSON.stringify({ s:(rc.slabs || []).map(function (sl) {
+      return [String(sl.from).trim(), String(sl.to).trim(), (+sl.rate).toFixed(2)]; }),
+      t:(+rc.touchpoint).toFixed(2) });
+  };
+  return norm(a) === norm(b);
+}
+/* Rate changes start on a payout cycle — the first of a coming month. */
+function cycleStart(monthsAhead) {
+  var d = new Date();
+  return fmtDay(new Date(d.getFullYear(), d.getMonth() + monthsAhead, 1));
+}
+
+/* What the bell lists: rate card updates to agree to, then hub edit outcomes
+   the captain hasn't dismissed yet. */
+function captainNotes() {
+  var out = [];
+  S.rateUpdates.forEach(function (u) {
+    if (u.status !== "pending") return;
+    out.push({ kind:"rate", id:u.id, act:true,
+      title:"Rate card update · " + u.hubName + " (" + u.hubCode + ")",
+      sub:"Your Area Manager changed this hub’s rates from " + u.effective + ".",
+      cta:"Review and agree →" });
+  });
+  S.hubEdits.forEach(function (e) {
+    if (e.status === "pending" || e.seen) return;
+    out.push({ kind:"edit", id:e.id, act:false,
+      title:(e.status === "approved" ? "Hub edit approved · " : "Hub edit not approved · ") + e.hubName,
+      sub:e.status === "approved" ? "The new details are live." : e.reason,
+      cta:"View hub →" });
+  });
+  return out;
+}
+
+var BELL_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" ' +
+  'd="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6v-5a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66' +
+  'A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>';
+
+function bellHtml() {
+  var notes = captainNotes(), open = S.panel.bellOpen;
+  return '<div class="bell-wrap">' +
+    '<button class="bell" id="bell" aria-label="Notifications' + (notes.length ? ' (' + notes.length + ')' : '') +
+      '" aria-expanded="' + (open ? "true" : "false") + '">' + BELL_SVG +
+      (notes.length ? '<span class="badge" data-testid="bell-count">' + notes.length + '</span>' : '') +
+    '</button>' +
+    (open
+      ? '<div class="bell-menu" data-testid="bell-menu"><div class="bh">Notifications</div>' +
+        (notes.length
+          ? notes.map(function (n) {
+              return '<button class="bell-item' + (n.act ? ' act' : '') + '" data-note="' + n.kind + ':' +
+                esc(n.id) + '"><b>' + esc(n.title) + '</b><span>' + esc(n.sub) + '</span>' +
+                '<i>' + esc(n.cta) + '</i></button>';
+            }).join("")
+          : '<div class="bell-empty">You’re all caught up.</div>') +
+        '</div>'
+      : '') +
+  '</div>';
 }
 
 function activeHub() {
@@ -2294,7 +2427,8 @@ var ADMIN_ROLE_ORDER = ["am","ch","zh","central"];
 /* Tabs per role. No area/cluster/zone binding screens — out of scope. */
 var ADMIN_TABS = {
   am:      [{ id:"mine", label:"My requests" },
-            { id:"edits", label:"Hub edits" }],
+            { id:"edits", label:"Hub edits" },
+            { id:"rates", label:"Rate card updates" }],
   ch:      [{ id:"mine", label:"My requests" },
             { id:"am",   label:"AM requests" },
             { id:"users",label:"User mapping" }],
@@ -2551,7 +2685,8 @@ function mintHubCode() {
 function blankAdmin() {
   return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"",
            amStep:"infra",     // infra check, then carting design, then rate card
-           edit:null, editReason:"", editError:"" };   // an open hub-edit request
+           edit:null, editReason:"", editError:"",      // an open hub-edit request
+           rate:null, rateDraft:null, rateError:"" };    // a hub whose rate card the AM is updating
 }
 
 function apRole()  { return ADMIN_ROLES[S.admin.role] || ADMIN_ROLES.am; }
@@ -2636,9 +2771,11 @@ function viewPanel() {
   if (p.section === "profile")      body = p.tab === "hubs" ? panelHubs() : panelPersonal();
   else if (p.section === "hubs")    body = panelHubs();
   else if (p.section === "addhub")  body = panelAddHub();
+  else if (p.section === "rateupdate") body = panelRateUpdate();
   else                              body = panelPlaceholder(p.section);
   return '<div class="hub-shell">' + hubSidebar() +
-         '<div class="hub-main"><div class="hub-wrap">' + body + '</div></div></div>';
+         '<div class="hub-main"><div class="hub-wrap">' +
+           '<div class="hub-topbar">' + bellHtml() + '</div>' + body + '</div></div></div>';
 }
 
 function panelTabs(tab) {
@@ -2803,6 +2940,17 @@ function hubCard(h) {
   var address = pending ? (rr.hub.address || "Address not added yet") : h.address;
   var pin = pending ? (rr.hub.selected || rr.hub.pincode) : h.pincode;
 
+  var rateRow = "";
+  if (!pending && !inactive && h.role === "FM" && h.rateCard) {
+    var ru = rateUpdateFor(h.id);
+    rateRow = '<div class="prow" data-testid="hub-rate"><div class="pl"><span class="k">Rate card</span>' +
+      '<span class="v">' + esc(rateSummary(h.rateCard)) + '</span>' +
+      '<span class="s" style="font-size:11px;color:var(--muted)">Agreed ' + esc(h.rateCard.agreedOn || "—") +
+      '</span></div>' +
+      (ru ? '<div class="pr"><button class="btn btn-primary" data-rateopen="' + esc(ru.id) + '">' +
+            'Review update</button></div>' : '') + '</div>';
+  }
+
   /* A live hub can ask its Area Manager for new details — one request at a time. */
   var detailsRow = "";
   if (!pending && !inactive) {
@@ -2851,9 +2999,65 @@ function hubCard(h) {
         '<b>GSTIN verified and saved</b>Invoices for this hub now carry ' + esc(h.gst.gstin) + '.</div></div>'
       : "") +
     (editing ? gstEditBlock(h) : "") +
+    rateRow +
     detailsRow +
     (S.panel.hubEdit.hubId === h.id ? hubEditBlock(h) : "") +
   '</div>';
+}
+
+/* The rate card update, from the bell: what the hub is paid now against what
+   it will be paid, and one way forward — Agree. */
+function panelRateUpdate() {
+  var u = rateUpdateById(S.panel.rateUpdateId);
+  var crumbs = '<div class="crumbs">My Profile<span class="sep">›</span>My Hubs' +
+    '<span class="sep">›</span><b>Rate card update</b></div>';
+  if (!u) {
+    return crumbs + '<h2 class="hub-h1"><button id="hub-back-hubs">‹</button>Rate card update</h2>' +
+      '<div class="rs-empty"><b>This update is no longer available</b>' +
+      '<span>Head back to My Hubs.</span></div>';
+  }
+  var agreed = u.status === "agreed";
+  var body = agreed
+    ? statusBlock("ok", "Rate card updated",
+        "You agreed on " + u.agreedOn + ". " + u.hubName + " is paid the updated rates from " +
+        u.effective + ".") +
+      '<div class="rate-cmp"><div><span class="cap">Now agreed</span>' + rateCardRowsHtml(u.to, "rate-new") +
+      '</div></div>' +
+      '<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" id="hub-back-hubs-2">' +
+        'Back to My Hubs</button></div>'
+    : '<div class="notice info" style="margin-bottom:16px"><b>Your Area Manager has updated this hub’s ' +
+        'rate card</b>' + esc(u.by) + ' changed the rates for ' + esc(u.hubName) + ' (' + esc(u.hubCode) +
+        '). They apply from ' + esc(u.effective) + ' once you agree.</div>' +
+      '<div class="rate-cmp">' +
+        '<div><span class="cap">Current · agreed ' + esc(u.fromAgreedOn || "—") + '</span>' +
+          rateCardRowsHtml(u.from, "rate-current") + '</div>' +
+        '<div><span class="cap">Updated · from ' + esc(u.effective) + '</span>' +
+          rateCardRowsHtml(u.to, "rate-new") + '</div>' +
+      '</div>' +
+      '<div class="kv" style="margin-bottom:16px"><div class="row"><span class="k">Why it changed</span>' +
+        '<span class="v" style="max-width:70%;white-space:normal;font-weight:600">' + esc(u.reason) +
+        '</span></div></div>' +
+      '<div class="notice info" data-testid="combined-blurb"><b>Combined rate card</b>' +
+        'You are paid the slab rate for your order volume plus the touchpoint rate, on one payout line.</div>' +
+      '<label class="check-row" style="margin:6px 0 16px">' +
+        '<input type="checkbox" id="rate-agree-check"' + (S.panel.rateAgreeChecked ? ' checked' : '') + '>' +
+        '<span class="cl"><b>I have read the updated rate card and agree to it</b>' +
+        '<span>It replaces the current rate card for this hub from ' + esc(u.effective) + '.</span></span></label>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn btn-primary" id="rate-agree"' + (S.panel.rateAgreeChecked ? '' : ' disabled') + '>' +
+          'Agree to updated rate card</button></div>' +
+      '<p style="margin:14px 0 0;font-size:12px;color:var(--muted);line-height:18px" data-testid="rate-questions">' +
+        'Questions about this change? Call your Area Manager, ' + esc(u.by) + ', on ' +
+        '<a href="tel:' + esc(u.byPhone) + '" style="color:var(--cyan-ink);font-weight:700;text-decoration:none">' +
+        esc(u.byPhone) + '</a>.</p>';
+
+  return crumbs +
+    '<h2 class="hub-h1"><button id="hub-back-hubs">‹</button>Rate card update</h2>' +
+    '<div class="pcard" style="max-width:720px" data-testid="rate-update"><div style="padding:22px 24px">' +
+      '<span class="hcode" style="display:inline-block;margin-bottom:8px">Hub ' + esc(u.hubCode) + '</span>' +
+      '<b style="display:block;font-size:17px;color:var(--ink);margin-bottom:14px">' + esc(u.hubName) + '</b>' +
+      body +
+    '</div></div>';
 }
 
 /* The captain's edit form. Every field starts from the hub's current value;
@@ -2873,7 +3077,7 @@ function hubEditBlock(h) {
       'reviews the change. Until they approve it, the hub keeps running on its current details.</p>' +
     field("he-address", "Hub address", d.address, "The full address of the hub.", e.address) +
     '<div class="grid2">' +
-      field("he-pin", "Pincode", d.pincode, cityFor(d.pincode) ? "Resolves to " + cityFor(d.pincode) + "."
+      field("he-pin", "Pincode", d.pincode, knownCity(d.pincode) ? "Resolves to " + knownCity(d.pincode) + "."
             : "A pincode VALMO is opening hubs in.", e.pincode, ' inputmode="numeric" maxlength="6"') +
       field("he-area", "Hub area (sq ft)", d.areaSqft, "Usable floor area.", e.areaSqft, ' inputmode="numeric"') +
     '</div>' +
@@ -3879,6 +4083,7 @@ function apCentralDetail(r) {
 function viewAdmin() {
   var a = S.admin, m = apRole();
   if (a.edit && hubEditById(a.edit)) return apShell(apEditDetail(hubEditById(a.edit)));
+  if (a.rate && hubById(a.rate)) return apShell(apRateDetail(hubById(a.rate)));
   if (a.selected) {
     var r = apById(a.selected);
     if (r) {
@@ -3895,8 +4100,107 @@ function viewAdmin() {
     }
   }
   var body = '<h2>' + esc(m.title) + '</h2><p class="lede">' + esc(m.lede) + '</p>' +
-             apTabs() + (a.tab === "users" ? apUsers() : a.tab === "edits" ? apEditList() : apList());
+             apTabs() + (a.tab === "users" ? apUsers() : a.tab === "edits" ? apEditList()
+                       : a.tab === "rates" ? apRateList() : apList());
   return apShell(body);
+}
+
+/* Live FM hubs and the rate card each captain agreed to. */
+function apRateList() {
+  var hubs = rateHubs();
+  var body = hubs.length
+    ? hubs.map(function (h) {
+        var u = rateUpdateFor(h.id);
+        return '<tr data-testid="ap-rate-row"><td class="id">Hub ' + esc(h.code) +
+            '<span style="display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:3px">' +
+            esc(h.name) + '</span></td>' +
+          '<td>' + esc(S.profile.name || "Captain") + '<span style="display:block;font-size:11px;' +
+            'font-weight:500;color:var(--muted);margin-top:3px">' + esc(fmtPhone(S.phone)) + '</span></td>' +
+          '<td style="max-width:260px;white-space:normal">' + esc(rateSummary(h.rateCard)) + '</td>' +
+          '<td>' + (u ? '<span class="st amber">Waiting for the captain</span>'
+                      : '<span class="st green">Agreed ' + esc(h.rateCard.agreedOn || "") + '</span>') + '</td>' +
+          '<td style="text-align:right"><button class="btn btn-ghost" data-aprate="' + esc(h.id) + '">' +
+            (u ? "View" : "Update rate card") + '</button></td></tr>';
+      }).join("")
+    : '<tr><td class="empty" colspan="5">No live FM hubs with an agreed rate card yet.</td></tr>';
+  return '<div class="ap-panel">' +
+      '<div class="ph"><div><b>Rate card updates</b>' +
+        '<span>Change a rate card a captain already agreed to. The captain is notified and agrees to ' +
+        'the new rates before they apply.</span></div></div>' +
+      '<table class="ap-table"><thead><tr>' +
+        '<th>Hub</th><th>Captain</th><th>Agreed rate card</th><th>Status</th>' +
+        '<th style="text-align:right">Action</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table>' +
+    '</div>';
+}
+
+/* Updating one hub's rate card: the agreed card, the new one, from when, and why. */
+function apRateDetail(h) {
+  var u = rateUpdateFor(h.id), d = S.admin.rateDraft;
+  var head = '<button class="btn-link" id="ap-rate-back" style="margin-bottom:12px">‹ Back to rate card updates</button>' +
+    '<div class="ap-panel"><div class="ph"><div>' +
+      '<span class="hubcode">Hub ' + esc(h.code) + '</span>' +
+      '<b>' + esc(h.name) + ' · rate card</b>' +
+      '<span>' + esc(S.profile.name || "Captain") + ' · ' + esc(fmtPhone(S.phone)) + ' · agreed ' +
+        esc(h.rateCard.agreedOn || "—") + '</span></div>' +
+      (u ? '<span class="st amber">Waiting for the captain</span>' : '<span class="st green">Agreed</span>') +
+    '</div><div class="ap-form">';
+
+  if (u) {
+    return '<div class="ap-detail" data-testid="ap-rate-detail">' + head +
+      '<div class="notice warn"><b>Sent on ' + esc(u.sentOn) + ' — waiting for the captain to agree</b>' +
+        'The captain has it under the bell in their Captain Hub. It applies from ' + esc(u.effective) +
+        ' once they agree; until then the agreed rate card stays in force.</div>' +
+      '<div class="rate-cmp"><div><span class="cap">Agreed</span>' + rateCardRowsHtml(u.from) + '</div>' +
+        '<div><span class="cap">Sent · from ' + esc(u.effective) + '</span>' + rateCardRowsHtml(u.to) + '</div></div>' +
+      '<div class="kv"><div class="row"><span class="k">Reason given</span><span class="v" ' +
+        'style="max-width:70%;white-space:normal">' + esc(u.reason) + '</span></div></div>' +
+      '</div></div></div>';
+  }
+
+  var rows = d.slabs.map(function (sl, i) {
+    return '<div class="slab-row" data-rslabrow="' + i + '">' +
+      '<div class="sf"><span class="sl">Orders from</span>' +
+        '<input data-rslab="' + i + '" data-rfield="from" inputmode="numeric" value="' + esc(sl.from) + '"></div>' +
+      '<div class="sf"><span class="sl">Orders to</span>' +
+        '<input data-rslab="' + i + '" data-rfield="to" inputmode="numeric" placeholder="blank = and above" ' +
+          'value="' + esc(sl.to) + '"></div>' +
+      '<div class="sf"><span class="sl">Slab rate (₹ / shipment)</span>' +
+        '<input data-rslab="' + i + '" data-rfield="rate" inputmode="decimal" value="' + esc(sl.rate) + '"></div>' +
+      '<button class="srm" data-rslabdel="' + i + '" title="Remove slab"' +
+        (d.slabs.length < 2 ? ' disabled' : '') + '>✕</button>' +
+    '</div>';
+  }).join("");
+  var opt = function (v) {
+    return '<option value="' + esc(v) + '"' + (d.effective === v ? ' selected' : '') + '>' + esc(v) + '</option>';
+  };
+
+  return '<div class="ap-detail" data-testid="ap-rate-detail">' + head +
+    '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin-bottom:8px">' +
+      'Agreed rate card</span>' + rateCardRowsHtml(h.rateCard) +
+    '<div class="slabs" style="margin-top:18px" data-testid="ap-rate-editor">' +
+      '<div class="sh"><div><b>Updated rate card</b><span>Change the slabs or the touchpoint rate. The ' +
+        'captain agrees to the whole card.</span></div></div>' +
+      rows +
+      '<button class="btn btn-ghost" id="ap-rate-add" style="margin-top:4px">＋ Add slab</button>' +
+      '<div class="slab-tp"><div class="sf" style="max-width:230px">' +
+        '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
+        '<input id="ap-rate-tp" inputmode="decimal" value="' + esc(d.touchpoint) + '"></div></div>' +
+    '</div>' +
+    '<div class="grid2" style="margin-top:16px">' +
+      '<div class="fl"><label>Applies from</label><div class="box"><select id="ap-rate-eff" ' +
+        'style="border:0;background:transparent;width:100%;font:inherit">' +
+        opt(cycleStart(1)) + opt(cycleStart(2)) + '</select></div>' +
+        '<div class="hint">The start of a payout cycle.</div></div>' +
+      '<div class="fl"><label>Why the rates are changing</label><div class="box">' +
+        '<input id="ap-rate-reason" placeholder="e.g. Volumes on this lane have doubled" value="' +
+          esc(d.reason) + '"></div><div class="hint">The captain sees this.</div></div>' +
+    '</div>' +
+    (S.admin.rateError ? '<div class="notice bad" data-testid="ap-rate-error">' + esc(S.admin.rateError) + '</div>' : '') +
+    '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+      '<button class="btn btn-ghost" id="ap-rate-cancel">Cancel</button>' +
+      '<button class="btn btn-primary" id="ap-rate-send">Send to captain to agree</button></div>' +
+    '</div></div></div>';
 }
 
 /* Captains' requests to change a live hub, newest first. */
@@ -4030,6 +4334,7 @@ function viewFlow() {
     '<div class="tt"><span>Captain Onboarding</span><b>' + esc(cur.title) + '</b></div>' +
     '<div class="track"><div style="width:' + pct + '%"></div></div>' +
     '<div class="tr">' +
+      (S.hubs.some(function (h) { return h.status === "active"; }) ? bellHtml() : '') +
       '<span class="pill"><span class="led"></span>Phone verified</span>' +
       '<button class="btn btn-ghost" id="save-exit">Save &amp; Exit</button>' +
     '</div>' +
@@ -5070,16 +5375,19 @@ function phaseHUB(r) {
   };
 }
 
+var CITY_BY_PIN = {
+  "560076":"Bengaluru, Karnataka", "560034":"Bengaluru, Karnataka",
+  "560102":"Bengaluru, Karnataka", "560001":"Bengaluru, Karnataka",
+  "560038":"Bengaluru, Karnataka", "560071":"Bengaluru, Karnataka",
+  "560099":"Bengaluru, Karnataka", "560058":"Bengaluru, Karnataka",
+  "560068":"Bengaluru, Karnataka",
+  "110017":"New Delhi, Delhi", "400059":"Mumbai, Maharashtra"
+};
 function cityFor(pin) {
-  var map = {
-    "560076":"Bengaluru, Karnataka", "560034":"Bengaluru, Karnataka",
-    "560102":"Bengaluru, Karnataka", "560001":"Bengaluru, Karnataka",
-    "560038":"Bengaluru, Karnataka", "560071":"Bengaluru, Karnataka",
-    "560099":"Bengaluru, Karnataka", "560058":"Bengaluru, Karnataka",
-    "110017":"New Delhi, Delhi", "400059":"Mumbai, Maharashtra"
-  };
-  return map[pin] || (pin ? "Resolved from pincode" : "");
+  return CITY_BY_PIN[pin] || (pin ? "Resolved from pincode" : "");
 }
+/* Only a city the pincode really resolves to — no placeholder. */
+function knownCity(pin) { return CITY_BY_PIN[pin] || ""; }
 
 /* --------------------------------------------- 7. Area Manager verification (LM) */
 
@@ -5960,6 +6268,10 @@ var A = {
       address: r.hub.address, pincode: r.hub.pincode, city: r.hub.city,
       status: "active", gst: gst,
       areaSqft: r.hub.areaSqft, manpower: r.hub.manpower, mapLink: r.hub.mapLink || "",
+      rateCard: r.role === "FM" && chRateSubmitted(r)
+        ? { slabs: JSON.parse(JSON.stringify(r.ch.slabs)), touchpoint: r.ch.touchpoint || "",
+            agreedOn: fmtDay(new Date()), version: 1 }
+        : null,
       maxVehicle: r.hub.maxVehicle || "",
       photo: r.hub.photo || "", photoName: r.hub.photoName || "",
       category: r.ch.category, activatedOn: r.act.activatedOn
@@ -6172,7 +6484,7 @@ var A = {
     if (!approve && !String(reason || "").trim()) return false;
     if (approve && h) {
       h.address = e.after.address; h.pincode = e.after.pincode;
-      h.city = cityFor(e.after.pincode) || h.city;
+      h.city = knownCity(e.after.pincode) || h.city;
       h.mapLink = e.after.mapLink; h.areaSqft = e.after.areaSqft;
     }
     e.status = approve ? "approved" : "rejected";
@@ -6180,6 +6492,37 @@ var A = {
     e.decidedOn = fmtDay(new Date()); e.seen = false;
     save(); render();
     return true;
+  },
+
+  /* ---- the bell and rate card updates ---- */
+  bellToggle: function () { S.panel.bellOpen = !S.panel.bellOpen; save(); render(); },
+  openNote: function (kind, id) {
+    S.panel.bellOpen = false;
+    if (kind === "rate") { A.openRateUpdate(id); return; }
+    S.screen = "panel"; S.panel.section = "hubs"; S.panel.tab = "hubs";
+    save(); render();
+  },
+  openRateUpdate: function (id) {
+    if (!rateUpdateById(id)) return;
+    S.screen = "panel"; S.panel.section = "rateupdate"; S.panel.bellOpen = false;
+    S.panel.rateUpdateId = id; S.panel.rateAgreeChecked = false;
+    save(); render();
+  },
+  rateAgreeCheck: function (v) {
+    S.panel.rateAgreeChecked = !!v; save();
+    var b = document.getElementById("rate-agree");
+    if (b) b.disabled = !v;
+  },
+  /* Agreeing makes the update the hub's rate card. There is no decline. */
+  rateAgree: function () {
+    var u = rateUpdateById(S.panel.rateUpdateId), h = u && hubById(u.hubId);
+    if (!u || u.status !== "pending" || !S.panel.rateAgreeChecked || !h) return;
+    h.rateCard = { slabs:JSON.parse(JSON.stringify(u.to.slabs)), touchpoint:u.to.touchpoint,
+                   agreedOn:fmtDay(new Date()), version:((h.rateCard && h.rateCard.version) || 1) + 1,
+                   effective:u.effective };
+    u.status = "agreed"; u.agreedOn = fmtDay(new Date());
+    S.panel.rateAgreeChecked = false;
+    save(); render();
   },
 
   /* ---- HB-07: add a new hub, then hand off to onboarding ---- */
@@ -6298,6 +6641,64 @@ var A = {
   },
   adminTab: function (tab) {
     S.admin.tab = tab; S.admin.selected = null; S.admin.toast = "";
+    save(); render();
+  },
+  /* The Area Manager's rate card update for a live FM hub. */
+  adminRateOpen: function (hubId) {
+    var h = hubById(hubId);
+    if (!h || !h.rateCard || S.admin.role !== "am") return;
+    S.admin.rate = hubId; S.admin.rateError = ""; S.admin.toast = "";
+    S.admin.rateDraft = { slabs:JSON.parse(JSON.stringify(h.rateCard.slabs)),
+                          touchpoint:h.rateCard.touchpoint, effective:cycleStart(1), reason:"" };
+    save(); render();
+  },
+  adminRateBack: function () { S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = ""; save(); render(); },
+  adminRateSlab: function (i, k, v) {
+    var d = S.admin.rateDraft;
+    if (d && d.slabs[i]) { d.slabs[i][k] = v; save(); }
+  },
+  adminRateAddSlab: function () {
+    var d = S.admin.rateDraft;
+    if (!d) return;
+    var last = d.slabs[d.slabs.length - 1];
+    var from = last && /^\d+$/.test(String(last.to).trim()) ? String(+last.to + 1) : "";
+    d.slabs.push({ from:from, to:"", rate:"" });
+    save(); render();
+  },
+  adminRateRemoveSlab: function (i) {
+    var d = S.admin.rateDraft;
+    if (!d || d.slabs.length < 2) return;
+    d.slabs.splice(i, 1); save(); render();
+  },
+  adminRateField: function (k, v) {
+    var d = S.admin.rateDraft;
+    if (d) { d[k] = v; save(); }
+  },
+  adminRateSend: function () {
+    var h = hubById(S.admin.rate), d = S.admin.rateDraft;
+    if (!h || !d || rateUpdateFor(h.id)) return;
+    var to = { slabs:d.slabs.map(function (sl) {
+                 return { from:String(sl.from).trim(), to:String(sl.to).trim(), rate:String(sl.rate).trim() }; }),
+               touchpoint:String(d.touchpoint || "").trim() };
+    var err = !slabsValid(to.slabs) || !rateOk(to.touchpoint)
+        ? "Every slab needs a starting volume, a rate and an upper bound above its start, and the hub needs a touchpoint rate."
+      : sameRateCard(to, h.rateCard) ? "These are the rates already agreed — change at least one to send an update."
+      : !String(d.reason || "").trim() ? "Say why the rates are changing — the captain sees this."
+      : "";
+    if (err) { S.admin.rateError = err; save(); render(); return; }
+    var m = ADMIN_ROLES.am.person;
+    S.rateUpdates.push({
+      id:"RCU-" + String(10000 + Math.floor(Math.random() * 90000)),
+      hubId:h.id, hubCode:h.code, hubName:h.name,
+      captain:S.profile.name || "Captain", phone:fmtPhone(S.phone),
+      from:{ slabs:JSON.parse(JSON.stringify(h.rateCard.slabs)), touchpoint:h.rateCard.touchpoint },
+      fromAgreedOn:h.rateCard.agreedOn || "",
+      to:to, effective:d.effective, reason:String(d.reason).trim(),
+      by:m.name, byPhone:m.phone || "+91 98450 11223",
+      status:"pending", sentOn:fmtDay(new Date()), agreedOn:""
+    });
+    S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = "";
+    S.admin.toast = "Rate card update sent to " + (S.profile.name || "the captain") + " to agree.";
     save(); render();
   },
   adminEditOpen: function (id) {
@@ -6679,6 +7080,14 @@ function bind() {
   });
   on("logout", "click", A.logout);
   on("switch-role", "click", A.switchRole);
+  /* the bell — on the Captain Hub and on onboarding's top bar */
+  on("bell", "click", A.bellToggle);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-note]"), function (el) {
+    el.addEventListener("click", function () {
+      var v = el.getAttribute("data-note"), i = v.indexOf(":");
+      A.openNote(v.slice(0, i), v.slice(i + 1));
+    });
+  });
   on("save-exit", "click", function () {
     // leaving a flow: back to the hub list if the captain already has hubs
     if (S.hubs.length) A.openPanel("hubs", "hubs"); else A.switchRole();
@@ -6960,6 +7369,24 @@ function bindAdmin() {
     el.addEventListener("click", function () { A.adminEditOpen(el.getAttribute("data-apedit")); });
   });
   on("ap-edit-back", "click", A.adminEditBack);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-aprate]"), function (el) {
+    el.addEventListener("click", function () { A.adminRateOpen(el.getAttribute("data-aprate")); });
+  });
+  on("ap-rate-back", "click", A.adminRateBack);
+  on("ap-rate-cancel", "click", A.adminRateBack);
+  on("ap-rate-add", "click", A.adminRateAddSlab);
+  on("ap-rate-send", "click", A.adminRateSend);
+  on("ap-rate-tp", "input", function (e) { A.adminRateField("touchpoint", e.target.value); });
+  on("ap-rate-eff", "change", function (e) { A.adminRateField("effective", e.target.value); });
+  on("ap-rate-reason", "input", function (e) { A.adminRateField("reason", e.target.value); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rslab]"), function (el) {
+    el.addEventListener("input", function () {
+      A.adminRateSlab(+el.getAttribute("data-rslab"), el.getAttribute("data-rfield"), el.value);
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rslabdel]"), function (el) {
+    el.addEventListener("click", function () { A.adminRateRemoveSlab(+el.getAttribute("data-rslabdel")); });
+  });
   on("ap-edit-reason", "input", function (e) { S.admin.editReason = e.target.value; save(); });
   on("ap-edit-approve", "click", function () { A.adminEditDecide("approve"); });
   on("ap-edit-reject", "click", function () { A.adminEditDecide("reject"); });
@@ -7086,6 +7513,14 @@ function bindPanel() {
   on("gst-remove", "click", A.gstAskRemove);
   on("gst-remove-go", "click", A.gstRemove);
 
+  /* rate card updates */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rateopen]"), function (el) {
+    el.addEventListener("click", function () { A.openRateUpdate(el.getAttribute("data-rateopen")); });
+  });
+  on("rate-agree-check", "change", function (e) { A.rateAgreeCheck(e.target.checked); });
+  on("rate-agree", "click", A.rateAgree);
+  on("hub-back-hubs-2", "click", function () { A.panelNav("hubs"); });
+
   /* hub edits */
   Array.prototype.forEach.call(document.querySelectorAll("[data-hubedit]"), function (el) {
     el.addEventListener("click", function () { A.hubEditOpen(el.getAttribute("data-hubedit")); });
@@ -7108,7 +7543,7 @@ function bindPanel() {
     A.hubEditField("pincode", v);
     var hint = document.getElementById("he-pin-hint");
     if (hint && !hint.classList.contains("err")) {
-      hint.textContent = cityFor(v) ? "Resolves to " + cityFor(v) + "." : "A pincode VALMO is opening hubs in.";
+      hint.textContent = knownCity(v) ? "Resolves to " + knownCity(v) + "." : "A pincode VALMO is opening hubs in.";
     }
     heRepaint(false);
   });
@@ -7173,7 +7608,7 @@ function devActions() {
         title: "Log in as",
         html:
           devBtn("Captain · new, no hubs yet", "as:new", S.loginAs === "new" ? "ok" : "") +
-          devBtn("Captain · existing, 3 hubs", "as:existing", S.loginAs === "existing" ? "ok" : "") +
+          devBtn("Captain · existing, 4 hubs", "as:existing", S.loginAs === "existing" ? "ok" : "") +
           devBtn("Admin panel", "as:admin", S.loginAs === "admin" ? "ok" : "") +
           '<p class="dnone">Captain opens the onboarding flow — new starts at role selection, ' +
           'existing lands in the Captain Hub. Admin opens the panel picker: FM Area Manager, ' +
@@ -7211,6 +7646,17 @@ function devActions() {
       groups.push({ title: "Bank change", html:
         '<p class="dnone">Step: ' + esc(bk.step) + '. The penny-drop outcome is simulated ' +
         'once the new account is submitted.</p>' });
+    }
+    var ruP = S.rateUpdates.filter(function (u) { return u.status === "pending"; })[0];
+    var ruHub = rateHubs().filter(function (h) { return !rateUpdateFor(h.id); })[0];
+    if (ruP) {
+      groups.push({ title: "Rate card update " + ruP.id, html:
+        '<p class="dnone">Waiting for the captain to agree from the bell. There is no decline, by ' +
+        'design — a captain with questions calls their Area Manager.</p>' });
+    } else if (ruHub) {
+      groups.push({ title: "Area Manager", html:
+        devBtn("Send a rate card update for " + ruHub.code, "rate:send:" + ruHub.id) +
+        '<p class="dnone">Or sign in as the Area Manager and use the Rate card updates tab.</p>' });
     }
     var heP = S.hubEdits.filter(function (e) { return e.status === "pending"; })[0];
     if (heP) {
@@ -7420,7 +7866,7 @@ function devDo(cmd) {
         if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
         S.admin = blankAdmin();
       }
-      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null; S.hubEdits = [];
+      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null; S.hubEdits = []; S.rateUpdates = [];
              S.seededExisting = false;
              S.roles = { LM: blankRole("LM"), FM: blankRole("FM") }; }
       save(); render();
@@ -7431,6 +7877,23 @@ function devDo(cmd) {
         "Name on the account did not match your KYC records.");
       break;
     case "fail": A.armFail(arg, parts[2]); break;
+    case "rate":
+      if (arg === "send") {
+        var keepAdmin = S.admin;
+        S.admin = Object.assign(blankAdmin(), { role:"am" });
+        A.adminRateOpen(parts[2]);
+        var dr = S.admin.rateDraft;
+        if (dr) {
+          dr.slabs = dr.slabs.map(function (sl) {
+            return Object.assign({}, sl, { rate:Math.max(0, +sl.rate - 0.3).toFixed(2) }); });
+          dr.touchpoint = Math.max(0, +dr.touchpoint - 0.2).toFixed(2);
+          dr.reason = "Volumes on this lane have doubled, so the per-shipment rates come down.";
+          A.adminRateSend();
+        }
+        S.admin = keepAdmin;
+        save(); render();
+      }
+      break;
     case "he":
       A.hubEditDecide(parts[2], arg === "approve",
         arg === "approve" ? "" : "The new location did not pass the Area Manager\u2019s site check.");
@@ -7506,6 +7969,8 @@ if (typeof window !== "undefined") {
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
       parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS, apMapLink: apMapLink,
       hubEditOf: hubEditOf, hubEditById: hubEditById, hubEditChanged: hubEditChanged,
+      rateUpdateById: rateUpdateById, rateUpdateFor: rateUpdateFor, rateHubs: rateHubs,
+      captainNotes: captainNotes, cycleStart: cycleStart,
       nameScore: nameScore, gstNameCheck: gstNameCheck, gstLookup: gstLookup,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
