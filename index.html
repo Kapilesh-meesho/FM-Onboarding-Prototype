@@ -1525,10 +1525,14 @@ var MAP_HINT = "Paste a Google Maps link with the hub pinned. A photo of the loc
 /* Redraw the preview and the field's hint in place as the link is typed, so the
    input keeps focus. `loud` reports a broken link — used once the captain
    leaves the field, not on every keystroke while they are mid-paste. */
-function paintMapPreview(link, pin, loud) {
-  var box = document.getElementById("hub-map-box"),
-      hint = document.getElementById("hub-map-hint"),
-      prev = document.getElementById("hub-map-preview");
+/* `prefix` names the field's box, hint and preview elements (hub details uses
+   "hub-map", the Area Manager's edit "ap-map"); `idle` is the hint shown while
+   the pin checks out. */
+function paintMapPreview(link, pin, loud, prefix, idle) {
+  prefix = prefix || "hub-map";
+  var box = document.getElementById(prefix + "-box"),
+      hint = document.getElementById(prefix + "-hint"),
+      prev = document.getElementById(prefix + "-preview");
   if (!prev) return;
   var c = checkMapPin(link, pin);
   var key = (c.lat == null ? "" : c.lat + "," + c.lng) + "|" + (pin || "") + "|" + c.code;
@@ -1540,7 +1544,7 @@ function paintMapPreview(link, pin, loud) {
   if (box) box.classList.toggle("bad", !!show);
   if (hint) {
     hint.classList.toggle("err", !!show);
-    hint.textContent = show ? c.msg : MAP_HINT;
+    hint.textContent = show ? c.msg : (idle || MAP_HINT);
   }
 }
 
@@ -2284,7 +2288,8 @@ function apReq(o) {
     hubCategory:"", rateEscalated:false, settled:null, revision:null,
     // the 3-letter code the Area Manager is assigned when they open the infra check
     hubCode:"",
-    city:"Bengaluru", state:"Karnataka", latLng:"12.9352, 77.6245",
+    city:"Bengaluru", state:"Karnataka",
+    mapLink:"",                    // the Google Maps link the captain submitted
     pincodesServing:null,          // filled below so it always leads with r.pincode
     /* FM carting design — the hub's mapping onto the sorting network. Sent to
        Central Admin for alignment while the AM carries on to the rate card. */
@@ -2300,6 +2305,9 @@ function apReq(o) {
                  scanStand:null, power:null, printer:null, address:null },
          // captain-declared max vehicle size, and the AM's review of it
          declaredVehicle:"7MT_20FT", vehicleReview:null, maxVehicle:"", vehicleEditing:false,
+         // the AM's correction of the captain's map pin — applied as-is, not sent
+         // back to the captain to verify
+         mapLink:"", mapOn:"", mapEditing:false, mapDraft:"", mapError:"",
          notes:"", done:false },
     ch:{ mode:"Phone", date:"03 Jul 2026", experience:"Relevant business",
          ownership:"Leased formal", pilots:"Ready", capacity:"Adequate",
@@ -2307,8 +2315,14 @@ function apReq(o) {
     zh:{ decision:null, reason:"" }
   }, o || {});
   if (!r.pincodesServing) r.pincodesServing = servingPincodes(r.pincode);
+  r.am = Object.assign({ mapLink:"", mapOn:"", mapEditing:false, mapDraft:"", mapError:"" }, r.am);
   return r;
 }
+
+/* The hub's map pin as the panel uses it: the Area Manager's correction if
+   they made one, otherwise what the captain submitted. */
+function apMapLink(r) { return (r.am && r.am.mapLink) || r.mapLink || ""; }
+var AM_MAP_HINT = "Saved straight to this request — the captain is not asked to verify it again.";
 
 /* A request only reaches the Cluster Head by passing the Area Manager's infra
    check first, so seeded downstream requests carry that work as done. Without
@@ -2325,18 +2339,24 @@ function seedAdminRequests() {
   return [
     apReq({ id:"OBD-78222", captain:"Mahesh Kumar", phone:"+91 98450 22119", hubAppId:"HUB-APP-90222",
             address:"Plot 14, 4th Cross, Indiranagar, Bengaluru", pincode:"560038",
+            mapLink:"https://maps.google.com/?q=12.9791,77.6402",
             stage:"am", status:"pending", sla:"41h left" }),
     apReq({ id:"OBD-78231", captain:"Amit Bansal", phone:"+91 99012 31447", hubAppId:"HUB-APP-90231",
-            address:"No. 8, Service Road, Hebbal, Bengaluru", pincode:"560071",
+            address:"No. 8, Old Airport Road, Domlur, Bengaluru", pincode:"560071",
+            mapLink:"https://www.google.com/maps/place/Domlur/@12.9605,77.6380,17z",
             stage:"am", status:"pending", sla:"2h left", slaTone:"warn" }),
     apReq({ id:"OBD-78240", captain:"Neha S", phone:"+91 91088 40233", hubAppId:"HUB-APP-90240",
             address:"Unit 3, HSR Layout, Bengaluru", pincode:"560102",
+            // the captain dropped the pin in Koramangala — the AM corrects it on the visit
+            mapLink:"https://maps.google.com/?q=12.9352,77.6245",
             stage:"am", status:"sla_breach", sla:"5h overdue", slaTone:"warn" }),
     apAmReviewed(apReq({ id:"OBD-78219", hubCategory:"standalone", rate:{ payoutType:"Combined", slabs:[{from:"0",to:"500",rate:"4.50"},{from:"501",to:"",rate:"4.00"}], touchpoint:"5.00" }, captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
             address:"Plot 14, 16th Main, BTM Layout, Bengaluru", pincode:"560076",
+            mapLink:"https://maps.google.com/?q=12.9086,77.6046",
             stage:"ch", status:"pending", sla:"6h left", slaTone:"warn" })),
     apAmReviewed(apReq({ id:"OBD-78255", hubCategory:"mall", captain:"Rajesh Gupta", phone:"+91 88617 55092", hubAppId:"HUB-APP-90255",
             address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
+            mapLink:"https://maps.google.com/?q=12.8160,77.6990",
             stage:"ch", status:"pending", sla:"22h left", slaTone:"warn",
             // the AM priced this one above the mall-hub ceiling, so it was
             // raised to the Cluster Head and is on its way to Central Admin
@@ -3101,14 +3121,55 @@ function apContext(r) {
         '<div class="row"><span class="k">Hub address</span>' +
           '<span class="v" style="max-width:62%;white-space:normal">' + esc(r.address) + '</span></div>' +
         '<div class="row"><span class="k">Pincode</span><span class="v">' + esc(r.pincode) + '</span></div>' +
-        '<div class="row"><span class="k">Map link</span>' +
-          '<span class="v"><a href="#" style="color:var(--cyan-ink);text-decoration:none">' +
-          'Open map location →</a></span></div>' +
+        apMapRow(r) +
         '<div class="row"><span class="k">Max vehicle size</span><span class="v">' +
           esc(amEffectiveVehicle(r) || "—") +
           (r.am.maxVehicle ? ' <span class="st amber">AM updated</span>' : '') + '</span></div>' +
       '</div>' +
+      (S.admin.role === "am" && r.am.mapEditing ? apMapEditor(r) : '') +
     '</div></div>';
+}
+
+/* Map link row: where the pin is, whether it sits in the hub's pincode, and —
+   for the Area Manager — an Edit that corrects it without going back to the
+   captain. */
+function apMapRow(r) {
+  var link = apMapLink(r), c = parseMapLink(link), chk = checkMapPin(link, r.pincode);
+  var canEdit = S.admin.role === "am" && !r.am.mapEditing;
+  return '<div class="row" data-testid="ap-map-row"><span class="k">Map link</span>' +
+      '<span class="v" style="max-width:66%;white-space:normal">' +
+      (c ? '<a href="' + esc(gmapsUrl(c)) + '" target="_blank" rel="noopener" ' +
+           'style="color:var(--cyan-ink);text-decoration:none">' +
+           c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ' ↗</a>'
+         : '<span class="mute">' + (link ? "No pin in the link" : "Not submitted") + '</span>') +
+      (r.am.mapLink ? ' <span class="st amber" data-testid="ap-map-updated">AM updated</span>' : '') +
+      (canEdit ? ' <button class="btn-link" id="ap-map-edit" style="font-size:12px;margin-left:6px">' +
+                 'Edit</button>' : '') +
+      '</span></div>' +
+    (link && !chk.ok
+      ? '<div class="row" data-testid="ap-map-warn"><span class="k"></span>' +
+        '<span class="v bad" style="max-width:80%;white-space:normal;font-weight:600">' + esc(chk.msg) +
+        '</span></div>'
+      : '') +
+    (r.am.mapLink
+      ? '<div class="row"><span class="k"></span><span class="v mute" style="font-weight:500;font-size:11px">' +
+        'Corrected by the Area Manager' + (r.am.mapOn ? ' on ' + esc(r.am.mapOn) : '') +
+        ' · not sent back to the captain</span></div>'
+      : '');
+}
+
+function apMapEditor(r) {
+  var draft = r.am.mapDraft, err = r.am.mapError;
+  return '<div data-testid="ap-map-editor" style="margin-top:14px">' +
+    '<div class="fl" style="margin-bottom:10px"><label>Google Maps link</label>' +
+      '<div class="box' + (err ? ' bad' : '') + '" id="ap-map-box">' +
+        '<input id="ap-map" placeholder="https://maps.google.com/?q=…" value="' + esc(draft) + '"></div>' +
+      '<div class="hint' + (err ? ' err' : '') + '" id="ap-map-hint">' + esc(err || AM_MAP_HINT) + '</div></div>' +
+    '<div id="ap-map-preview">' + mapPreviewHtml(draft, r.pincode) + '</div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+      '<button class="btn btn-ghost" id="ap-map-cancel">Cancel</button>' +
+      '<button class="btn btn-primary" id="ap-map-save">Save map link</button></div>' +
+  '</div>';
 }
 
 function apSla(r, label, sub) {
@@ -3602,8 +3663,13 @@ function apCentralDesignDetail(r) {
       '<div class="kv" style="margin-bottom:18px" data-testid="central-design-inputs">' +
         row("City", esc(r.city || "—")) +
         row("Hub code", esc(r.hubCode || "—")) +
-        row("Lat-Long / Map link", esc(r.latLng || "—") +
-          ' · <a href="#" style="color:var(--cyan-ink);text-decoration:none">Open map →</a>') +
+        row("Lat-Long / Map link", (function () {
+          var c = parseMapLink(apMapLink(r));
+          return c ? esc(c.lat.toFixed(4) + ", " + c.lng.toFixed(4)) + ' · <a href="' + esc(gmapsUrl(c)) +
+                     '" target="_blank" rel="noopener" style="color:var(--cyan-ink);text-decoration:none">' +
+                     'Open map ↗</a>' + (r.am.mapLink ? ' <span class="st amber">AM updated</span>' : '')
+                   : "—";
+        })()) +
         row("Pincodes serving", esc((r.pincodesServing || []).join(", ") || "—")) +
         row("Max vehicle size", esc(amEffectiveVehicle(r) || "—")) +
         row("Hub type", cat ? esc(cat) : '<span class="mute">Not set yet — AM sets it on the rate card</span>') +
@@ -5524,6 +5590,34 @@ var A = {
     else { r.am.vehicleEditing = true; }        // a failed review needs a correction
     save(); render();
   },
+  /* The Area Manager corrects the hub's map pin on their visit. It is checked
+     against the request's pincode like the captain's was, and applied as-is —
+     nothing goes back to the captain. */
+  amMapEdit: function () {
+    var r = apById(S.admin.selected);
+    if (!r || S.admin.role !== "am") return;
+    r.am.mapEditing = true; r.am.mapDraft = apMapLink(r); r.am.mapError = "";
+    save(); render();
+  },
+  amMapCancel: function () {
+    var r = apById(S.admin.selected);
+    if (!r) return;
+    r.am.mapEditing = false; r.am.mapDraft = ""; r.am.mapError = "";
+    save(); render();
+  },
+  amMapSave: function (link) {
+    var r = apById(S.admin.selected);
+    if (!r || S.admin.role !== "am") return;
+    link = String(link == null ? r.am.mapDraft : link).trim();
+    r.am.mapDraft = link;
+    var chk = checkMapPin(link, r.pincode);
+    if (!chk.ok) { r.am.mapError = chk.msg; save(); render(); return; }
+    // putting back exactly what the captain sent clears the correction
+    r.am.mapLink = link === r.mapLink ? "" : link;
+    r.am.mapOn = r.am.mapLink ? fmtDay(new Date()) : "";
+    r.am.mapEditing = false; r.am.mapDraft = ""; r.am.mapError = "";
+    save(); render();
+  },
   amVehicleEdit: function (open) {
     var r = apById(S.admin.selected);
     if (!r) return;
@@ -6570,6 +6664,19 @@ function bindAdmin() {
   });
   on("ap-status", "change", function (e) { A.adminFilter("status", e.target.value); });
   on("ap-back", "click", A.adminBack);
+  on("ap-map-edit", "click", A.amMapEdit);
+  on("ap-map-cancel", "click", A.amMapCancel);
+  on("ap-map-save", "click", function () { A.amMapSave(val("ap-map")); });
+  var apSel = apById(S.admin.selected);
+  if (apSel) {
+    on("ap-map", "input", function (e) {
+      apSel.am.mapDraft = e.target.value; save();
+      paintMapPreview(e.target.value, apSel.pincode, false, "ap-map", AM_MAP_HINT);
+    });
+    on("ap-map", "change", function (e) {
+      paintMapPreview(e.target.value, apSel.pincode, true, "ap-map", AM_MAP_HINT);
+    });
+  }
   on("ap-save", "click", A.adminSaveDraft);
   on("ap-approve", "click", function () { A.adminDecide("approve"); });
   on("ap-reject", "click", function () { A.adminDecide("reject"); });
@@ -7050,7 +7157,7 @@ if (typeof window !== "undefined") {
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
       isAboveCeiling: isAboveCeiling, ceilingFor: ceilingFor,
       chAboveCeiling: chAboveCeiling, chRateSubmitted: chRateSubmitted,
-      parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS,
+      parseMapLink: parseMapLink, checkMapPin: checkMapPin, PIN_AREAS: PIN_AREAS, apMapLink: apMapLink,
       nameScore: nameScore, gstNameCheck: gstNameCheck, gstLookup: gstLookup,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,

@@ -3470,6 +3470,106 @@ async function testGstVerification() {
   b.win.close();
 }
 
+/* =========================================================================
+   25. Area Manager corrects the map pin — no trip back to the captain
+   ====================================================================== */
+
+async function testAmMapEdit() {
+  section("25. Area Manager edits the map link without the captain re-verifying");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions;
+  const at = (pin, dLat = 0, dLng = 0) => "https://maps.google.com/?q=" +
+    (H.PIN_AREAS[pin].lat + dLat).toFixed(4) + "," + (H.PIN_AREAS[pin].lng + dLng).toFixed(4);
+
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+
+  /* every seeded request now carries the captain's pin, inside its pincode
+     — except OBD-78240, which the captain dropped in Koramangala */
+  api.state.adminRequests.forEach(r => {
+    const chk = H.checkMapPin(r.mapLink, r.pincode);
+    if (r.id === "OBD-78240") eq(chk.code, "elsewhere", r.id + ": the captain’s pin is outside its pincode");
+    else check(chk.ok, r.id + ": the captain’s pin is inside " + r.pincode);
+  });
+  eq(H.apById("OBD-78231").address, "No. 8, Old Airport Road, Domlur, Bengaluru",
+     "OBD-78231’s address now agrees with its pincode (560071, Domlur)");
+
+  A.adminOpen("OBD-78240");
+  const row = () => sel(doc, '[data-testid="ap-map-row"]');
+  check(row().textContent.indexOf("12.9352, 77.6245") >= 0, "the context card shows where the pin is");
+  check(row().querySelector("a").getAttribute("href").indexOf("google.com/maps?q=12.9352,77.6245") >= 0,
+        "linking to it on Google Maps");
+  check(sel(doc, '[data-testid="ap-map-warn"]').textContent.indexOf("560034 (Koramangala)") >= 0,
+        "and warns that it sits in another pincode");
+  check(exists(doc, "#ap-map-edit"), "the Area Manager can edit it");
+
+  const before = JSON.stringify({ roles: api.state.roles, profile: api.state.profile, hubs: api.state.hubs });
+  const req = () => H.apById("OBD-78240");
+  const stage0 = req().stage, status0 = req().status, gates0 = JSON.stringify(req().am.gates);
+
+  click(doc, "ap-map-edit");
+  check(exists(doc, '[data-testid="ap-map-editor"]'), "Edit opens the map editor");
+  eq($(doc, "ap-map").value, req().mapLink, "starting from the captain’s link");
+  check(exists(doc, '[data-testid="map-pin-bad"]'), "previewing it as outside the pincode");
+  check($(doc, "ap-map-hint").textContent.indexOf("not asked to verify it again") >= 0,
+        "and saying the captain is not asked to verify the change");
+
+  const input = $(doc, "ap-map");
+  type(doc, "ap-map", at("560102", 0.0004, -0.0003));
+  check($(doc, "ap-map") === input, "typing previews in place without redrawing the field");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "a pin in HSR Layout previews as inside 560102");
+
+  type(doc, "ap-map", at("560076"));
+  click(doc, "ap-map-save");
+  check(txt(doc).indexOf("not the hub’s pincode 560102") >= 0, "a pin outside the pincode cannot be saved");
+  eq(req().am.mapLink, "", "and nothing is changed");
+
+  type(doc, "ap-map", at("560102", 0.0004, -0.0003));
+  click(doc, "ap-map-save");
+  eq(req().am.mapLink, at("560102", 0.0004, -0.0003), "a pin inside the pincode is saved");
+  check(!exists(doc, '[data-testid="ap-map-editor"]'), "the editor closes");
+  check(exists(doc, '[data-testid="ap-map-updated"]'), "the row is tagged AM updated");
+  check(!exists(doc, '[data-testid="ap-map-warn"]'), "and the pincode warning clears");
+  check(txt(doc).indexOf("not sent back to the captain") >= 0, "saying it was not sent back to the captain");
+  eq(req().mapLink, "https://maps.google.com/?q=12.9352,77.6245", "the captain’s submission is kept as it was");
+  eq(H.apMapLink(req()), req().am.mapLink, "the panel uses the corrected pin from here on");
+
+  /* nothing is triggered for the captain */
+  eq(req().stage, stage0, "the request stays at the same desk");
+  eq(req().status, status0, "with the same status");
+  eq(JSON.stringify(req().am.gates), gates0, "and the infra checks untouched");
+  eq(JSON.stringify({ roles: api.state.roles, profile: api.state.profile, hubs: api.state.hubs }), before,
+     "no captain-side state changes — no re-verification is raised");
+
+  check(api.reload(), "the correction is saved");
+  A.adminOpen("OBD-78240");
+  check(exists(doc, '[data-testid="ap-map-updated"]'), "and survives a reload");
+
+  /* cancelling discards a draft; putting the captain's link back clears the correction */
+  click(doc, "ap-map-edit");
+  type(doc, "ap-map", at("560102", -0.0006, 0.0005));
+  click(doc, "ap-map-cancel");
+  eq(req().am.mapLink, at("560102", 0.0004, -0.0003), "Cancel keeps the saved correction");
+  click(doc, "ap-map-edit");
+  type(doc, "ap-map", at("560102"));
+  click(doc, "ap-map-save");
+  check(exists(doc, '[data-testid="ap-map-updated"]'), "a second correction replaces the first");
+  check(H.checkMapPin(H.apMapLink(req()), "560102").ok, "still inside the pincode");
+
+  /* only the Area Manager edits it */
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  A.adminOpen("OBD-78219");
+  check(exists(doc, '[data-testid="ap-map-row"]'), "the Cluster Head sees the map link");
+  check(!exists(doc, "#ap-map-edit"), "but cannot edit it");
+  A.amMapEdit();
+  check(!exists(doc, '[data-testid="ap-map-editor"]'), "even by calling the action directly");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -3499,6 +3599,7 @@ async function testGstVerification() {
     await testMapPin();
     await testApiFailures();
     await testGstVerification();
+    await testAmMapEdit();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }
