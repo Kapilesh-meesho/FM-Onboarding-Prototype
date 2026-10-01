@@ -2954,6 +2954,24 @@ async function testPincodesOnHub() {
   eq(b.api.helpers.R().hub.pincode, "560102", "and records the one it picks");
   b.api.stopTimers();
   b.win.close();
+
+  /* --- the availability notice counts properly --- */
+  const c = await boot();
+  login(c.doc);
+  pickRole(c.doc, "FM");
+  c.api.helpers.goPhase("hub");
+  const A = c.api.actions;
+  const notice = () => sel(c.doc, '[data-testid="pincode-picker"] .notice.ok b').textContent;
+  A.addPincodes("560076"); A.checkAvailability();
+  eq(notice(), "Your pincode is available", "one pincode, available");
+  A.addPincodes("560034, 999999"); A.checkAvailability();
+  eq(notice(), "2 of 3 pincodes are available", "some available");
+  A.removePincode("560034"); A.checkAvailability();
+  eq(notice(), "1 of 2 pincodes is available", "one of several available");
+  A.removePincode("999999"); A.addPincodes("560034"); A.checkAvailability();
+  eq(notice(), "All 2 pincodes are available", "all available");
+  c.api.stopTimers();
+  c.win.close();
 }
 
 /* =========================================================================

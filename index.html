@@ -4326,8 +4326,11 @@ function pincodePicker(h) {
       results = '<div class="notice bad"><b>None of your pincodes are serviceable</b>' +
         'VALMO is not opening hubs in these areas yet. Remove them and try other pincodes.</div>';
     } else {
-      results = '<div class="notice ok"><b>' + avail.length + ' of ' + h.pincodes.length +
-        ' pincodes are available</b>Select the pincode this hub will run in.</div>' +
+      var total = h.pincodes.length;
+      var head = total === 1 ? "Your pincode is available"
+        : avail.length === total ? "All " + total + " pincodes are available"
+        : avail.length + " of " + total + " pincodes " + (avail.length === 1 ? "is" : "are") + " available";
+      results = '<div class="notice ok"><b>' + head + '</b>Select the pincode this hub will run in.</div>' +
         '<div class="toggle-row">' + avail.map(function (p) {
           return '<button data-selpin="' + esc(p) + '"' +
                  (h.selected === p ? ' class="on"' : '') + '>' + esc(p) + '</button>';
