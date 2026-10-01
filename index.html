@@ -1046,9 +1046,9 @@ var CATEGORY_ORDER = ["standalone_mini","standalone","lm_as_fm","mall","sah"];
    rate ceiling at Cluster Head review) has something to work from. */
 var PHASES = {
   LM: [
-    { id:"pd",  title:"Personal details",          sub:"Name, email, alternate phone, pincode", lc:"personal details" },
+    { id:"pd",  title:"Personal details",          sub:"Name, email, alternate phone", lc:"personal details" },
     { id:"kyc", title:"KYC verification",          sub:"Aadhaar, PAN, bank, GST status", lc:"KYC verification" },
-    { id:"hub", title:"Hub details",               sub:"Address and facility", lc:"hub details" },
+    { id:"hub", title:"Hub details",               sub:"Pincode, address and facility", lc:"hub details" },
     { id:"bgv", title:"Background verification",   sub:"Secure background check", lc:"background verification" },
     { id:"ch",  title:"Cluster Head review",       sub:"Interview and rate card", lc:"Cluster Head review" },
     { id:"sd",  title:"Security deposit",          sub:"Final deposit and receipt", lc:"security deposit" },
@@ -1057,9 +1057,9 @@ var PHASES = {
     { id:"act", title:"Activation",                sub:"Hub goes live", lc:"activation" }
   ],
   FM: [
-    { id:"pd",  title:"Personal details",        sub:"Name, email, alternate phone, pincode", lc:"personal details" },
+    { id:"pd",  title:"Personal details",        sub:"Name, email, alternate phone", lc:"personal details" },
     { id:"kyc", title:"KYC verification",        sub:"Aadhaar, PAN, bank, GST status", lc:"KYC verification" },
-    { id:"hub", title:"Hub details",             sub:"Address and facility", lc:"hub details" },
+    { id:"hub", title:"Hub details",             sub:"Pincode, address and facility", lc:"hub details" },
     { id:"bgv", title:"Background verification", sub:"Secure background check", lc:"background verification" },
     { id:"ch",  title:"Cluster Head review",     sub:"Interview and rate card", lc:"Cluster Head review" },
     { id:"ag",  title:"Agreements",              sub:"Rate card and service agreement", lc:"agreements" },
@@ -1179,6 +1179,7 @@ var ERR = {
   pincodeFormat: "Enter a valid 6-digit pincode.",
   pincodeDupe:   "This pincode is already added.",
   pincodeMax:    "You can add up to 5 pincodes.",
+  pincodeSelect: "Check availability and pick the pincode this hub will run in.",
   pan:           "Enter a valid PAN (e.g. ABCDE1234F).",
   panFather:     "Father's name is required for PAN verification.",
   ifsc:          "Enter a valid IFSC (e.g. HDFC0001234).",
@@ -1212,7 +1213,7 @@ function blankRole(role) {
     pd: {
       name:"", altPhone:"", email:"",
       emailVerified:false, emailOtpOpen:false, emailOtpAttempts:0, emailLocked:false,
-      pincodes:[], checked:false, selected:null, errors:{}
+      errors:{}
     },
     kyc: {
       aadhaar:{ done:false, value:"", otpOpen:false, data:null },
@@ -1233,6 +1234,9 @@ function blankRole(role) {
            revision:null },
     sd:  { status:"pending", amount:25000, attempts:0 },
     hub: { address:"", mapLink:"", pincode:"", city:"",
+           // serviceable-pincode picker: up to 5 candidates, an availability
+           // check, and the one this hub will run in
+           pincodes:[], checked:false, selected:null, lastAdded:0,
            areaSqft:"", manpower:"", maxVehicle:"",
            photo:"", photoName:"",
            submitted:false, hubCode:null, returnTo:null, errors:{} },
@@ -1365,6 +1369,18 @@ function load() {
     for (var k in parsed) if (k !== "roles") next[k] = parsed[k];
     ["LM","FM"].forEach(function (r) {
       var role = Object.assign(blankRole(r), parsed.roles[r] || {});
+      role.hub = Object.assign(blankRole(r).hub, role.hub || {});
+      /* Migration: the serviceable-pincode picker used to live on personal
+         details. Carry an older save's picks over to hub details. */
+      if (role.pd && Array.isArray(role.pd.pincodes)) {
+        if (!role.hub.pincodes.length && role.pd.pincodes.length) {
+          role.hub.pincodes = role.pd.pincodes;
+          role.hub.checked = !!role.pd.checked;
+          role.hub.selected = role.pd.selected || null;
+        }
+        delete role.pd.pincodes; delete role.pd.checked;
+        delete role.pd.selected; delete role.pd.lastAdded;
+      }
       /* Migration: hub details used to hold a single `maxVehicle` string before
          multiple types could be chosen. Carry it into the array. */
       /* Migration: hub details used to hold a list of accommodated vehicle
@@ -1607,7 +1623,7 @@ function fmtDay(d) {
 /* The name a brand new hub takes until it is renamed. Both the activation
    screen and the hub it produces read it from here. */
 function defaultHubName(r) {
-  return ((r.pd && r.pd.selected) || r.hub.pincode || "New") + " Hub";
+  return ((r.hub && (r.hub.selected || r.hub.pincode)) || "New") + " Hub";
 }
 function money(n) {
   if (n == null) return "—";
@@ -3406,14 +3422,6 @@ function renderPhase(id, r) {
 function phasePD(r) {
   var pd = r.pd, e = pd.errors || {};
 
-  var chips = pd.pincodes.map(function (p) {
-    var cls = "";
-    if (pd.checked) cls = SERVICEABLE.indexOf(p) >= 0 ? " ok" : " no";
-    var flag = pd.checked ? (SERVICEABLE.indexOf(p) >= 0 ? " ✓" : " ✕") : "";
-    return '<span class="pchip' + cls + '">' + esc(p) + flag +
-           '<button data-rmpin="' + esc(p) + '" aria-label="Remove">✕</button></span>';
-  }).join("");
-
   var emailBox;
   if (pd.emailVerified) {
     emailBox = '<div class="box"><input id="pd-email" value="' + esc(pd.email) + '" disabled>' +
@@ -3447,24 +3455,7 @@ function phasePD(r) {
       'Three incorrect codes. Contact VALMO Support to unlock this email.</div>';
   }
 
-  var canCheck = pd.pincodes.length > 0 && pd.emailVerified;
-  var canContinue = !!pd.name.trim() && pd.emailVerified && pd.checked && !!pd.selected;
-
-  var results = "";
-  if (pd.checked) {
-    var avail = pd.pincodes.filter(function (p) { return SERVICEABLE.indexOf(p) >= 0; });
-    if (avail.length === 0) {
-      results = '<div class="notice bad"><b>None of your pincodes are serviceable</b>' +
-        'VALMO is not opening hubs in these areas yet. Remove them and try other pincodes.</div>';
-    } else {
-      results = '<div class="notice ok"><b>' + avail.length + ' of ' + pd.pincodes.length +
-        ' pincodes are available</b>Select the pincode you want to run your hub in.</div>' +
-        '<div class="toggle-row">' + avail.map(function (p) {
-          return '<button data-selpin="' + esc(p) + '"' +
-                 (pd.selected === p ? ' class="on"' : '') + '>' + esc(p) + '</button>';
-        }).join("") + '</div>';
-    }
-  }
+  var canContinue = !!pd.name.trim() && pd.emailVerified;
 
   var inner =
     '<div class="fl"><label>Vendor / Captain name</label>' +
@@ -3489,31 +3480,6 @@ function phasePD(r) {
 
     otpBlock +
 
-    /* A bulk add that landed some pincodes and skipped others is a partial
-       success, not a failure — amber, not red. */
-    '<div class="fl" style="margin-bottom:10px"><label>Serviceable pincodes</label>' +
-      '<div class="box' + (e.pincode ? (pd.lastAdded ? ' warn' : ' bad') : '') +
-        '" style="justify-content:space-between;padding-right:8px">' +
-        '<input id="pd-pin" placeholder="Enter or paste pincodes — e.g. 560076, 560034, 110017">' +
-        '<button class="addbtn" id="pd-addpin"' +
-          (pd.pincodes.length >= 5 ? ' disabled' : '') + '>＋ Add</button></div>' +
-      (e.pincode
-        ? '<div class="hint ' + (pd.lastAdded ? 'warn' : 'err') + '">' + esc(e.pincode) + '</div>'
-        : '') +
-    '</div>' +
-    '<div class="chips">' + (chips || '<span style="font-size:12px;color:var(--muted)">No pincodes added yet.</span>') + '</div>' +
-    '<div class="meta-row"><span class="l">Add up to 5 pincodes where you&rsquo;d like to run a hub — ' +
-      'we&rsquo;ll check which are available. Paste a comma-separated list to add several at once.</span>' +
-      '<span class="r">' + pd.pincodes.length + ' of 5 added</span></div>' +
-
-    '<div style="margin-top:16px">' +
-      '<button class="btn btn-ghost" id="pd-check"' + (canCheck ? '' : ' disabled') + '>' +
-        'Check availability</button>' +
-      (!pd.emailVerified ? '<span style="font-size:11px;color:var(--muted);margin-left:10px">' +
-        'Verify your email first.</span>' : '') +
-    '</div>' +
-    (results ? '<div style="margin-top:16px">' + results + '</div>' : '') +
-
     '<div class="cfoot">' +
       backBtn(r) +
       '<span class="note">By continuing, you agree that VALMO can use this information to ' +
@@ -3523,9 +3489,9 @@ function phasePD(r) {
     '</div>';
 
   return {
-    left: phaseHeader(r, "Personal details", "Tell us who you are and where you want to open the hub.") +
+    left: phaseHeader(r, "Personal details", "Tell us who you are and how to reach you.") +
           cardWrap("Personal details",
-                   "Email verification is required before pincode availability check.", inner),
+                   "Verify your email to receive onboarding updates and documents.", inner),
     side: sideDefault(r)
   };
 }
@@ -4176,6 +4142,61 @@ function hubSpecRows(h) {
            (maxV ? alsoFitsText(alsoFits) : "—") + '</span></div>';
 }
 
+/* Serviceable pincodes: up to five candidates, one availability check, and the
+   pick this hub will run in. It sits on hub details because the pincode is a
+   property of the hub — an existing captain adding a second hub skips
+   personal details entirely, and would otherwise never choose one. */
+function pincodePicker(h) {
+  var e = h.errors || {};
+  var chips = h.pincodes.map(function (p) {
+    var cls = "";
+    if (h.checked) cls = SERVICEABLE.indexOf(p) >= 0 ? " ok" : " no";
+    var flag = h.checked ? (SERVICEABLE.indexOf(p) >= 0 ? " ✓" : " ✕") : "";
+    return '<span class="pchip' + cls + '">' + esc(p) + flag +
+           '<button data-rmpin="' + esc(p) + '" aria-label="Remove">✕</button></span>';
+  }).join("");
+
+  var results = "";
+  if (h.checked) {
+    var avail = h.pincodes.filter(function (p) { return SERVICEABLE.indexOf(p) >= 0; });
+    if (avail.length === 0) {
+      results = '<div class="notice bad"><b>None of your pincodes are serviceable</b>' +
+        'VALMO is not opening hubs in these areas yet. Remove them and try other pincodes.</div>';
+    } else {
+      results = '<div class="notice ok"><b>' + avail.length + ' of ' + h.pincodes.length +
+        ' pincodes are available</b>Select the pincode this hub will run in.</div>' +
+        '<div class="toggle-row">' + avail.map(function (p) {
+          return '<button data-selpin="' + esc(p) + '"' +
+                 (h.selected === p ? ' class="on"' : '') + '>' + esc(p) + '</button>';
+        }).join("") + '</div>';
+    }
+  }
+
+  /* A bulk add that landed some pincodes and skipped others is a partial
+     success, not a failure — amber, not red. */
+  return '<div data-testid="pincode-picker">' +
+    '<div class="fl" style="margin-bottom:10px"><label>Serviceable pincodes</label>' +
+      '<div class="box' + (e.pincode ? (h.lastAdded ? ' warn' : ' bad') : '') +
+        '" style="justify-content:space-between;padding-right:8px">' +
+        '<input id="hub-pins" placeholder="Enter or paste pincodes — e.g. 560076, 560034, 110017">' +
+        '<button class="addbtn" id="hub-addpin"' +
+          (h.pincodes.length >= 5 ? ' disabled' : '') + '>＋ Add</button></div>' +
+      (e.pincode
+        ? '<div class="hint ' + (h.lastAdded ? 'warn' : 'err') + '">' + esc(e.pincode) + '</div>'
+        : '') +
+    '</div>' +
+    '<div class="chips">' + (chips || '<span style="font-size:12px;color:var(--muted)">No pincodes added yet.</span>') + '</div>' +
+    '<div class="meta-row"><span class="l">Add up to 5 pincodes where you&rsquo;d like to run this hub — ' +
+      'we&rsquo;ll check which are available. Paste a comma-separated list to add several at once.</span>' +
+      '<span class="r">' + h.pincodes.length + ' of 5 added</span></div>' +
+    '<div style="margin-top:16px">' +
+      '<button class="btn btn-ghost" id="hub-check"' + (h.pincodes.length ? '' : ' disabled') + '>' +
+        'Check availability</button>' +
+    '</div>' +
+    (results ? '<div style="margin-top:16px">' + results + '</div>' : '') +
+  '</div>';
+}
+
 function phaseHUB(r) {
   var h = r.hub, e = h.errors || {}, fm = r.role === "FM", inner;
   var maxVehicle = h.maxVehicle || "";
@@ -4222,6 +4243,8 @@ function phaseHUB(r) {
       : "";
 
     inner = reconfirm +
+      pincodePicker(h) +
+      '<div style="height:1px;background:var(--line-soft);margin:22px 0 20px"></div>' +
       '<div class="fl"><label>Hub address</label>' +
         '<div class="box' + (e.address ? ' bad' : '') + '">' +
         '<input id="hub-address" placeholder="Full address of the proposed hub" ' +
@@ -4244,10 +4267,11 @@ function phaseHUB(r) {
       '</div>' +
       '<div class="grid2">' +
         '<div class="fl"><label>Hub pincode</label>' +
-          '<div class="box"><input id="hub-pin" value="' + esc(h.pincode || r.pd.selected || "") + '" disabled></div>' +
-          '<div class="hint">Pre-filled from personal details.</div></div>' +
+          '<div class="box"><input id="hub-pin" value="' + esc(h.selected || "") + '" ' +
+            'placeholder="Not selected yet" disabled></div>' +
+          '<div class="hint">Choose it from the available pincodes above.</div></div>' +
         '<div class="fl"><label>City / State</label>' +
-          '<div class="box"><input id="hub-city" value="' + esc(h.city || cityFor(r.pd.selected)) + '" disabled></div>' +
+          '<div class="box"><input id="hub-city" value="' + esc(cityFor(h.selected)) + '" disabled></div>' +
           '<div class="hint">Resolved from pincode.</div></div>' +
       '</div>' +
       '<div class="grid2">' +
@@ -4272,9 +4296,11 @@ function phaseHUB(r) {
   }
 
   return {
-    left: phaseHeader(r, "Hub details", "Add the proposed hub address and map link.") +
+    left: phaseHeader(r, "Hub details",
+                      "Choose an available pincode, then add the hub address and map link.") +
           cardWrap("Hub details",
-                   "Pincode is carried forward from personal details and cannot be edited here.", inner),
+                   "Check which of your pincodes VALMO is opening hubs in, then describe the facility.",
+                   inner),
     side: sideDefault(r)
   };
 }
@@ -4538,37 +4564,38 @@ var A = {
      time. Partial success is the normal case: valid entries are added and the
      rest are reported by reason. */
   addPincodes: function (raw) {
-    var r = R(), pd = r.pd;
-    pd.errors = {};
-    pd.lastAdded = 0;
+    var h = R().hub;             // the picker lives on hub details
+    h.errors = h.errors || {};
+    delete h.errors.pincode;    // leave any address or map error in place
+    h.lastAdded = 0;
 
     var tokens = String(raw == null ? "" : raw).split(PIN_SPLIT)
       .map(function (s) { return s.trim(); })
       .filter(function (s) { return s.length > 0; });
 
-    if (!tokens.length) { pd.errors.pincode = ERR.pincodeFormat; save(); render(); return; }
+    if (!tokens.length) { h.errors.pincode = ERR.pincodeFormat; save(); render(); return; }
 
     var added = [], invalid = [], dupes = [], overflow = [], seen = {};
     tokens.forEach(function (t) {
       if (!V.pincode(t))                                   { invalid.push(t);  return; }
-      if (seen[t] || pd.pincodes.indexOf(t) >= 0)          { dupes.push(t);    return; }
-      if (pd.pincodes.length + added.length >= 5)          { overflow.push(t); return; }
+      if (seen[t] || h.pincodes.indexOf(t) >= 0)          { dupes.push(t);    return; }
+      if (h.pincodes.length + added.length >= 5)          { overflow.push(t); return; }
       seen[t] = true;
       added.push(t);
     });
 
     if (added.length) {
-      pd.pincodes = pd.pincodes.concat(added);
+      h.pincodes = h.pincodes.concat(added);
       // any new pincode invalidates a previous availability check
-      pd.checked = false;
-      pd.selected = null;
-      pd.lastAdded = added.length;
+      h.checked = false;
+      h.selected = null;
+      h.lastAdded = added.length;
     }
 
     if (invalid.length || dupes.length || overflow.length) {
       if (tokens.length === 1) {
         // one entry in, one precise message out
-        pd.errors.pincode = invalid.length ? ERR.pincodeFormat
+        h.errors.pincode = invalid.length ? ERR.pincodeFormat
                           : dupes.length   ? ERR.pincodeDupe
                           :                  ERR.pincodeMax;
       } else {
@@ -4579,7 +4606,7 @@ var A = {
         }
         if (dupes.length)    why.push(dupes.length + " already added");
         if (overflow.length) why.push(overflow.length + " beyond the 5-pincode limit");
-        pd.errors.pincode =
+        h.errors.pincode =
           (added.length ? "Added " + added.length + ". Skipped " : "Skipped ") + why.join("; ") + ".";
       }
     }
@@ -4588,18 +4615,27 @@ var A = {
   /* Kept so single-value callers read naturally. */
   addPincode: function (val) { A.addPincodes(val); },
   removePincode: function (p) {
-    var pd = R().pd;
-    pd.pincodes = pd.pincodes.filter(function (x) { return x !== p; });
-    if (pd.selected === p) pd.selected = null;
-    pd.checked = false; pd.errors = {};
+    var h = R().hub;
+    h.pincodes = h.pincodes.filter(function (x) { return x !== p; });
+    if (h.selected === p) h.selected = null;
+    h.checked = false;
+    if (h.errors) delete h.errors.pincode;
     save(); render();
   },
   checkAvailability: function () {
-    var pd = R().pd;
-    pd.checked = true; pd.selected = null;
+    var h = R().hub;
+    if (!h.pincodes.length) return;
+    h.checked = true; h.selected = null;
+    if (h.errors) delete h.errors.pincode;
     save(); render();
   },
-  selectPincode: function (p) { R().pd.selected = p; save(); render(); },
+  selectPincode: function (p) {
+    var h = R().hub;
+    if (!h.checked || SERVICEABLE.indexOf(p) < 0 || h.pincodes.indexOf(p) < 0) return;
+    h.selected = p;
+    if (h.errors) delete h.errors.pincode;
+    save(); render();
+  },
 
   sendEmailOtp: function () {
     var pd = R().pd;
@@ -4624,10 +4660,7 @@ var A = {
     if (!pd.name.trim())   pd.errors.name = "Name is required.";
     if (pd.altPhone && !V.phone(pd.altPhone)) pd.errors.altPhone = ERR.phone;
     if (!pd.emailVerified) pd.errors.email = "Verify your email before continuing.";
-    if (!pd.selected)      pd.errors.pincode = "Select an available pincode.";
     if (Object.keys(pd.errors).length) { save(); render(); return; }
-    r.hub.pincode = pd.selected;
-    r.hub.city = cityFor(pd.selected);
     nextPhase();
   },
 
@@ -4908,6 +4941,7 @@ var A = {
     }
 
     h.errors = {};
+    if (!h.selected) h.errors.pincode = ERR.pincodeSelect;
     if (!String(address == null ? "" : address).trim()) h.errors.address = ERR.hubAddress;
     if (!V.mapLink(mapLink))      h.errors.mapLink  = ERR.mapLink;
     if (!V.hubArea(areaSqft))     h.errors.areaSqft = ERR.hubArea;
@@ -4922,7 +4956,7 @@ var A = {
     h.maxVehicle = String(maxVehicle == null ? "" : maxVehicle).trim();
 
     if (Object.keys(h.errors).length) { save(); render(); return; }
-    h.pincode = r.pd.selected || h.pincode;
+    h.pincode = h.selected;
     h.city = cityFor(h.pincode);
     h.submitted = true;
     // LM gets its hub code at submit. FM does not — it is issued during
@@ -5256,7 +5290,7 @@ var A = {
     // carry the captain-level record forward
     r.pd = Object.assign(r.pd, {
       name: pr.name, email: pr.email, altPhone: pr.altPhone,
-      emailVerified: true, pincodes: [], checked: false, selected: null
+      emailVerified: true
     });
     r.kyc.aadhaar = { done:true, value:pr.aadhaar, otpOpen:false };
     r.kyc.pan     = { done:true, value:pr.pan, father:"Suresh Verma" };
@@ -5693,14 +5727,14 @@ function bind() {
   });
   on("pd-verify-email", "click", A.sendEmailOtp);
   on("pd-email-otp-go", "click", function () { A.confirmEmailOtp(val("pd-email-otp")); });
-  on("pd-addpin", "click", function () { A.addPincodes(val("pd-pin")); });
-  on("pd-pin", "keydown", function (e) {
-    if (e.key === "Enter") { e.preventDefault(); A.addPincodes(val("pd-pin")); }
+  on("hub-addpin", "click", function () { A.addPincodes(val("hub-pins")); });
+  on("hub-pins", "keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); A.addPincodes(val("hub-pins")); }
   });
   /* A paste carrying a separator is clearly a bulk paste — add it straight away
      rather than making the captain also press Add. A single value just fills
      the field as normal. */
-  on("pd-pin", "paste", function (e) {
+  on("hub-pins", "paste", function (e) {
     var cb = e.clipboardData || window.clipboardData;
     if (!cb) return;
     var t = cb.getData("text") || "";
@@ -5714,7 +5748,7 @@ function bind() {
   Array.prototype.forEach.call(document.querySelectorAll("[data-selpin]"), function (el) {
     el.addEventListener("click", function () { A.selectPincode(el.getAttribute("data-selpin")); });
   });
-  on("pd-check", "click", A.checkAvailability);
+  on("hub-check", "click", A.checkAvailability);
   on("pd-continue", "click", A.pdContinue);
 
   /* kyc */
@@ -6361,6 +6395,8 @@ if (typeof window !== "undefined") {
       seedExistingCaptain: seedExistingCaptain
     },
     render: render,
+    // re-read saved state, as a page reload would — lets a test exercise migrations
+    reload: function () { var ok = load(); render(); return ok; },
     reset: resetAll,
     stopTimers: function () { stopOtpTimer(); stopFanout(); },
     STORE_KEY: STORE_KEY

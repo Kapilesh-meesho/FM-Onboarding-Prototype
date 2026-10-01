@@ -141,18 +141,22 @@ function login(doc, phone = "7004301290") {
 
 function pickRole(doc, code) { clickSel(doc, '[data-pick="' + code + '"]'); }
 
-function doPersonalDetails(doc, { name = "Karan Verma", pin = "560076" } = {}) {
+function doPersonalDetails(doc, { name = "Karan Verma" } = {}) {
   type(doc, "pd-name", name);
   type(doc, "pd-alt", "9876543210");
   type(doc, "pd-email", "karan.verma@gmail.com");
   click(doc, "pd-verify-email");
   type(doc, "pd-email-otp", "000000");
   click(doc, "pd-email-otp-go");
-  type(doc, "pd-pin", pin);
-  click(doc, "pd-addpin");
-  click(doc, "pd-check");
-  clickSel(doc, '[data-selpin="' + pin + '"]');
   click(doc, "pd-continue");
+}
+
+/* The serviceable-pincode check now opens hub details. */
+function pickPincode(doc, pin) {
+  type(doc, "hub-pins", pin);
+  click(doc, "hub-addpin");
+  click(doc, "hub-check");
+  clickSel(doc, '[data-selpin="' + pin + '"]');
 }
 
 /* KYC is a sequence of one-record-at-a-time cards (KYC-01…KYC-14), each with a
@@ -201,10 +205,12 @@ function pickMaxVehicle(doc, type) {
   row.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
 }
 
-function doHubDetails(doc, { address = "No. 42, 4th Cross, Koramangala, Bengaluru",
+function doHubDetails(doc, { pin = "560076",
+                              address = "No. 42, 4th Cross, Koramangala, Bengaluru",
                               map = "https://maps.google.com/?q=12.9352,77.6245",
                               area = "4000", manpower = "12",
                               maxVehicle = "7MT_20FT" } = {}) {
+  if (pin && exists(doc, "#hub-pins")) pickPincode(doc, pin);
   type(doc, "hub-address", address);
   type(doc, "hub-map", map);
   type(doc, "hub-area", area);
@@ -237,14 +243,19 @@ async function testLM() {
 
   doPersonalDetails(doc);
   eq(api.helpers.phaseId(), "kyc", "personal details → KYC");
-  eq(api.helpers.R().pd.selected, "560076", "serviceable pincode selected");
+  check(!exists(doc, "#hub-pins") && !exists(doc, '[data-testid="pincode-picker"]'),
+        "personal details no longer asks for pincodes");
 
   doKyc(doc, "LM");
   eq(api.helpers.phaseId(), "hub", "KYC → hub details (now before background verification)");
   check(api.helpers.R().kyc.gst.registered === false,
         "LM accepted Non-GST as a complete GST answer (optional toggle)");
 
+  check(exists(doc, '[data-testid="pincode-picker"]'),
+        "hub details opens with the serviceable-pincode check");
   doHubDetails(doc);
+  eq(api.helpers.R().hub.selected, "560076", "serviceable pincode selected on hub details");
+  eq(api.helpers.R().hub.pincode, "560076", "and recorded as the hub's pincode");
   const lmHubCode = api.helpers.R().hub.hubCode;
   check(!!lmHubCode && /^[A-Z]{3}$/.test(lmHubCode),
         "LM hub code generated at hub submit (" + lmHubCode + ")");
@@ -653,7 +664,7 @@ async function testRoleIndependence() {
 
   /* LM: get partway in, then leave it alone. */
   pickRole(doc, "LM");
-  doPersonalDetails(doc, { name: "Karan LM", pin: "560076" });
+  doPersonalDetails(doc, { name: "Karan LM" });
   doKyc(doc, "LM");
   doHubDetails(doc, { address: "No. 42, Koramangala" });
   click(doc, "hub-continue");
@@ -666,13 +677,13 @@ async function testRoleIndependence() {
   click(doc, "switch-role");
   eq(api.state.screen, "roles", "switch-role returns to role selection mid-flow");
   pickRole(doc, "FM");
-  doPersonalDetails(doc, { name: "Karan FM", pin: "110017" });
+  doPersonalDetails(doc, { name: "Karan FM" });
   eq(api.state.roles.FM.pd.name, "Karan FM", "FM captured its own name");
-  eq(api.state.roles.FM.pd.selected, "110017", "FM selected its own pincode");
+  eq(api.state.roles.FM.hub.selected, null, "FM's hub pincode is its own \u2014 not yet picked");
 
   const lmAfter = api.state.roles.LM;
   eq(lmAfter.pd.name, "Karan LM", "LM name untouched by the FM run");
-  eq(lmAfter.pd.selected, "560076", "LM pincode untouched by the FM run");
+  eq(lmAfter.hub.selected, "560076", "LM hub pincode untouched by the FM run");
   eq(lmAfter.phaseIdx, lmBefore.phaseIdx, "LM phase index untouched");
   eq(lmAfter.bgv.status, "passed", "LM background verification result untouched");
   eq(lmAfter.kyc.gst.registered, false, "LM Non-GST answer untouched");
@@ -716,35 +727,43 @@ async function testValidation() {
   login(doc);
   pickRole(doc, "LM");
 
-  /* --- pincode format --- */
-  type(doc, "pd-pin", "12ab5");
-  click(doc, "pd-addpin");
+  /* --- pincode rules, now on hub details --- */
+  api.helpers.goPhase("hub");
+  type(doc, "hub-pins", "12ab5");
+  click(doc, "hub-addpin");
   check(txt(doc).indexOf(E.pincodeFormat) >= 0, "bad pincode → '" + E.pincodeFormat + "'");
-  eq(api.helpers.R().pd.pincodes.length, 0, "bad pincode not added");
+  eq(api.helpers.R().hub.pincodes.length, 0, "bad pincode not added");
 
-  type(doc, "pd-pin", "012345");
-  click(doc, "pd-addpin");
+  type(doc, "hub-pins", "012345");
+  click(doc, "hub-addpin");
   check(txt(doc).indexOf(E.pincodeFormat) >= 0, "pincode starting with 0 rejected");
 
   /* --- duplicate --- */
-  type(doc, "pd-pin", "560076");
-  click(doc, "pd-addpin");
-  type(doc, "pd-pin", "560076");
-  click(doc, "pd-addpin");
+  type(doc, "hub-pins", "560076");
+  click(doc, "hub-addpin");
+  type(doc, "hub-pins", "560076");
+  click(doc, "hub-addpin");
   check(txt(doc).indexOf(E.pincodeDupe) >= 0, "duplicate pincode → '" + E.pincodeDupe + "'");
-  eq(api.helpers.R().pd.pincodes.length, 1, "duplicate not added twice");
+  eq(api.helpers.R().hub.pincodes.length, 1, "duplicate not added twice");
 
   /* --- max 5 --- */
   ["560034","560102","110017","400059"].forEach(p => {
-    type(doc, "pd-pin", p); click(doc, "pd-addpin");
+    type(doc, "hub-pins", p); click(doc, "hub-addpin");
   });
-  eq(api.helpers.R().pd.pincodes.length, 5, "five pincodes accepted");
+  eq(api.helpers.R().hub.pincodes.length, 5, "five pincodes accepted");
   api.actions.addPincode("560001");
   check(txt(doc).indexOf(E.pincodeMax) >= 0, "sixth pincode → '" + E.pincodeMax + "'");
-  eq(api.helpers.R().pd.pincodes.length, 5, "sixth pincode not added");
+  eq(api.helpers.R().hub.pincodes.length, 5, "sixth pincode not added");
+
+  /* --- a hub cannot be submitted without a chosen pincode --- */
+  api.actions.removePincode("400059");
+  api.actions.hubSubmit({ address: "No. 42, Koramangala", mapLink: "https://maps.google.com/?q=12.9352,77.6245",
+                          areaSqft: "4000", manpower: "12", maxVehicle: "7MT_20FT" });
+  check(!api.helpers.R().hub.submitted, "hub details refuse to submit with no pincode picked");
+  check(txt(doc).indexOf(E.pincodeSelect) >= 0, "and say why: '" + E.pincodeSelect + "'");
 
   /* --- email --- */
-  api.actions.removePincode("400059");
+  api.helpers.goPhase("pd");
   type(doc, "pd-email", "not-an-email");
   api.actions.sendEmailOtp();
   check(txt(doc).indexOf(E.email) >= 0, "invalid email → '" + E.email + "'");
@@ -1143,14 +1162,15 @@ async function testBulkPincodes() {
   section("9. Bulk pincode entry — comma-separated paste");
   const { win, doc, api } = await boot();
   const E = api.errors;
-  const pins = () => api.helpers.R().pd.pincodes;
+  const pins = () => api.helpers.R().hub.pincodes;
 
   login(doc);
   pickRole(doc, "LM");
+  api.helpers.goPhase("hub");
 
   /* comma-separated, one action */
-  type(doc, "pd-pin", "560076, 560034, 110017");
-  click(doc, "pd-addpin");
+  type(doc, "hub-pins", "560076, 560034, 110017");
+  click(doc, "hub-addpin");
   eq(pins(), ["560076","560034","110017"], "a comma-separated list adds all three at once");
   check(txt(doc).indexOf("3 of 5 added") >= 0, "counter reflects the bulk add");
 
@@ -1172,6 +1192,7 @@ async function testBulkPincodes() {
   api.reset();
   login(doc);
   pickRole(doc, "LM");
+  api.helpers.goPhase("hub");
   api.actions.addPincodes("560076, notapin, 560076, 000000, 560034");
   eq(pins(), ["560076","560034"], "valid entries are added, invalid and duplicate ones are not");
   const msg = txt(doc);
@@ -1183,6 +1204,7 @@ async function testBulkPincodes() {
   api.reset();
   login(doc);
   pickRole(doc, "LM");
+  api.helpers.goPhase("hub");
   api.actions.addPincodes("560034, 560034, 560034");
   eq(pins(), ["560034"], "a value repeated inside one paste is added once");
 
@@ -1190,20 +1212,21 @@ async function testBulkPincodes() {
   api.reset();
   login(doc);
   pickRole(doc, "LM");
+  api.helpers.goPhase("hub");
   api.actions.addPincodes("560076");
-  api.helpers.R().pd.emailVerified = true;
   api.actions.checkAvailability();
   api.actions.selectPincode("560076");
-  check(api.helpers.R().pd.checked && api.helpers.R().pd.selected === "560076",
+  check(api.helpers.R().hub.checked && api.helpers.R().hub.selected === "560076",
         "availability checked and a pincode selected");
   api.actions.addPincodes("560034, 110017");
-  check(!api.helpers.R().pd.checked && !api.helpers.R().pd.selected,
+  check(!api.helpers.R().hub.checked && !api.helpers.R().hub.selected,
         "adding more pincodes clears the stale availability result");
 
   /* single-value behaviour is unchanged — precise copy, not a batch summary */
   api.reset();
   login(doc);
   pickRole(doc, "LM");
+  api.helpers.goPhase("hub");
   api.actions.addPincode("12ab5");
   check(txt(doc).indexOf(E.pincodeFormat) >= 0,
         "a single bad value still gives the precise format error");
@@ -1216,7 +1239,8 @@ async function testBulkPincodes() {
   api.reset();
   login(doc);
   pickRole(doc, "LM");
-  const pinInput = $(doc, "pd-pin");
+  api.helpers.goPhase("hub");
+  const pinInput = $(doc, "hub-pins");
   const pasteEvt = new win.Event("paste", { bubbles: true, cancelable: true });
   pasteEvt.clipboardData = { getData: () => "560076, 560034" };
   pinInput.dispatchEvent(pasteEvt);
@@ -1432,7 +1456,7 @@ async function testHubFacilityInputs() {
   /* FM captures the same three fields */
   api.actions.switchRole();
   pickRole(doc, "FM");
-  doPersonalDetails(doc, { pin: "560076" });
+  doPersonalDetails(doc);
   doKyc(doc, "FM");
   eq(api.helpers.phaseId(), "hub", "FM reached hub details, straight after KYC");
   check(exists(doc, "#hub-area") && exists(doc, "#hub-manpower") && exists(doc, "#veh-toggle"),
@@ -1538,7 +1562,7 @@ async function testBackAndPhoto() {
   eq($(doc, "pd-name").value, "Karan Verma", "the captured name is still there");
   type(doc, "pd-name", "Karan V Verma");
   eq(api.helpers.R().pd.name, "Karan V Verma", "and can be edited");
-  eq(api.helpers.R().pd.pincodes, ["560076"], "pincodes survive the round trip");
+  check(api.helpers.R().pd.emailVerified, "the verified email survives the round trip");
   click(doc, "pd-continue");
   eq(api.helpers.phaseId(), "kyc", "forward again to KYC");
 
@@ -1880,8 +1904,10 @@ async function testCaptainHub() {
   check(txt(doc).indexOf("Hub details") >= 0, "the onboarding rail is back on screen");
 
   /* finish it and confirm the hub joins My Hubs */
-  api.helpers.R().pd.selected = "560076";
+  check(exists(doc, '[data-testid="pincode-picker"]'),
+        "an added hub starts with its own serviceable-pincode check");
   doHubDetails(doc, { address: "12, 1st Main, Jayanagar, Bengaluru" });
+  eq(api.helpers.R().hub.pincode, "560076", "and records the pincode it picked");
   click(doc, "hub-continue");
   /* background verification was carried over, so the walk skips it entirely
      rather than re-running a check this captain already passed */
@@ -2753,6 +2779,7 @@ async function testCopyConsistency() {
   doPersonalDetails(doc);
   doKyc(doc, "FM");
   /* --- one framing for the vehicle count, picker and summary alike --- */
+  pickPincode(doc, "560076");
   type(doc, "hub-address", "Plot 7, Bommasandra");
   type(doc, "hub-map", "https://maps.google.com/?q=12.9352,77.6245");
   type(doc, "hub-area", "4000");
@@ -2837,6 +2864,90 @@ async function testCopyConsistency() {
   b.win.close();
 }
 
+/* =========================================================================
+   21. Serviceable pincodes live on hub details
+   ====================================================================== */
+
+async function testPincodesOnHub() {
+  section("21. Serviceable pincodes live on hub details");
+  const { win, doc, api } = await boot();
+
+  login(doc);
+  pickRole(doc, "FM");
+
+  /* --- personal details asks only about the person --- */
+  check(!exists(doc, "#hub-pins") && !exists(doc, "#pd-pin"),
+        "personal details has no pincode field");
+  check(txt(doc).indexOf("Serviceable pincodes") === -1, "and no pincode section");
+  check(txt(doc).indexOf("Check availability") === -1, "and no availability check");
+  doPersonalDetails(doc);
+  eq(api.helpers.phaseId(), "kyc", "personal details continues with no pincode at all");
+  eq(api.config.PHASES.FM[0].sub, "Name, email, alternate phone",
+     "the rail no longer lists pincode under personal details");
+  eq(api.config.PHASES.FM[2].sub, "Pincode, address and facility",
+     "it lists it under hub details instead");
+
+  /* --- hub details opens with the check --- */
+  doKyc(doc, "FM");
+  eq(api.helpers.phaseId(), "hub", "KYC → hub details");
+  const order = txt(doc);
+  check(order.indexOf("Serviceable pincodes") >= 0, "hub details carries the pincode check");
+  check(order.indexOf("Serviceable pincodes") < order.indexOf("Hub address"),
+        "and it comes first, before the address");
+  check($(doc, "hub-check").disabled, "Check availability waits for a pincode");
+  type(doc, "hub-pins", "560076, 700001");
+  click(doc, "hub-addpin");
+  check(!$(doc, "hub-check").disabled, "and enables once one is added — no email gate any more");
+  click(doc, "hub-check");
+  check(exists(doc, '[data-selpin="560076"]'), "the serviceable pincode is offered");
+  check(!exists(doc, '[data-selpin="700001"]'), "the unserviceable one is not");
+  api.actions.selectPincode("700001");
+  eq(api.helpers.R().hub.selected, null, "an unserviceable pincode cannot be forced in");
+  clickSel(doc, '[data-selpin="560076"]');
+  eq($(doc, "hub-pin").value, "560076", "the chosen pincode shows in the hub pincode field");
+  eq($(doc, "hub-city").value, "Bengaluru, Karnataka", "and resolves the city");
+
+  /* --- picks survive a submit failure elsewhere on the form --- */
+  api.actions.hubSubmit({ address: "", mapLink: "", areaSqft: "", manpower: "", maxVehicle: "" });
+  eq(api.helpers.R().hub.selected, "560076", "a failed submit keeps the chosen pincode");
+  check(txt(doc).indexOf(api.errors.pincodeSelect) === -1, "and does not complain about it");
+
+  /* --- an older save that kept pincodes on personal details is migrated --- */
+  const old = JSON.parse(win.localStorage.getItem(api.STORE_KEY));
+  old.roles.FM.pd.pincodes = ["560034", "560102"];
+  old.roles.FM.pd.checked = true;
+  old.roles.FM.pd.selected = "560034";
+  delete old.roles.FM.hub.pincodes; delete old.roles.FM.hub.checked; delete old.roles.FM.hub.selected;
+  win.localStorage.setItem(api.STORE_KEY, JSON.stringify(old));
+  check(api.reload(), "the older save loads");
+  const mig = api.state.roles.FM;
+  eq(mig.hub.pincodes, ["560034", "560102"], "its pincodes move onto hub details");
+  eq(mig.hub.selected, "560034", "with the pick intact");
+  check(mig.pd.pincodes === undefined, "and personal details no longer carries them");
+
+  api.stopTimers();
+  win.close();
+
+  /* --- an existing captain adding a hub now chooses its pincode --- */
+  const b = await boot();
+  b.api.state.loginAs = "existing";
+  b.api.helpers.seedExistingCaptain();
+  login(b.doc);
+  b.api.actions.openPanel("hubs", "hubs");
+  b.api.actions.addHubOpen();
+  b.api.actions.addHubRole("LM");
+  b.api.actions.addHubChoice("none");
+  b.api.actions.addHubContinue();
+  eq(b.api.helpers.phaseId(), "hub", "adding a hub starts at hub details");
+  check(exists(b.doc, '[data-testid="pincode-picker"]'),
+        "with the pincode check, which it never had before");
+  eq(b.api.helpers.R().hub.pincode, "", "the new hub has no pincode until one is picked");
+  doHubDetails(b.doc, { pin: "560102", address: "Unit 3, HSR Layout, Bengaluru" });
+  eq(b.api.helpers.R().hub.pincode, "560102", "and records the one it picks");
+  b.api.stopTimers();
+  b.win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -2862,6 +2973,7 @@ async function testCopyConsistency() {
     await testFMCaptainCopy();
     await testFMNoSplit();
     await testCopyConsistency();
+    await testPincodesOnHub();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }
