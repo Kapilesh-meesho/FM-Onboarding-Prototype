@@ -3680,10 +3680,15 @@ async function testHubEdits() {
   login(doc);
   clickSel(doc, '[data-aprole="am"]');
   const editsTab = sel(doc, '[data-aptab="edits"]');
-  eq(editsTab && editsTab.textContent, "Hub edits (1)", "the Area Manager has a Hub edits tab with one pending");
+  const pendingAll = api.state.hubEdits.filter(e => e.status === "pending").length;
+  eq(pendingAll, 5, "the captain\u2019s request joins the four the portfolio already has waiting");
+  eq(editsTab && editsTab.textContent, "Hub edits (" + pendingAll + ")",
+     "the Area Manager\u2019s Hub edits tab counts every pending one");
   clickSel(doc, '[data-aptab="edits"]');
-  eq(doc.querySelectorAll('[data-testid="ap-edit-row"]').length, 1, "listing the captain’s request");
-  check(txt(doc).indexOf("Hub AQT") >= 0 && txt(doc).indexOf("Karan Verma") >= 0, "with the hub and the captain");
+  const aqtRow = sel(doc, '[data-testid="ap-hub-row"][data-hubrow="hub-aqt"]');
+  eq(aqtRow && aqtRow.getAttribute("data-status"), "pending", "the captain\u2019s hub is listed with its edit to review");
+  check(aqtRow.textContent.indexOf("Hub AQT") >= 0 && aqtRow.textContent.indexOf("Karan Verma") >= 0,
+        "with the hub and the captain");
   clickSel(doc, '[data-apedit="' + e1.id + '"]');
   check(exists(doc, '[data-testid="ap-edit-detail"]'), "Review opens the request");
   eq(doc.querySelectorAll('[data-testid="ap-edit-changed"]').length, 4, "showing all four changes, now against requested");
@@ -3791,9 +3796,10 @@ async function testRateUpdates() {
   clickSel(doc, '[data-aprole="am"]');
   clickSel(doc, '[data-aptab="rates"]');
   const rows = [...doc.querySelectorAll('[data-testid="ap-rate-row"]')];
-  eq(rows.length, 1, "the Area Manager sees the live FM hub with an agreed card");
-  check(rows[0].textContent.indexOf("Hub KDG") >= 0 && rows[0].textContent.indexOf("Agreed 14 Feb 2026") >= 0,
-        "with its code and agreement date");
+  eq(rows.length, 12, "the Area Manager sees every live FM hub under them \u2014 the captain\u2019s and eleven others");
+  const kdgRow = () => sel(doc, '[data-testid="ap-rate-row"][data-ratehub="hub-kdg"]');
+  check(kdgRow().textContent.indexOf("Hub KDG") >= 0 && kdgRow().textContent.indexOf("Agreed 14 Feb 2026") >= 0,
+        "the captain\u2019s KDG among them, with its agreement date");
   clickSel(doc, '[data-aprate="hub-kdg"]');
   check(exists(doc, '[data-testid="ap-rate-editor"]'), "Update rate card opens the editor");
   eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value), ["4.50", "4.00"],
@@ -3826,15 +3832,15 @@ async function testRateUpdates() {
   eff.value = H.cycleStart(2); eff.dispatchEvent(new win.Event("change", { bubbles: true }));
   click(doc, "ap-rate-send");
 
-  eq(api.state.rateUpdates.length, 1, "a valid update is sent");
-  const u = api.state.rateUpdates[0];
+  const u = H.rateUpdateFor("hub-kdg");
+  check(!!u, "a valid update is sent");
   eq(u.status, "pending", "and waits for the captain");
   eq(u.to, { slabs:[{ from:"0", to:"500", rate:"4.80" }, { from:"501", to:"", rate:"4.30" }], touchpoint:"5.20" },
      "carrying the new card");
   eq(u.effective, H.cycleStart(2), "from the cycle the AM chose");
   eq(kdg().rateCard.slabs[0].rate, "4.50", "the agreed card stays in force until the captain agrees");
   check(api.state.admin.toast.indexOf("sent to Karan Verma to agree") >= 0, "the AM is told it went to the captain");
-  check(sel(doc, '[data-testid="ap-rate-row"]').textContent.indexOf("Waiting for the captain") >= 0,
+  check(kdgRow().textContent.indexOf("Waiting for the captain") >= 0,
         "and the list says it is waiting on them");
   clickSel(doc, '[data-aprate="hub-kdg"]');
   check(!exists(doc, '[data-testid="ap-rate-editor"]'), "one update at a time — no second one while it waits");
@@ -4009,6 +4015,176 @@ async function testTypedHubPincode() {
   win.close();
 }
 
+/* =========================================================================
+   29. The Area Manager's portfolio — every hub under them, in both tabs
+   ====================================================================== */
+
+async function testAmPortfolio() {
+  section("29. AM portfolio — Hub edits and Rate card updates over every hub");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions, C = api.config;
+  const rowsOf = (id) => [...doc.querySelectorAll('[data-testid="' + id + '"]')];
+  const tiles = (id) => [...doc.querySelectorAll('[data-testid="' + id + '"] b')].map(b => b.textContent);
+  const setSelect = (id, v) => { const el = $(doc, id); el.value = v; el.dispatchEvent(new win.Event("change", { bubbles: true })); };
+
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  check(txt(doc).indexOf("Area: Bengaluru South & East") >= 0, "the Area Manager’s patch matches the hubs they hold");
+
+  /* --- the sample hubs are sound --- */
+  const net = api.state.networkHubs;
+  eq(net.length, 11, "eleven other captains’ hubs are seeded under the Area Manager");
+  eq(new Set(net.map(h => h.captain)).size, 11, "each run by its own captain");
+  check(net.every(h => H.checkMapPin(h.mapLink, h.pincode).code === "ok"), "every hub’s pin sits inside its pincode");
+  check(net.every(h => {
+    const c = C.HUB_CATEGORIES[h.category];
+    return H.slabsValid(h.rateCard.slabs) && h.rateCard.slabs.every(sl => +sl.rate <= c.ceiling) &&
+           +h.rateCard.touchpoint <= c.tpCeiling;
+  }), "and every agreed rate card is complete and within its hub type’s ceilings");
+  check(api.state.hubEdits.filter(e => e.status === "pending")
+          .every(e => H.checkMapPin(e.after.mapLink, e.after.pincode).ok),
+        "every requested pin sits inside the pincode it asks for");
+
+  /* --- Hub edits: every hub, the ones to review first --- */
+  clickSel(doc, '[data-aptab="edits"]');
+  eq(sel(doc, '[data-aptab="edits"]').textContent, "Hub edits (4)", "four edits are waiting for review");
+  let rows = rowsOf("ap-hub-row");
+  eq(rows.length, 11, "the tab lists every hub under the Area Manager");
+  const states = rows.map(r => r.getAttribute("data-status"));
+  eq(states.slice(0, 4), ["pending", "pending", "pending", "pending"], "with the ones to review first");
+  eq([states.filter(s => s === "approved").length, states.filter(s => s === "rejected").length,
+      states.filter(s => s === "none").length], [1, 1, 5], "then one approved, one rejected and five with no request");
+  eq(tiles("ap-hub-stats"), ["11", "4", "1", "1"], "the tiles count hubs, edits to review, approved and rejected");
+
+  $(doc, "ap-hub-search").focus();
+  type(doc, "ap-hub-search", "whitefield");
+  eq(rowsOf("ap-hub-row").map(r => r.getAttribute("data-hubrow")), ["nh-whf"], "search finds a hub by its area");
+  eq(doc.activeElement && doc.activeElement.id, "ap-hub-search", "and keeps the caret in the search box");
+  type(doc, "ap-hub-search", "98451 77230");
+  eq(rowsOf("ap-hub-row").map(r => r.getAttribute("data-hubrow")), ["nh-ind"], "or by the captain’s phone");
+  type(doc, "ap-hub-search", "");
+  setSelect("ap-hub-filter", "pending");
+  eq(rowsOf("ap-hub-row").length, 4, "the filter narrows to edits to review");
+  setSelect("ap-hub-filter", "none");
+  eq(rowsOf("ap-hub-row").length, 5, "or to hubs with no request");
+  setSelect("ap-hub-filter", "all");
+
+  /* --- reviewing a relocation, approving it --- */
+  clickSel(doc, '[data-apedit="HE-40241"]');
+  check(exists(doc, '[data-testid="ap-edit-detail"]'), "Review opens the request");
+  eq(doc.querySelectorAll('[data-testid="ap-edit-changed"]').length, 4, "a move to BTM Layout changes all four details");
+  check(exists(doc, '[data-testid="ap-edit-detail"] [data-testid="map-pin-ok"]'), "its new pin sits in 560076");
+  click(doc, "ap-edit-approve");
+  const hsr = H.networkHubById("nh-hsr");
+  eq([hsr.pincode, hsr.city, hsr.areaSqft], ["560076", "Bengaluru, Karnataka", "3000"],
+     "approving it moves that captain’s hub");
+  check(hsr.address.indexOf("BTM Layout 1st Stage") >= 0, "address included");
+  check(api.state.admin.toast.indexOf("HE-40241 approved") >= 0, "with a confirmation");
+  eq(sel(doc, '[data-hubrow="nh-hsr"]').getAttribute("data-status"), "approved", "and the list shows it approved");
+  eq(sel(doc, '[data-aptab="edits"]').textContent, "Hub edits (3)", "three left to review");
+
+  /* --- rejecting one needs a reason, and changes nothing --- */
+  clickSel(doc, '[data-apedit="HE-40235"]');
+  click(doc, "ap-edit-reject");
+  check(txt(doc).indexOf("Say why you’re rejecting it") >= 0, "rejecting needs a reason");
+  type(doc, "ap-edit-reason", "The adjoining shed isn’t on the lease.");
+  click(doc, "ap-edit-reject");
+  eq(H.hubEditById("HE-40235").status, "rejected", "with one it is rejected");
+  eq(H.networkHubById("nh-elc").areaSqft, "1800", "and the hub keeps its area");
+
+  /* --- a hub with no request, and one with history --- */
+  clickSel(doc, '[data-aphub="nh-dml"]');
+  check(exists(doc, '[data-testid="ap-hub-view"]'), "View hub opens the hub");
+  check(sel(doc, '[data-testid="ap-hub-details"]').textContent.indexOf("No. 14, Old Airport Road, Domlur") >= 0,
+        "with its current details");
+  check(exists(doc, '[data-testid="ap-hub-view"] [data-testid="map-pin-ok"]'), "its pin on a map");
+  check(exists(doc, '[data-testid="ap-hub-history-empty"]'), "and no edit requests yet");
+  click(doc, "ap-hub-back");
+  clickSel(doc, '[data-aphub="nh-bom"]');
+  check(sel(doc, '[data-testid="ap-hub-details"]').textContent.indexOf("9,500 sq ft") >= 0,
+        "an approved edit is already live on its hub");
+  check(sel(doc, '[data-testid="ap-hub-history"]').textContent.indexOf("HE-40188") >= 0, "and listed in its history");
+  clickSel(doc, '[data-apedit="HE-40188"]');
+  check(txt(doc).indexOf("Approved on 18 Sept 2026") >= 0, "a decided request opens read-only");
+  eq($(doc, "ap-edit-back").textContent, "‹ Back to Hub BOM", "and Back returns to the hub");
+  click(doc, "ap-edit-back");
+  check(exists(doc, '[data-testid="ap-hub-view"]'), "which it does");
+  clickSel(doc, '[data-aprate="nh-bom"]');
+  check(exists(doc, '[data-testid="ap-rate-editor"]'), "the hub links straight to updating its rate card");
+  click(doc, "ap-rate-back");
+  click(doc, "ap-hub-back");
+
+  /* --- Rate card updates: every FM hub, waiting ones first --- */
+  clickSel(doc, '[data-aptab="rates"]');
+  rows = rowsOf("ap-rate-row");
+  eq(rows.length, 11, "the tab lists every live FM hub under the Area Manager");
+  eq(rows.slice(0, 2).map(r => r.getAttribute("data-ratehub")), ["nh-mrt", "nh-whf"],
+     "the two waiting for their captain first");
+  eq(tiles("ap-rate-stats"), ["11", "2", "1"], "the tiles count hubs, waiting updates and agreed ones");
+  check(sel(doc, '[data-ratehub="nh-jpn"]').textContent.indexOf("v2 · agreed 22 Sept 2026") >= 0,
+        "a hub whose update was agreed shows its second version");
+  check(sel(doc, '[data-ratehub="nh-ind"]').textContent.indexOf("Mall hub") >= 0, "each with its hub type");
+  setSelect("ap-rate-filter", "waiting");
+  eq(rowsOf("ap-rate-row").length, 2, "the filter narrows to updates waiting");
+  setSelect("ap-rate-filter", "agreed");
+  eq(rowsOf("ap-rate-row").length, 9, "or to agreed cards");
+  setSelect("ap-rate-filter", "all");
+  type(doc, "ap-rate-search", "mall hub");
+  eq(rowsOf("ap-rate-row").map(r => r.getAttribute("data-ratehub")), ["nh-mrt", "nh-ind"],
+     "search reads hub type too, the waiting one still first");
+  type(doc, "ap-rate-search", "");
+
+  /* --- updating another captain's card, through to their agreement --- */
+  clickSel(doc, '[data-aprate="nh-krm"]');
+  check(txt(doc).indexOf("Sunil Rao") >= 0, "the update names that hub’s own captain");
+  eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value), ["4.20", "3.80"], "starting from their card");
+  const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
+  r0.value = "4.40"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  type(doc, "ap-rate-reason", "Koramangala volumes are up after the new seller cluster.");
+  click(doc, "ap-rate-send");
+  check(api.state.admin.toast.indexOf("sent to Sunil Rao to agree") >= 0, "it is sent to that captain");
+  const krmUp = H.rateUpdateFor("nh-krm");
+  eq(krmUp && krmUp.captain, "Sunil Rao", "recorded against them");
+  clickSel(doc, '[data-aprate="nh-krm"]');
+  check(devText(doc).indexOf("Sunil Rao agrees to the update") >= 0, "the dev panel can stand in for their agreement");
+  devClick(doc, "rateagree:" + krmUp.id);
+  const krm = H.networkHubById("nh-krm");
+  eq([krm.rateCard.slabs[0].rate, krm.rateCard.version], ["4.40", 2], "agreeing replaces their card as version 2");
+  check(api.state.admin.toast.indexOf("Sunil Rao agreed") >= 0, "and the AM is told");
+  A.adminRateBack();
+  check(sel(doc, '[data-ratehub="nh-krm"]').textContent.indexOf("Agreed") >= 0, "the list shows it agreed");
+  clickSel(doc, '[data-aprate="nh-jpn"]');
+  check(sel(doc, '[data-testid="ap-rate-history"]').textContent.indexOf("RCU-50988") >= 0,
+        "a hub’s earlier agreed updates show as its rate card history");
+  A.adminRateBack();
+
+  /* --- the signed-in captain's bell carries only their own hubs --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
+  check(api.state.rateUpdates.some(u => u.status === "pending" && u.hubId.indexOf("nh-") === 0),
+        "other captains still have updates waiting");
+  check(!exists(doc, '[data-testid="bell-count"]'), "but none of them reach this captain’s bell");
+  eq(H.captainNotes().length, 0, "nor their notifications");
+  check(devText(doc).indexOf("Area Manager · hub edit") === -1, "nor the dev panel’s hub edit actions");
+
+  /* --- once the captain is loaded, their hubs join the Area Manager's lists --- */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-aptab="edits"]');
+  eq(rowsOf("ap-hub-row").length, 15, "fifteen hubs: the eleven, plus the captain’s four");
+  check(sel(doc, '[data-hubrow="hub-jyp"]').getAttribute("data-status") === "inactive",
+        "the captain’s inactive hub is listed as inactive");
+  clickSel(doc, '[data-aptab="rates"]');
+  eq(rowsOf("ap-rate-row").length, 12, "and twelve FM hubs on the rate card list");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -4042,6 +4218,7 @@ async function testTypedHubPincode() {
     await testHubEdits();
     await testRateUpdates();
     await testTypedHubPincode();
+    await testAmPortfolio();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

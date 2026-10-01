@@ -1472,6 +1472,11 @@ var PIN_AREAS = {
   "560099": { name:"Bommasandra",         lat:12.8156, lng:77.6982 },
   "560102": { name:"HSR Layout",          lat:12.9116, lng:77.6474 },
   "560068": { name:"Kudlu Gate",          lat:12.8890, lng:77.6380 },
+  "560066": { name:"Whitefield",          lat:12.9698, lng:77.7500 },
+  "560100": { name:"Electronic City",     lat:12.8452, lng:77.6602 },
+  "560078": { name:"JP Nagar",            lat:12.9063, lng:77.5857 },
+  "560037": { name:"Marathahalli",        lat:12.9569, lng:77.7011 },
+  "560103": { name:"Bellandur",           lat:12.9304, lng:77.6784 },
   "110017": { name:"Malviya Nagar",       lat:28.5355, lng:77.2167 },
   "400059": { name:"Marol, Andheri East", lat:19.1176, lng:72.8790 }
 };
@@ -1747,6 +1752,7 @@ function blankState() {
     failNext: {},              // dev panel: API → failure kind armed for its next call
     hubEdits: [],              // captains' requested hub changes, decided by the Area Manager
     rateUpdates: [],           // Area Manager rate card changes, waiting for the captain to agree
+    networkHubs: [],           // other captains' hubs under the Area Manager (sample portfolio)
     seededExisting: false      // the dev panel's existing captain is loaded — don't re-seed over it
   };
 }
@@ -1803,8 +1809,8 @@ function seedExistingCaptain() {
               activatedOn:"14 Feb 2026" })
   ];
   S.activeHubId = "hub-aqt";
-  S.hubEdits = [];
-  S.rateUpdates = [];
+  S.hubEdits = S.hubEdits.filter(function (e) { return isNetworkHubId(e.hubId); });
+  S.rateUpdates = S.rateUpdates.filter(function (u) { return isNetworkHubId(u.hubId); });
   S.seededExisting = true;
 }
 
@@ -1848,6 +1854,177 @@ function fmtPhone(p) {
   return p.length === 10 ? "+91 " + p.slice(0, 5) + " " + p.slice(5) : p;
 }
 
+/* The Area Manager's portfolio ------------------------------------------------
+   Every hub under Priya Sharma (FM Area Manager, Bengaluru South & East). The
+   signed-in captain's own hubs are part of it; these are the other captains'
+   — sample data, seeded with the admin panel, so the Hub edits and Rate card
+   updates tabs have a real list to work through. Each pin sits inside its
+   hub's pincode. */
+var PORTFOLIO_HUBS = [
+  { id:"nh-krm", code:"KRM", name:"Koramangala FM Hub", captain:"Sunil Rao", phone:"+91 98860 21345",
+    address:"No. 18, 80 Feet Road, 4th Block, Koramangala, Bengaluru", pincode:"560034",
+    mapLink:"https://maps.google.com/?q=12.9346,77.6262", areaSqft:"5200", manpower:"16",
+    maxVehicle:"7MT_20FT", category:"standalone", activatedOn:"18 Mar 2026",
+    rateCard:{ slabs:[{ from:"0", to:"500", rate:"4.20" }, { from:"501", to:"", rate:"3.80" }],
+               touchpoint:"4.50", agreedOn:"18 Mar 2026", version:1 } },
+  { id:"nh-hsr", code:"HSR", name:"HSR Layout FM Hub", captain:"Ayesha Khan", phone:"+91 99000 45812",
+    address:"Plot 22, Sector 6, HSR Layout, Bengaluru", pincode:"560102",
+    mapLink:"https://maps.google.com/?q=12.9123,77.6481", areaSqft:"2800", manpower:"9",
+    maxVehicle:"2.2MT_4W_Bolero", category:"standalone_mini", activatedOn:"02 Apr 2026",
+    rateCard:{ slabs:[{ from:"0", to:"300", rate:"3.00" }, { from:"301", to:"", rate:"2.80" }],
+               touchpoint:"5.50", agreedOn:"02 Apr 2026", version:1 } },
+  { id:"nh-ind", code:"IND", name:"Indiranagar FM Hub", captain:"Vikram Shetty", phone:"+91 98451 77230",
+    address:"No. 7, 12th Main, HAL 2nd Stage, Indiranagar, Bengaluru", pincode:"560038",
+    mapLink:"https://maps.google.com/?q=12.9773,77.6421", areaSqft:"3400", manpower:"11",
+    maxVehicle:"2.2MT_4W_Bolero", category:"mall", activatedOn:"21 Jan 2026",
+    rateCard:{ slabs:[{ from:"0", to:"500", rate:"1.90" }, { from:"501", to:"", rate:"1.80" }],
+               touchpoint:"1.80", agreedOn:"21 Jan 2026", version:1 } },
+  { id:"nh-whf", code:"WHF", name:"Whitefield FM Hub", captain:"Deepa Nair", phone:"+91 97400 31876",
+    address:"Unit 4, ITPL Main Road, Whitefield, Bengaluru", pincode:"560066",
+    mapLink:"https://maps.google.com/?q=12.9705,77.7491", areaSqft:"7000", manpower:"22",
+    maxVehicle:"10MT_22FT", category:"lm_as_fm", activatedOn:"09 Feb 2026",
+    rateCard:{ slabs:[{ from:"0", to:"800", rate:"5.50" }, { from:"801", to:"", rate:"5.00" }],
+               touchpoint:"5.80", agreedOn:"09 Feb 2026", version:1 } },
+  { id:"nh-elc", code:"ELC", name:"Electronic City FM Hub", captain:"Manjunath Gowda", phone:"+91 99456 12093",
+    address:"Plot 41, Phase 2, Electronic City, Bengaluru", pincode:"560100",
+    mapLink:"https://maps.google.com/?q=12.8459,77.6611", areaSqft:"1800", manpower:"6",
+    maxVehicle:"1.5MT_4W_Dost", category:"sah", activatedOn:"15 Dec 2025",
+    rateCard:{ slabs:[{ from:"0", to:"400", rate:"1.40" }, { from:"401", to:"", rate:"1.30" }],
+               touchpoint:"1.40", agreedOn:"15 Dec 2025", version:1 } },
+  { id:"nh-bom", code:"BOM", name:"Bommasandra FM Hub", captain:"Ritu Agarwal", phone:"+91 98804 66721",
+    address:"Shed 9, KIADB Industrial Area, Bommasandra, Bengaluru", pincode:"560099",
+    mapLink:"https://maps.google.com/?q=12.8149,77.6991", areaSqft:"9000", manpower:"28",
+    maxVehicle:"10MT_32FT", category:"standalone", activatedOn:"27 Feb 2026",
+    rateCard:{ slabs:[{ from:"0", to:"1000", rate:"4.60" }, { from:"1001", to:"", rate:"4.10" }],
+               touchpoint:"4.80", agreedOn:"27 Feb 2026", version:1 } },
+  { id:"nh-bld", code:"BLD", name:"Bellandur FM Hub", captain:"Harish Kumar", phone:"+91 99860 54012",
+    address:"No. 112, Sarjapur Outer Ring Road, Bellandur, Bengaluru", pincode:"560103",
+    mapLink:"https://maps.google.com/?q=12.9311,77.6775", areaSqft:"8200", manpower:"24",
+    maxVehicle:"9MT_6W", category:"standalone", activatedOn:"11 May 2026",
+    rateCard:{ slabs:[{ from:"0", to:"700", rate:"4.40" }, { from:"701", to:"", rate:"3.90" }],
+               touchpoint:"4.60", agreedOn:"11 May 2026", version:1 } },
+  { id:"nh-jpn", code:"JPN", name:"JP Nagar FM Hub", captain:"Lakshmi Iyer", phone:"+91 98455 09871",
+    address:"No. 33, 15th Cross, JP Nagar 6th Phase, Bengaluru", pincode:"560078",
+    mapLink:"https://maps.google.com/?q=12.9070,77.5866", areaSqft:"2600", manpower:"8",
+    maxVehicle:"2.2MT_4W_Bolero", category:"standalone_mini", activatedOn:"30 Jun 2026",
+    rateCard:{ slabs:[{ from:"0", to:"300", rate:"3.10" }, { from:"301", to:"", rate:"2.90" }],
+               touchpoint:"5.00", agreedOn:"22 Sept 2026", version:2, effective:"01 Oct 2026" } },
+  { id:"nh-mrt", code:"MRT", name:"Marathahalli FM Hub", captain:"Arjun Menon", phone:"+91 97411 28456",
+    address:"No. 5, Outer Ring Road, Marathahalli, Bengaluru", pincode:"560037",
+    mapLink:"https://maps.google.com/?q=12.9575,77.7002", areaSqft:"3100", manpower:"10",
+    maxVehicle:"3.5MT_14FT", category:"mall", activatedOn:"06 Aug 2026",
+    rateCard:{ slabs:[{ from:"0", to:"500", rate:"1.95" }, { from:"501", to:"", rate:"1.85" }],
+               touchpoint:"1.90", agreedOn:"06 Aug 2026", version:1 } },
+  { id:"nh-dml", code:"DML", name:"Domlur FM Hub", captain:"Kavya Joshi", phone:"+91 98862 40917",
+    address:"No. 14, Old Airport Road, Domlur, Bengaluru", pincode:"560071",
+    mapLink:"https://maps.google.com/?q=12.9617,77.6379", areaSqft:"4800", manpower:"14",
+    maxVehicle:"5MT_17FT", category:"standalone", activatedOn:"03 Jul 2026",
+    rateCard:{ slabs:[{ from:"0", to:"600", rate:"4.30" }, { from:"601", to:"", rate:"3.90" }],
+               touchpoint:"4.70", agreedOn:"03 Jul 2026", version:1 } },
+  { id:"nh-btm", code:"BTM", name:"BTM Layout FM Hub", captain:"Naveen Reddy", phone:"+91 99001 67345",
+    address:"No. 21, 29th Main, BTM Layout 2nd Stage, Bengaluru", pincode:"560076",
+    mapLink:"https://maps.google.com/?q=12.9074,77.6032", areaSqft:"6500", manpower:"19",
+    maxVehicle:"7MT_20FT", category:"lm_as_fm", activatedOn:"19 Apr 2026",
+    rateCard:{ slabs:[{ from:"0", to:"500", rate:"5.20" }, { from:"501", to:"", rate:"4.80" }],
+               touchpoint:"5.60", agreedOn:"19 Apr 2026", version:1 } }
+];
+
+/* Requests already in flight on those hubs — four waiting for review, one
+   approved (already applied to the hub), one rejected (the hub kept its details). */
+function portfolioEdit(id, hubId, o) {
+  var h = PORTFOLIO_HUBS.filter(function (x) { return x.id === hubId; })[0];
+  var before = { address:h.address, pincode:h.pincode, mapLink:h.mapLink, areaSqft:h.areaSqft };
+  return Object.assign({ id:id, hubId:hubId, hubCode:h.code, hubName:h.name, role:"FM",
+    captain:h.captain, phone:h.phone, before:before, after:Object.assign({}, before, o.after),
+    note:"", status:"pending", submittedOn:"", decidedOn:"", reason:"", seen:true }, o, {
+    after:Object.assign({}, before, o.after) });
+}
+function portfolioEdits() {
+  return [
+    portfolioEdit("HE-40174", "nh-bld", { submittedOn:"10 Sept 2026", status:"rejected", decidedOn:"12 Sept 2026",
+      after:{ address:"No. 4, Kariyammana Agrahara Road, Bellandur, Bengaluru",
+              mapLink:"https://maps.google.com/?q=12.9338,77.6862", areaSqft:"8800" },
+      note:"Shifting to a bigger unit off the main road.",
+      reason:"The new unit is outside the approved industrial plot." }),
+    portfolioEdit("HE-40188", "nh-bom", { submittedOn:"15 Sept 2026", status:"approved", decidedOn:"18 Sept 2026",
+      after:{ areaSqft:"9500" }, note:"Added the mezzanine floor." }),
+    portfolioEdit("HE-40213", "nh-krm", { submittedOn:"29 Sept 2026",
+      after:{ address:"No. 26, 80 Feet Road, 4th Block, Koramangala, Bengaluru",
+              mapLink:"https://maps.google.com/?q=12.9341,77.6270", areaSqft:"5600" },
+      note:"Moved two buildings down the same road — a bigger floor." }),
+    portfolioEdit("HE-40227", "nh-ind", { submittedOn:"30 Sept 2026",
+      after:{ mapLink:"https://maps.google.com/?q=12.9787,77.6404" },
+      note:"The old pin was on the main road, not at the gate." }),
+    portfolioEdit("HE-40235", "nh-elc", { submittedOn:"30 Sept 2026", after:{ areaSqft:"2400" },
+      note:"We took the adjoining shed." }),
+    portfolioEdit("HE-40241", "nh-hsr", { submittedOn:"01 Oct 2026",
+      after:{ address:"No. 9, 7th Cross, BTM Layout 1st Stage, Bengaluru", pincode:"560076",
+              mapLink:"https://maps.google.com/?q=12.9089,77.6052", areaSqft:"3000" },
+      note:"The lease in HSR ended — moving to BTM Layout." })
+  ];
+}
+/* Rate card updates on those hubs — two waiting for their captain, one agreed. */
+function portfolioRates() {
+  var m = { by:"Priya Sharma", byPhone:"+91 98450 11223" };
+  var hub = function (id) { return PORTFOLIO_HUBS.filter(function (x) { return x.id === id; })[0]; };
+  var up = function (id, hubId, o) {
+    var h = hub(hubId);
+    return Object.assign({ id:id, hubId:hubId, hubCode:h.code, hubName:h.name, captain:h.captain, phone:h.phone,
+      from:{ slabs:JSON.parse(JSON.stringify(h.rateCard.slabs)), touchpoint:h.rateCard.touchpoint },
+      fromAgreedOn:h.rateCard.agreedOn, status:"pending", agreedOn:"" }, m, o);
+  };
+  return [
+    up("RCU-50988", "nh-jpn", { status:"agreed", sentOn:"15 Sept 2026", agreedOn:"22 Sept 2026",
+      effective:"01 Oct 2026", fromAgreedOn:"30 Jun 2026",
+      from:{ slabs:[{ from:"0", to:"300", rate:"3.20" }, { from:"301", to:"", rate:"3.00" }], touchpoint:"5.20" },
+      to:{ slabs:[{ from:"0", to:"300", rate:"3.10" }, { from:"301", to:"", rate:"2.90" }], touchpoint:"5.00" },
+      reason:"Volumes doubled after the second seller cluster went live." }),
+    up("RCU-51102", "nh-whf", { sentOn:"27 Sept 2026", effective:"01 Nov 2026",
+      to:{ slabs:[{ from:"0", to:"800", rate:"5.30" }, { from:"801", to:"", rate:"4.80" }], touchpoint:"5.60" },
+      reason:"Volumes on the ITPL lane are well past the forecast." }),
+    up("RCU-51117", "nh-mrt", { sentOn:"30 Sept 2026", effective:"01 Nov 2026",
+      to:{ slabs:[{ from:"0", to:"500", rate:"1.90" }, { from:"501", to:"", rate:"1.80" }], touchpoint:"1.85" },
+      reason:"Bringing it in line with the other mall hubs on the Outer Ring Road." })
+  ];
+}
+
+function seedAmPortfolio() {
+  if (S.networkHubs && S.networkHubs.length) return;
+  S.networkHubs = PORTFOLIO_HUBS.map(function (o) {
+    return makeHub(Object.assign(JSON.parse(JSON.stringify(o)),
+      { role:"FM", status:"active", city:knownCity(o.pincode) || "Bengaluru, Karnataka" }));
+  });
+  var edits = portfolioEdits();
+  edits.forEach(function (e) {             // an approved edit is already live on its hub
+    var h = e.status === "approved" && networkHubById(e.hubId);
+    if (!h) return;
+    h.address = e.after.address; h.pincode = e.after.pincode; h.mapLink = e.after.mapLink;
+    h.areaSqft = e.after.areaSqft; h.city = knownCity(e.after.pincode) || h.city;
+  });
+  S.hubEdits = S.hubEdits.concat(edits);
+  S.rateUpdates = S.rateUpdates.concat(portfolioRates());
+}
+/* Admin sign-in seeds both the onboarding requests and the AM's portfolio. */
+function seedAdmin() {
+  if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+  seedAmPortfolio();
+}
+
+function isNetworkHubId(id) { return /^nh-/.test(String(id || "")); }
+function networkHubById(id) {
+  for (var i = 0; i < (S.networkHubs || []).length; i++) if (S.networkHubs[i].id === id) return S.networkHubs[i];
+  return null;
+}
+/* Any hub the Area Manager can see — the signed-in captain's own, or another captain's. */
+function allHubById(id) { return hubById(id) || networkHubById(id); }
+function hubOwner(h) {
+  return isNetworkHubId(h.id) ? { name:h.captain, phone:h.phone }
+                              : { name:S.profile.name || "Captain", phone:fmtPhone(S.phone) };
+}
+function amHubs() {
+  return S.hubs.filter(function (h) { return h.status !== "in_progress"; }).concat(S.networkHubs || []);
+}
+
 /* Rate card updates -----------------------------------------------------------
    The Area Manager changes an agreed rate card on a live FM hub; the captain
    agrees to it from the bell. There is deliberately no decline — a captain with
@@ -1864,7 +2041,7 @@ function rateUpdateFor(hubId) {          // the update still waiting on a hub, i
   return null;
 }
 function rateHubs() {                    // live FM hubs with a rate card the AM can change
-  return S.hubs.filter(function (h) { return h.status === "active" && h.role === "FM" && h.rateCard; });
+  return amHubs().filter(function (h) { return h.status === "active" && h.role === "FM" && h.rateCard; });
 }
 function rateSummary(rc) {
   if (!rc) return "—";
@@ -1894,19 +2071,27 @@ function cycleStart(monthsAhead) {
   return fmtDay(new Date(d.getFullYear(), d.getMonth() + monthsAhead, 1));
 }
 
+/* Agreeing makes the update the hub's rate card, as its next version. */
+function applyRateAgreement(u, h) {
+  h.rateCard = { slabs:JSON.parse(JSON.stringify(u.to.slabs)), touchpoint:u.to.touchpoint,
+                 agreedOn:fmtDay(new Date()), version:((h.rateCard && h.rateCard.version) || 1) + 1,
+                 effective:u.effective };
+  u.status = "agreed"; u.agreedOn = fmtDay(new Date());
+}
+
 /* What the bell lists: rate card updates to agree to, then hub edit outcomes
    the captain hasn't dismissed yet. */
 function captainNotes() {
   var out = [];
   S.rateUpdates.forEach(function (u) {
-    if (u.status !== "pending") return;
+    if (u.status !== "pending" || !hubById(u.hubId)) return;
     out.push({ kind:"rate", id:u.id, act:true,
       title:"Rate card update · " + u.hubName + " (" + u.hubCode + ")",
       sub:"Your Area Manager changed this hub’s rates from " + u.effective + ".",
       cta:"Review and agree →" });
   });
   S.hubEdits.forEach(function (e) {
-    if (e.status === "pending" || e.seen) return;
+    if (e.status === "pending" || e.seen || !hubById(e.hubId)) return;
     out.push({ kind:"edit", id:e.id, act:false,
       title:(e.status === "approved" ? "Hub edit approved · " : "Hub edit not approved · ") + e.hubName,
       sub:e.status === "approved" ? "The new details are live." : e.reason,
@@ -2409,9 +2594,9 @@ var ADMIN_ROLES = {
     id:"am", label:"Area Manager", short:"AM", icon:"📍",
     desc:"Run the infra hard-gate checklist, then set the hub type and the slab-wise rate card.",
     cta:"Continue as AM →",
-    person:{ name:"Priya Sharma", email:"priya.sharma@meesho.com", scope:"Area: Indiranagar, Bengaluru" },
+    person:{ name:"Priya Sharma", email:"priya.sharma@meesho.com", scope:"Area: Bengaluru South & East" },
     title:"FM Onboarding",
-    lede:"Your infra verification requests for Indiranagar, Bengaluru."
+    lede:"Your infra verification requests, hub edits and rate cards for Bengaluru South & East."
   },
   ch: {
     id:"ch", label:"Cluster Head", short:"CH", icon:"👥",
@@ -2570,7 +2755,7 @@ function seedAdminRequests() {
 }
 
 var AP_USERS = [
-  { name:"Priya Sharma",  email:"priya.sharma@meesho.com",  role:"Area Manager",  scope:"Indiranagar, Bengaluru", status:"Active" },
+  { name:"Priya Sharma",  email:"priya.sharma@meesho.com",  role:"Area Manager",  scope:"Bengaluru South & East", status:"Active" },
   { name:"Rakesh Sharma", email:"rakesh.sharma@meesho.com", role:"Cluster Head",  scope:"Bengaluru Urban East",   status:"Active" },
   { name:"Priya Nair",    email:"priya.nair@meesho.com",    role:"Zonal Head",    scope:"South",                  status:"Active" },
   { name:"Arun Kumar",    email:"arun.kumar@meesho.com",    role:"Area Manager",  scope:"Whitefield, Bengaluru",  status:"Pending" }
@@ -2704,7 +2889,9 @@ function blankAdmin() {
   return { role:null, tab:"mine", selected:null, search:"", status:"all", toast:"",
            amStep:"infra",     // infra check, then carting design, then rate card
            edit:null, editReason:"", editError:"",      // an open hub-edit request
-           rate:null, rateDraft:null, rateError:"" };    // a hub whose rate card the AM is updating
+           rate:null, rateDraft:null, rateError:"",      // a hub whose rate card the AM is updating
+           hubView:null,                                 // a hub opened from the Hub edits list
+           hubSearch:"", hubFilter:"all", rateSearch:"", rateFilter:"all" };
 }
 
 function apRole()  { return ADMIN_ROLES[S.admin.role] || ADMIN_ROLES.am; }
@@ -4112,7 +4299,8 @@ function apCentralDetail(r) {
 function viewAdmin() {
   var a = S.admin, m = apRole();
   if (a.edit && hubEditById(a.edit)) return apShell(apEditDetail(hubEditById(a.edit)));
-  if (a.rate && hubById(a.rate)) return apShell(apRateDetail(hubById(a.rate)));
+  if (a.rate && allHubById(a.rate)) return apShell(apRateDetail(allHubById(a.rate)));
+  if (a.hubView && allHubById(a.hubView)) return apShell(apHubView(allHubById(a.hubView)));
   if (a.selected) {
     var r = apById(a.selected);
     if (r) {
@@ -4135,29 +4323,60 @@ function viewAdmin() {
 }
 
 /* Live FM hubs and the rate card each captain agreed to. */
+/* Every live FM hub under the Area Manager and the rate card its captain agreed
+   to — any update still waiting on a captain first. */
 function apRateList() {
-  var hubs = rateHubs();
-  var body = hubs.length
-    ? hubs.map(function (h) {
-        var u = rateUpdateFor(h.id);
-        return '<tr data-testid="ap-rate-row"><td class="id">Hub ' + esc(h.code) +
-            '<span style="display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:3px">' +
-            esc(h.name) + '</span></td>' +
-          '<td>' + esc(S.profile.name || "Captain") + '<span style="display:block;font-size:11px;' +
-            'font-weight:500;color:var(--muted);margin-top:3px">' + esc(fmtPhone(S.phone)) + '</span></td>' +
-          '<td style="max-width:260px;white-space:normal">' + esc(rateSummary(h.rateCard)) + '</td>' +
-          '<td>' + (u ? '<span class="st amber">Waiting for the captain</span>'
+  var a = S.admin, q = String(a.rateSearch || "").trim().toLowerCase(), f = a.rateFilter || "all";
+  var all = rateHubs().map(function (h) { return { h:h, u:rateUpdateFor(h.id), o:hubOwner(h) }; });
+  var waiting = all.filter(function (x) { return !!x.u; }).length;
+  var agreedUpdates = S.rateUpdates.filter(function (u) {
+    return u.status === "agreed" && !!allHubById(u.hubId);
+  }).length;
+  var shown = all.filter(function (x) {
+    if (f === "waiting" && !x.u) return false;
+    if (f === "agreed" && x.u) return false;
+    var cat = HUB_CATEGORIES[x.h.category];
+    return apMatches(q, [x.h.code, x.h.name, x.o.name, x.o.phone, x.h.pincode, cat ? cat.label : ""], x.o.phone);
+  }).sort(function (x, y) { return ((x.u ? 0 : 1) - (y.u ? 0 : 1)) || (x.h.code < y.h.code ? -1 : 1); });
+
+  var body = shown.length
+    ? shown.map(function (x) {
+        var h = x.h, u = x.u, cat = HUB_CATEGORIES[h.category];
+        return '<tr data-testid="ap-rate-row" data-ratehub="' + esc(h.id) + '">' +
+          '<td class="id">Hub ' + esc(h.code) + apSub(esc(h.name)) + '</td>' +
+          '<td>' + esc(x.o.name) + apSub(esc(x.o.phone)) + '</td>' +
+          '<td>' + esc(cat ? cat.label : "—") + '</td>' +
+          '<td style="max-width:260px;white-space:normal">' + esc(rateSummary(h.rateCard)) +
+            apSub('v' + (h.rateCard.version || 1) + ' · agreed ' + esc(h.rateCard.agreedOn || "—")) + '</td>' +
+          '<td>' + (u ? '<span class="st amber">Waiting for the captain</span>' +
+                        apSub('sent ' + esc(u.sentOn) + ' · from ' + esc(u.effective))
                       : '<span class="st green">Agreed ' + esc(h.rateCard.agreedOn || "") + '</span>') + '</td>' +
-          '<td style="text-align:right"><button class="btn btn-ghost" data-aprate="' + esc(h.id) + '">' +
-            (u ? "View" : "Update rate card") + '</button></td></tr>';
+          '<td style="text-align:right"><button class="btn ' + (u ? 'btn-ghost' : 'btn-primary') +
+            '" data-aprate="' + esc(h.id) + '">' + (u ? "View" : "Update rate card") + '</button></td></tr>';
       }).join("")
-    : '<tr><td class="empty" colspan="5">No live FM hubs with an agreed rate card yet.</td></tr>';
-  return '<div class="ap-panel">' +
+    : '<tr><td class="empty" colspan="6">' +
+        (all.length ? 'No hubs match this filter.' : 'No live FM hubs with an agreed rate card yet.') + '</td></tr>';
+
+  var opt = function (v, label) {
+    return '<option value="' + v + '"' + (f === v ? ' selected' : '') + '>' + label + '</option>';
+  };
+  return '<div class="ap-stats" data-testid="ap-rate-stats">' +
+      apStatTile("blue", "FM hubs under you", all.length, "Each on an agreed rate card") +
+      apStatTile("amber", "Waiting for the captain", waiting, waiting ? "Sent, not yet agreed" : "Nothing outstanding") +
+      apStatTile("green", "Updates agreed", agreedUpdates, "Applied from their cycle") +
+    '</div>' +
+    '<div class="ap-panel">' +
       '<div class="ph"><div><b>Rate card updates</b>' +
         '<span>Change a rate card a captain already agreed to. The captain is notified and agrees to ' +
-        'the new rates before they apply.</span></div></div>' +
+        'the new rates before they apply.</span></div>' +
+        '<div class="ap-filters">' +
+          '<input id="ap-rate-search" placeholder="Search hub, captain, phone, hub type" value="' +
+            esc(a.rateSearch || "") + '">' +
+          '<select id="ap-rate-filter">' + opt("all", "All FM hubs") +
+            opt("waiting", "Waiting for the captain") + opt("agreed", "Agreed") + '</select>' +
+        '</div></div>' +
       '<table class="ap-table"><thead><tr>' +
-        '<th>Hub</th><th>Captain</th><th>Agreed rate card</th><th>Status</th>' +
+        '<th>Hub</th><th>Captain</th><th>Hub type</th><th>Agreed rate card</th><th>Status</th>' +
         '<th style="text-align:right">Action</th>' +
       '</tr></thead><tbody>' + body + '</tbody></table>' +
     '</div>';
@@ -4165,13 +4384,26 @@ function apRateList() {
 
 /* Updating one hub's rate card: the agreed card, the new one, from when, and why. */
 function apRateDetail(h) {
-  var u = rateUpdateFor(h.id), d = S.admin.rateDraft;
-  var head = '<button class="btn-link" id="ap-rate-back" style="margin-bottom:12px">‹ Back to rate card updates</button>' +
+  var u = rateUpdateFor(h.id), d = S.admin.rateDraft, o = hubOwner(h), cat = HUB_CATEGORIES[h.category];
+  var past = S.rateUpdates.filter(function (x) { return x.hubId === h.id && x.status === "agreed"; });
+  var hist = past.length
+    ? '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin:18px 0 8px">' +
+        'Rate card history</span>' +
+      '<table class="ap-table" data-testid="ap-rate-history"><thead><tr><th>Update</th><th>Was</th><th>Now</th>' +
+        '<th>Agreed</th><th>Applies from</th></tr></thead><tbody>' +
+      past.map(function (x) {
+        return '<tr><td class="id">' + esc(x.id) + '</td><td style="white-space:normal">' + esc(rateSummary(x.from)) +
+          '</td><td style="white-space:normal">' + esc(rateSummary(x.to)) + '</td><td>' + esc(x.agreedOn) +
+          '</td><td>' + esc(x.effective) + '</td></tr>';
+      }).join("") + '</tbody></table>'
+    : '';
+  var head = '<button class="btn-link" id="ap-rate-back" style="margin-bottom:12px">‹ ' +
+      (S.admin.hubView ? 'Back to Hub ' + esc(h.code) : 'Back to rate card updates') + '</button>' +
     '<div class="ap-panel"><div class="ph"><div>' +
       '<span class="hubcode">Hub ' + esc(h.code) + '</span>' +
       '<b>' + esc(h.name) + ' · rate card</b>' +
-      '<span>' + esc(S.profile.name || "Captain") + ' · ' + esc(fmtPhone(S.phone)) + ' · agreed ' +
-        esc(h.rateCard.agreedOn || "—") + '</span></div>' +
+      '<span>' + esc(o.name) + ' · ' + esc(o.phone) + (cat ? ' · ' + esc(cat.label) : '') + ' · v' +
+        (h.rateCard.version || 1) + ' agreed ' + esc(h.rateCard.agreedOn || "—") + '</span></div>' +
       (u ? '<span class="st amber">Waiting for the captain</span>' : '<span class="st green">Agreed</span>') +
     '</div><div class="ap-form">';
 
@@ -4184,6 +4416,7 @@ function apRateDetail(h) {
         '<div><span class="cap">Sent · from ' + esc(u.effective) + '</span>' + rateCardRowsHtml(u.to) + '</div></div>' +
       '<div class="kv"><div class="row"><span class="k">Reason given</span><span class="v" ' +
         'style="max-width:70%;white-space:normal">' + esc(u.reason) + '</span></div></div>' +
+      hist +
       '</div></div></div>';
   }
 
@@ -4229,37 +4462,160 @@ function apRateDetail(h) {
     '<div style="display:flex;gap:10px;justify-content:flex-end">' +
       '<button class="btn btn-ghost" id="ap-rate-cancel">Cancel</button>' +
       '<button class="btn btn-primary" id="ap-rate-send">Send to captain to agree</button></div>' +
+    hist +
     '</div></div></div>';
 }
 
 /* Captains' requests to change a live hub, newest first. */
+function apSub(t) {
+  return '<span style="display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:3px">' +
+         t + '</span>';
+}
+function apStatTile(cls, k, v, sub) {
+  return '<div class="ap-stat ' + cls + '"><span class="k">' + k + '</span><b>' + v + '</b>' +
+         '<span class="s">' + sub + '</span></div>';
+}
+function editChanges(e) { return hubEditChanged(e).map(function (f) { return f.label; }).join(", "); }
+function apMatches(q, parts, phone) {
+  if (!q) return true;
+  if (parts.join(" ").toLowerCase().indexOf(q) >= 0) return true;
+  var d = q.replace(/\D/g, "").replace(/^(?:91|0)/, "");
+  return d.length >= 3 && String(phone || "").replace(/\D/g, "").replace(/^91/, "").indexOf(d) >= 0;
+}
+
+/* Every hub under the Area Manager and where its latest edit request stands —
+   anything waiting for review first. */
 function apEditList() {
-  var rows = S.hubEdits.slice().reverse();
-  var body = rows.length
-    ? rows.map(function (e) {
-        var m = HE_STATUS[e.status];
-        return '<tr data-testid="ap-edit-row"><td class="id">' + esc(e.id) + '</td>' +
-          '<td>' + esc(e.captain) + '<span style="display:block;font-size:11px;font-weight:500;' +
-            'color:var(--muted);margin-top:3px">' + esc(e.phone) + '</span></td>' +
-          '<td>Hub ' + esc(e.hubCode) + ' · ' + esc(e.hubName) + '<span style="display:block;font-size:11px;' +
-            'font-weight:500;color:var(--muted);margin-top:3px">' + esc(e.role) + ' hub</span></td>' +
-          '<td>' + esc(hubEditChanged(e).map(function (f) { return f.label; }).join(", ")) + '</td>' +
-          '<td><span class="st ' + m.tone + '">' + m.label + '</span></td>' +
-          '<td>' + esc(e.submittedOn) + '</td>' +
-          '<td style="text-align:right"><button class="btn btn-ghost" data-apedit="' + esc(e.id) + '">' +
-            (e.status === "pending" ? "Review" : "View") + '</button></td></tr>';
+  var a = S.admin, q = String(a.hubSearch || "").trim().toLowerCase(), f = a.hubFilter || "all";
+  var rows = amHubs().map(function (h) {
+    var e = hubEditOf(h.id);
+    return { h:h, e:e, o:hubOwner(h), st:h.status === "inactive" ? "inactive" : (e ? e.status : "none") };
+  });
+  var count = function (st) { return rows.filter(function (x) { return x.st === st; }).length; };
+  var captains = {};
+  rows.forEach(function (x) { captains[x.o.name] = true; });
+  var rank = { pending:0, approved:1, rejected:1, none:2, inactive:3 };
+  var shown = rows.filter(function (x) {
+    if (f !== "all" && x.st !== f) return false;
+    var area = PIN_AREAS[x.h.pincode];
+    return apMatches(q, [x.h.code, x.h.name, x.o.name, x.o.phone, x.h.pincode, area ? area.name : ""], x.o.phone);
+  }).sort(function (x, y) { return (rank[x.st] - rank[y.st]) || (x.h.code < y.h.code ? -1 : 1); });
+
+  var body = shown.length
+    ? shown.map(function (x) {
+        var h = x.h, e = x.e, area = PIN_AREAS[h.pincode];
+        var status = x.st === "pending"  ? '<span class="st blue">Edit to review</span>' +
+                                           apSub(esc(editChanges(e)) + ' · sent ' + esc(e.submittedOn))
+                   : x.st === "approved" ? '<span class="st green">Edit approved</span>' +
+                                           apSub(esc(editChanges(e)) + ' · ' + esc(e.decidedOn))
+                   : x.st === "rejected" ? '<span class="st red">Edit rejected</span>' +
+                                           apSub(esc(editChanges(e)) + ' · ' + esc(e.decidedOn))
+                   : x.st === "inactive" ? '<span class="st grey">Hub inactive</span>'
+                   :                       '<span class="st grey">No open request</span>';
+        var act = x.st === "pending"
+          ? '<button class="btn btn-primary" data-apedit="' + esc(e.id) + '">Review</button>'
+          : '<button class="btn btn-ghost" data-aphub="' + esc(h.id) + '">View hub</button>';
+        return '<tr data-testid="ap-hub-row" data-hubrow="' + esc(h.id) + '" data-status="' + x.st + '">' +
+          '<td class="id">Hub ' + esc(h.code) + apSub(esc(h.name) + ' · ' + esc(h.role)) + '</td>' +
+          '<td>' + esc(x.o.name) + apSub(esc(x.o.phone)) + '</td>' +
+          '<td>' + esc(h.pincode || "—") + apSub(esc(area ? area.name : (h.city || ""))) + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td style="text-align:right">' + act + '</td></tr>';
       }).join("")
-    : '<tr><td class="empty" colspan="7">No hub edit requests yet. When a captain edits a live hub\u2019s ' +
-      'address, pincode, map pin or area, it lands here.</td></tr>';
-  return '<div class="ap-panel">' +
+    : '<tr><td class="empty" colspan="5">No hubs match this filter.</td></tr>';
+
+  var opt = function (v, label) {
+    return '<option value="' + v + '"' + (f === v ? ' selected' : '') + '>' + label + '</option>';
+  };
+  return '<div class="ap-stats" data-testid="ap-hub-stats">' +
+      apStatTile("blue", "Hubs under you", rows.length, Object.keys(captains).length + " captains") +
+      apStatTile("amber", "Edits to review", count("pending"), count("pending") ? "Waiting on you" : "All caught up") +
+      apStatTile("green", "Edits approved", count("approved"), "Live on the hub") +
+      apStatTile("red", "Edits rejected", count("rejected"), "The hub kept its details") +
+    '</div>' +
+    '<div class="ap-panel">' +
       '<div class="ph"><div><b>Hub edits</b>' +
-        '<span>Captains asking to change a live hub. Approving applies the change; rejecting keeps the ' +
-        'hub as it is.</span></div></div>' +
+        '<span>Every hub under you. A captain asking to change a live hub\u2019s address, pincode, map ' +
+        'pin or area waits here — approving applies it, rejecting keeps the hub as it is.</span></div>' +
+        '<div class="ap-filters">' +
+          '<input id="ap-hub-search" placeholder="Search hub, captain, phone, pincode" value="' +
+            esc(a.hubSearch || "") + '">' +
+          '<select id="ap-hub-filter">' + opt("all", "All hubs") + opt("pending", "Edit to review") +
+            opt("approved", "Edit approved") + opt("rejected", "Edit rejected") +
+            opt("none", "No open request") + opt("inactive", "Hub inactive") + '</select>' +
+        '</div></div>' +
       '<table class="ap-table"><thead><tr>' +
-        '<th>Request</th><th>Captain</th><th>Hub</th><th>Changes</th><th>Status</th><th>Sent</th>' +
+        '<th>Hub</th><th>Captain</th><th>Pincode</th><th>Latest edit request</th>' +
         '<th style="text-align:right">Action</th>' +
       '</tr></thead><tbody>' + body + '</tbody></table>' +
     '</div>';
+}
+
+/* One hub under the Area Manager: what it runs on now, and every edit asked of it. */
+function apHubView(h) {
+  var o = hubOwner(h), area = PIN_AREAS[h.pincode], cat = HUB_CATEGORIES[h.category];
+  var edits = S.hubEdits.filter(function (e) { return e.hubId === h.id; }).slice().reverse();
+  var pend = edits.filter(function (e) { return e.status === "pending"; })[0];
+  var ru = h.rateCard ? rateUpdateFor(h.id) : null;
+  var row = function (k, v) {
+    return '<div class="row"><span class="k">' + k + '</span>' +
+      '<span class="v" style="max-width:66%;white-space:normal">' + v + '</span></div>';
+  };
+  var c = parseMapLink(h.mapLink);
+  var mapCell = c
+    ? '<a href="' + esc(gmapsUrl(c)) + '" target="_blank" rel="noopener" style="color:var(--cyan-ink);' +
+      'text-decoration:none">' + c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ' ↗</a>'
+    : isShortMapLink(h.mapLink)
+      ? '<a href="' + esc(h.mapLink) + '" target="_blank" rel="noopener" style="color:var(--cyan-ink);' +
+        'text-decoration:none">Google Maps share link ↗</a>'
+      : '—';
+  var hist = edits.length
+    ? '<table class="ap-table" data-testid="ap-hub-history"><thead><tr><th>Request</th><th>Changes</th>' +
+        '<th>Status</th><th>Sent</th><th style="text-align:right"></th></tr></thead><tbody>' +
+      edits.map(function (e) {
+        var m = HE_STATUS[e.status];
+        return '<tr><td class="id">' + esc(e.id) + '</td><td>' + esc(editChanges(e)) + '</td>' +
+          '<td><span class="st ' + m.tone + '">' + m.label + '</span></td><td>' + esc(e.submittedOn) + '</td>' +
+          '<td style="text-align:right"><button class="btn btn-ghost" data-apedit="' + esc(e.id) + '">' +
+            (e.status === "pending" ? "Review" : "View") + '</button></td></tr>';
+      }).join("") + '</tbody></table>'
+    : '<p style="margin:0;font-size:12px;color:var(--muted)" data-testid="ap-hub-history-empty">' +
+      'No edit requests for this hub yet.</p>';
+
+  return '<div class="ap-detail" data-testid="ap-hub-view">' +
+    '<button class="btn-link" id="ap-hub-back" style="margin-bottom:12px">‹ Back to hub edits</button>' +
+    '<div class="ap-panel"><div class="ph"><div>' +
+      '<span class="hubcode">Hub ' + esc(h.code) + '</span>' +
+      '<b>' + esc(h.name) + '</b>' +
+      '<span>' + esc(o.name) + ' · ' + esc(o.phone) + ' · ' + esc(h.role) + ' hub · live since ' +
+        esc(h.activatedOn || "—") + '</span></div>' +
+      (h.status === "inactive" ? '<span class="st grey">Inactive</span>' : '<span class="st green">Active</span>') +
+    '</div><div class="ap-form">' +
+      (pend
+        ? '<div class="notice info" data-testid="ap-hub-pending" style="display:flex;align-items:center;' +
+          'justify-content:space-between;gap:12px"><span><b>An edit is waiting for your review</b>' +
+          esc(editChanges(pend)) + ' · sent ' + esc(pend.submittedOn) + '</span>' +
+          '<button class="btn btn-primary" data-apedit="' + esc(pend.id) + '">Review</button></div>'
+        : '') +
+      '<div class="kv" style="margin-bottom:16px" data-testid="ap-hub-details">' +
+        row("Hub address", esc(h.address || "—")) +
+        row("Pincode", esc(h.pincode || "—") + (area ? ' · ' + esc(area.name) : '')) +
+        row("City / State", esc(h.city || knownCity(h.pincode) || "—")) +
+        row("Map pin", mapCell) +
+        row("Hub area", esc(fmtArea(h.areaSqft))) +
+        row("Max vehicle size", esc(h.maxVehicle || "—")) +
+        (h.role === "FM" && cat ? row("Hub type", esc(cat.label)) : '') +
+        (h.rateCard
+          ? row("Rate card", esc(rateSummary(h.rateCard)) + ' <span class="mute">· v' + (h.rateCard.version || 1) +
+                ', agreed ' + esc(h.rateCard.agreedOn || "—") + '</span> <button class="btn-link" data-aprate="' +
+                esc(h.id) + '" style="font-size:12px;margin-left:4px">' + (ru ? "View update" : "Update rate card") +
+                '</button>')
+          : '') +
+      '</div>' +
+      mapPreviewHtml(h.mapLink, h.pincode) +
+      '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin:16px 0 8px">' +
+        'Edit requests</span>' + hist +
+    '</div></div></div>';
 }
 
 /* One hub edit: what the hub has now against what the captain asked for. */
@@ -4294,7 +4650,8 @@ function apEditDetail(e) {
                                  : esc(e.reason) + " The hub kept its current details.") + '</div>';
 
   return '<div class="ap-detail" data-testid="ap-edit-detail">' +
-    '<button class="btn-link" id="ap-edit-back" style="margin-bottom:12px">‹ Back to hub edits</button>' +
+    '<button class="btn-link" id="ap-edit-back" style="margin-bottom:12px">‹ ' +
+      (S.admin.hubView ? 'Back to Hub ' + esc(e.hubCode) : 'Back to hub edits') + '</button>' +
     '<div class="ap-panel"><div class="ph"><div>' +
       '<span class="hubcode">Hub ' + esc(e.hubCode) + '</span>' +
       '<b>' + esc(e.hubName) + ' · hub edit ' + esc(e.id) + '</b>' +
@@ -5445,7 +5802,9 @@ var CITY_BY_PIN = {
   "560102":"Bengaluru, Karnataka", "560001":"Bengaluru, Karnataka",
   "560038":"Bengaluru, Karnataka", "560071":"Bengaluru, Karnataka",
   "560099":"Bengaluru, Karnataka", "560058":"Bengaluru, Karnataka",
-  "560068":"Bengaluru, Karnataka",
+  "560068":"Bengaluru, Karnataka", "560066":"Bengaluru, Karnataka",
+  "560100":"Bengaluru, Karnataka", "560078":"Bengaluru, Karnataka",
+  "560037":"Bengaluru, Karnataka", "560103":"Bengaluru, Karnataka",
   "110017":"New Delhi, Delhi", "400059":"Mumbai, Maharashtra"
 };
 function cityFor(pin) {
@@ -5667,7 +6026,7 @@ var A = {
     if (code === "000000") {
       S.otpError = ""; stopOtpTimer();
       if (S.loginAs === "admin") {
-        if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+        seedAdmin();
         S.screen = "adminselect";
         save(); render(); return;
       }
@@ -6593,7 +6952,7 @@ var A = {
   /* The Area Manager's decision. Approving writes the requested details onto
      the hub; rejecting needs a reason and leaves the hub untouched. */
   hubEditDecide: function (id, approve, reason) {
-    var e = hubEditById(id), h = e && hubById(e.hubId);
+    var e = hubEditById(id), h = e && allHubById(e.hubId);
     if (!e || e.status !== "pending") return false;
     if (!approve && !String(reason || "").trim()) return false;
     if (approve && h) {
@@ -6631,11 +6990,17 @@ var A = {
   rateAgree: function () {
     var u = rateUpdateById(S.panel.rateUpdateId), h = u && hubById(u.hubId);
     if (!u || u.status !== "pending" || !S.panel.rateAgreeChecked || !h) return;
-    h.rateCard = { slabs:JSON.parse(JSON.stringify(u.to.slabs)), touchpoint:u.to.touchpoint,
-                   agreedOn:fmtDay(new Date()), version:((h.rateCard && h.rateCard.version) || 1) + 1,
-                   effective:u.effective };
-    u.status = "agreed"; u.agreedOn = fmtDay(new Date());
+    applyRateAgreement(u, h);
     S.panel.rateAgreeChecked = false;
+    save(); render();
+  },
+  /* Dev panel: another captain agrees to an update the Area Manager sent them. */
+  rateAgreeAs: function (id) {
+    var u = rateUpdateById(id), h = u && allHubById(u.hubId);
+    if (!u || u.status !== "pending" || !h) return;
+    applyRateAgreement(u, h);
+    S.admin.toast = h.code + ": " + hubOwner(h).name + " agreed — the updated rate card applies from " +
+                    u.effective + ".";
     save(); render();
   },
 
@@ -6740,7 +7105,7 @@ var A = {
   /* ---- admin panel ---- */
   openAdminRole: function (role) {
     if (!ADMIN_ROLES[role]) return;
-    if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+    seedAdmin();
     S.admin = Object.assign(blankAdmin(), {
       role: role,
       tab: (ADMIN_TABS[role][0] || {}).id || "mine"
@@ -6755,11 +7120,26 @@ var A = {
   },
   adminTab: function (tab) {
     S.admin.tab = tab; S.admin.selected = null; S.admin.toast = "";
+    S.admin.edit = null; S.admin.rate = null; S.admin.rateDraft = null; S.admin.hubView = null;
     save(); render();
+  },
+  /* A hub from the Hub edits list: its details, and every edit asked of it. */
+  adminHubOpen: function (id) {
+    if (!allHubById(id)) return;
+    S.admin.hubView = id; S.admin.toast = "";
+    save(); render();
+  },
+  adminHubBack: function () { S.admin.hubView = null; save(); render(); },
+  adminListFilter: function (k, v) {
+    if (["hubSearch", "hubFilter", "rateSearch", "rateFilter"].indexOf(k) < 0) return;
+    S.admin[k] = v == null ? "" : String(v);
+    save();
+    if (/Search$/.test(k)) renderKeepingFocus(k === "hubSearch" ? "ap-hub-search" : "ap-rate-search");
+    else render();
   },
   /* The Area Manager's rate card update for a live FM hub. */
   adminRateOpen: function (hubId) {
-    var h = hubById(hubId);
+    var h = allHubById(hubId);
     if (!h || !h.rateCard || S.admin.role !== "am") return;
     S.admin.rate = hubId; S.admin.rateError = ""; S.admin.toast = "";
     S.admin.rateDraft = { slabs:JSON.parse(JSON.stringify(h.rateCard.slabs)),
@@ -6789,7 +7169,7 @@ var A = {
     if (d) { d[k] = v; save(); }
   },
   adminRateSend: function () {
-    var h = hubById(S.admin.rate), d = S.admin.rateDraft;
+    var h = allHubById(S.admin.rate), d = S.admin.rateDraft;
     if (!h || !d || rateUpdateFor(h.id)) return;
     var to = { slabs:d.slabs.map(function (sl) {
                  return { from:String(sl.from).trim(), to:String(sl.to).trim(), rate:String(sl.rate).trim() }; }),
@@ -6800,11 +7180,11 @@ var A = {
       : !String(d.reason || "").trim() ? "Say why the rates are changing — the captain sees this."
       : "";
     if (err) { S.admin.rateError = err; save(); render(); return; }
-    var m = ADMIN_ROLES.am.person;
+    var m = ADMIN_ROLES.am.person, owner = hubOwner(h);
     S.rateUpdates.push({
       id:"RCU-" + String(10000 + Math.floor(Math.random() * 90000)),
       hubId:h.id, hubCode:h.code, hubName:h.name,
-      captain:S.profile.name || "Captain", phone:fmtPhone(S.phone),
+      captain:owner.name, phone:owner.phone,
       from:{ slabs:JSON.parse(JSON.stringify(h.rateCard.slabs)), touchpoint:h.rateCard.touchpoint },
       fromAgreedOn:h.rateCard.agreedOn || "",
       to:to, effective:d.effective, reason:String(d.reason).trim(),
@@ -6812,7 +7192,7 @@ var A = {
       status:"pending", sentOn:fmtDay(new Date()), agreedOn:""
     });
     S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = "";
-    S.admin.toast = "Rate card update sent to " + (S.profile.name || "the captain") + " to agree.";
+    S.admin.toast = "Rate card update sent to " + owner.name + " to agree.";
     save(); render();
   },
   adminEditOpen: function (id) {
@@ -7488,6 +7868,14 @@ function bindAdmin() {
     el.addEventListener("click", function () { A.adminEditOpen(el.getAttribute("data-apedit")); });
   });
   on("ap-edit-back", "click", A.adminEditBack);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-aphub]"), function (el) {
+    el.addEventListener("click", function () { A.adminHubOpen(el.getAttribute("data-aphub")); });
+  });
+  on("ap-hub-back", "click", A.adminHubBack);
+  on("ap-hub-search", "input", function (e) { A.adminListFilter("hubSearch", e.target.value); });
+  on("ap-hub-filter", "change", function (e) { A.adminListFilter("hubFilter", e.target.value); });
+  on("ap-rate-search", "input", function (e) { A.adminListFilter("rateSearch", e.target.value); });
+  on("ap-rate-filter", "change", function (e) { A.adminListFilter("rateFilter", e.target.value); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-aprate]"), function (el) {
     el.addEventListener("click", function () { A.adminRateOpen(el.getAttribute("data-aprate")); });
   });
@@ -7740,11 +8128,21 @@ function devActions() {
     return { ctx: "Admin · choosing a panel.", groups: [] };
   }
   if (S.screen === "admin") {
+    var adminGroups = [{ title: "Admin panel", html:
+      '<p class="dnone">You are the backend here — decisions are made in the panel itself, ' +
+      'not simulated from this box.</p>' }];
+    /* An update sent to another captain can only be agreed by them — stand in for it. */
+    var rh = S.admin.rate && allHubById(S.admin.rate), ru = rh && rateUpdateFor(rh.id);
+    if (ru) {
+      adminGroups.push({ title: "Captain · " + hubOwner(rh).name, html:
+        devBtn(hubOwner(rh).name + " agrees to the update", "rateagree:" + ru.id, "ok") +
+        '<p class="dnone">Stands in for the captain agreeing from their bell. There is no decline, ' +
+        'by design.</p>' });
+    }
     return {
-      ctx: "<b>" + esc(apRole().label) + "</b> · " + esc(S.admin.selected || S.admin.tab),
-      groups: [{ title: "Admin panel", html:
-        '<p class="dnone">You are the backend here — decisions are made in the panel itself, ' +
-        'not simulated from this box.</p>' }]
+      ctx: "<b>" + esc(apRole().label) + "</b> · " +
+           esc(S.admin.rate || S.admin.edit || S.admin.hubView || S.admin.selected || S.admin.tab),
+      groups: adminGroups
     };
   }
 
@@ -7766,8 +8164,9 @@ function devActions() {
         '<p class="dnone">Step: ' + esc(bk.step) + '. The penny-drop outcome is simulated ' +
         'once the new account is submitted.</p>' });
     }
-    var ruP = S.rateUpdates.filter(function (u) { return u.status === "pending"; })[0];
-    var ruHub = rateHubs().filter(function (h) { return !rateUpdateFor(h.id); })[0];
+    /* the Captain Hub is the signed-in captain's — only their own hubs' requests */
+    var ruP = S.rateUpdates.filter(function (u) { return u.status === "pending" && !!hubById(u.hubId); })[0];
+    var ruHub = rateHubs().filter(function (h) { return !!hubById(h.id) && !rateUpdateFor(h.id); })[0];
     if (ruP) {
       groups.push({ title: "Rate card update " + ruP.id, html:
         '<p class="dnone">Waiting for the captain to agree from the bell. There is no decline, by ' +
@@ -7777,7 +8176,7 @@ function devActions() {
         devBtn("Send a rate card update for " + ruHub.code, "rate:send:" + ruHub.id) +
         '<p class="dnone">Or sign in as the Area Manager and use the Rate card updates tab.</p>' });
     }
-    var heP = S.hubEdits.filter(function (e) { return e.status === "pending"; })[0];
+    var heP = S.hubEdits.filter(function (e) { return e.status === "pending" && !!hubById(e.hubId); })[0];
     if (heP) {
       groups.push({ title: "Area Manager · hub edit " + heP.id, html:
         devBtn("Approve edit", "he:approve:" + heP.id, "ok") +
@@ -7982,10 +8381,12 @@ function devDo(cmd) {
          decision is still there when the captain comes back. */
       if (arg === "existing") { if (!S.seededExisting) seedExistingCaptain(); }
       else if (arg === "admin") {
-        if (!S.adminRequests.length) S.adminRequests = seedAdminRequests();
+        seedAdmin();
         S.admin = blankAdmin();
       }
-      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null; S.hubEdits = []; S.rateUpdates = [];
+      else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null;
+             S.hubEdits = S.hubEdits.filter(function (e) { return isNetworkHubId(e.hubId); });
+             S.rateUpdates = S.rateUpdates.filter(function (u) { return isNetworkHubId(u.hubId); });
              S.seededExisting = false;
              S.roles = { LM: blankRole("LM"), FM: blankRole("FM") }; }
       save(); render();
@@ -7996,6 +8397,7 @@ function devDo(cmd) {
         "Name on the account did not match your KYC records.");
       break;
     case "fail": A.armFail(arg, parts[2]); break;
+    case "rateagree": A.rateAgreeAs(arg); break;
     case "rate":
       if (arg === "send") {
         var keepAdmin = S.admin;
@@ -8091,6 +8493,7 @@ if (typeof window !== "undefined") {
       hubEditOf: hubEditOf, hubEditById: hubEditById, hubEditChanged: hubEditChanged,
       rateUpdateById: rateUpdateById, rateUpdateFor: rateUpdateFor, rateHubs: rateHubs,
       captainNotes: captainNotes, cycleStart: cycleStart,
+      amHubs: amHubs, allHubById: allHubById, hubOwner: hubOwner, networkHubById: networkHubById,
       nameScore: nameScore, gstNameCheck: gstNameCheck, gstLookup: gstLookup,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,

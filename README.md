@@ -498,22 +498,46 @@ clears the correction, other desks see the pin read-only, and Central Admin's de
 read their lat-long from the effective pin. `OBD-78240` is seeded with the captain's pin
 dropped in Koramangala for its HSR Layout pincode, for the Area Manager to fix.
 
+### The Area Manager's portfolio
+
+The Area Manager (Priya Sharma, *Bengaluru South & East*) holds **every hub under them**,
+and both the Hub edits and Rate card updates tabs work over that list. Signing in to the
+admin panel seeds **eleven sample FM hubs** run by eleven other captains — Koramangala, HSR
+Layout, Indiranagar, Whitefield, Electronic City, Bommasandra, Bellandur, JP Nagar,
+Marathahalli, Domlur and BTM Layout — each with a hub type, a map pin inside its pincode and
+an agreed rate card within its type's ceilings. The existing captain's own four hubs join
+them once that captain has been loaded, for **fifteen**.
+
+The samples come with work in flight, so each flow can be taken straight away: four hub
+edits waiting for review (a move to a new unit, a map pin fix, extra area, and a relocation
+from HSR Layout to BTM Layout), one approved and already live, one rejected; and two rate
+card updates waiting on their captains, plus one agreed earlier (JP Nagar, now on its
+second version). Other captains' requests never reach the signed-in captain's bell.
+
 ### Hub edits
 
-The Area Manager's **Hub edits** tab (with a pending count) lists captains' requests to
-change a live hub. Reviewing one shows each detail *now* against *requested*, the requested
-pin on a map with its pincode check, and the captain's note. **Approve** writes the new
-details onto the hub; **Reject** needs a reason, which the captain sees, and leaves the hub
-exactly as it was. A decided request stays listed, read-only.
+The Area Manager's **Hub edits** tab (with a pending count) lists **every hub under them**
+with where its latest edit request stands — *Edit to review* first, then approved and
+rejected, then hubs with no request — with tiles for hubs, edits to review, approved and
+rejected, a search over hub, captain, phone and pincode, and a status filter. **Review**
+opens a request: each detail *now* against *requested*, the requested pin on a map with its
+pincode check, and the captain's note. **Approve** writes the new details onto the hub;
+**Reject** needs a reason, which the captain sees, and leaves the hub exactly as it was. A
+decided request stays read-only. **View hub** opens any hub — its current details, its pin
+on a map, its rate card with a link to update it, and every edit asked of it.
 
 ### Rate card updates
 
-The Area Manager's **Rate card updates** tab lists live FM hubs with the rate card each
-captain agreed to. Updating one starts from the agreed slabs and touchpoint; the Area
+The Area Manager's **Rate card updates** tab lists **every live FM hub under them** with its
+hub type, the rate card its captain agreed to and its version — updates waiting on a captain
+first — with tiles, a search (hub type included) and a filter for waiting or agreed. A hub's
+detail shows its rate card history. Updating one starts from the agreed slabs and touchpoint; the Area
 Manager changes them, picks the payout cycle it applies from (the first of next month, or
 the month after) and says why. An unchanged card, an incomplete one, or one without a reason
 isn't sent, and a hub takes one update at a time. The agreed card stays in force until the
-captain agrees from their bell; the list shows *Waiting for the captain* meanwhile.
+captain agrees from their bell; the list shows *Waiting for the captain* meanwhile. Another
+captain can't sign in to agree in this prototype, so on an update sent to one of them the dev
+panel stands in for their agreement.
 
 Rate card updates go **straight from the Area Manager to the captain** — they do not run
 the Cluster Head / Central Admin ceiling chain that a new hub's rate card does.
@@ -649,6 +673,7 @@ The panel is contextual to the current phase and exposes exactly those actors:
 | Captain Hub · bank change | penny-drop succeeded / failed / bank times out / IMPS down |
 | Captain Hub · hub edit pending | Area Manager approves / rejects it |
 | Captain Hub · live FM hub | Area Manager sends a sample rate card update |
+| Admin · an update waiting on another captain | that captain agrees to it |
 | Always | reset entire demo |
 
 Every reject path is reachable. For LM that routes the captain back to the right earlier
@@ -678,7 +703,7 @@ build from.
 npm install && npm test
 ```
 
-**1458 assertions across 28 groups:**
+**1520 assertions across 29 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -767,11 +792,6 @@ npm install && npm test
    before max vehicle size; an unserviceable pincode cannot
    be forced in; the pick survives a failed submit; an older save is migrated; an existing
    captain adding a hub picks one; and the availability notice counts properly
-28. **Typing the hub pincode** — the field after the map link takes a pincode: a complete
-   serviceable one is chosen with the caret kept in place, the city resolved and the map pin
-   checked; unserviceable, malformed and sixth pincodes are refused at the field; a pick from
-   the check fills it; clearing it clears the hub's pincode; a failed check resumes and
-   chooses what was typed; and the typed pincode is the one the hub submits with
 22. **Map pin** — every link format parsed, every outcome of the check (inside, another
    pincode, too far, abroad, impossible, text search, no pincode yet), the embedded map and
    badges, live checking that keeps the field, a half-typed link left alone until the field
@@ -804,6 +824,19 @@ npm install && npm test
    notification, the agreement page with no reject or decline, Agree gated on the tick, the
    card replaced as its next version, hub edit outcomes on the bell, the dev panel shortcut,
    and the bell on onboarding's top bar
+28. **Typing the hub pincode** — the field after the map link takes a pincode: a complete
+   serviceable one is chosen with the caret kept in place, the city resolved and the map pin
+   checked; unserviceable, malformed and sixth pincodes are refused at the field; a pick from
+   the check fills it; clearing it clears the hub's pincode; a failed check resumes and
+   chooses what was typed; and the typed pincode is the one the hub submits with
+29. **The Area Manager's portfolio** — eleven sample hubs, each with its own captain, a pin
+   inside its pincode and a rate card within its type's ceilings; the Hub edits tab listing
+   every hub with the ones to review first, tiles, search (keeping the caret) and filters;
+   approving a relocation and rejecting with a reason on other captains' hubs; the hub view
+   with details, map, history and a link to its rate card; the Rate card updates tab with
+   waiting updates first, hub types, versions, filters and search; sending another captain
+   an update and the dev panel standing in for their agreement; their requests kept off the
+   signed-in captain's bell; and the captain's own hubs joining the lists for fifteen
 
 Three notes on how the tests drive the app:
 
