@@ -51,6 +51,8 @@ returns you to the picker mid-flow and resumes exactly where you left off.
 The dev panel's **Log in as** switch on the login screen decides which journey you get:
 
 - **New captain · no hubs yet** → role selection → full onboarding, as designed.
+- **Sample captain** → pick any of the Area Manager's eleven sample captains and sign in as
+  them, to see their bell and their side of the flows.
 - **Existing captain · 4 hubs** → straight into the **Captain Hub**, with the hubs from
   `HB-01` already seeded — three LM hubs (two active, one inactive) and one live FM hub,
   **KDG · Kudlu Gate Hub**, with an agreed rate card for the Area Manager to update.
@@ -388,8 +390,9 @@ current details while the request waits — the card says so, one request per hu
 rejection, until dismissed.
 
 **The bell** sits at the top right of the Captain Hub, and of onboarding's top bar once the
-captain runs hubs, with a count. It carries **rate card updates** to agree to, decided hub
-edits, and **changes the Area Manager made directly**: a map pin corrected on the captain's
+captain runs hubs, with a count. It carries **rate card updates** to agree to — only once
+the Cluster Head, or Central Admin, has approved them — decided hub edits, and **changes the
+Area Manager made directly**: a map pin corrected on the captain's
 own onboarding request, or a live hub's address, coordinates or max vehicle size. Those need
 nothing from the captain — the note opens My Hubs, where the hub card says what changed
 (*"Address: … · Map pin: … · Max vehicle size: … Already live — nothing for you to do."*)
@@ -440,9 +443,9 @@ the panel picker from `panel-select`, with four consoles:
 | Panel | |
 |---|---|
 | **Area Manager** | Infra hard-gate checklist and VLS field pre-check; map pin corrections; captains' **hub edits**; **rate card updates** |
-| **Cluster Head** | Interview and the AM's rate card — approve within ceiling, raise above it, or send back |
+| **Cluster Head** | Interview and the AM's rate card — approve within ceiling, raise above it, or send back; the same for AM rate card and hub type updates on live hubs |
 | **Zonal Head** | Monitoring only — AM and CH pendency. Approves nothing |
-| **FM Central Admin** | Design alignment and above-ceiling rate cards, plus user mapping |
+| **FM Central Admin** | Design alignment and above-ceiling rate cards — onboarding and updates raised to them — plus user mapping |
 
 Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
 SLA chip — over a request table with search and status filters, and stat tiles. Each row
@@ -515,9 +518,18 @@ them once that captain has been loaded, for **fifteen**.
 
 The samples come with work in flight, so each flow can be taken straight away: four hub
 edits waiting for review (a move to a new unit, a map pin fix, extra area, and a relocation
-from HSR Layout to BTM Layout), one approved and already live, one rejected; and two rate
-card updates waiting on their captains, plus one agreed earlier (JP Nagar, now on its
-second version). Other captains' requests never reach the signed-in captain's bell.
+from HSR Layout to BTM Layout), one approved and already live, one rejected; and rate card
+updates at **every stage** — two with the Cluster Head (one re-typing Electronic City from
+SAH to Standalone mini-hub), one above its ceilings with Central Admin, one sent back to the
+Area Manager, two approved and waiting for their captains, and one agreed earlier (JP Nagar,
+now on its second version).
+
+**Every sample captain has notifications** — an Area Manager change to their hub, a decided
+hub edit, or an approved rate card update — and the login switch can **sign in as any of
+them**: their hub moves into the Captain Hub with their own profile, GSTIN and bell, and they
+can take their side of the flows (agree to a rate card update, dismiss a change, ask for an
+edit). Signing back in as the existing captain puts everyone back. One captain's
+notifications never reach another's bell.
 
 ### Hub edits
 
@@ -542,27 +554,35 @@ edit of the hub is waiting, the Area Manager decides that first.
 ### Rate card updates
 
 The Area Manager's **Rate card updates** tab lists **every live FM hub under them** with its
-hub type, the rate card its captain agreed to and its version — updates waiting on a captain
-first — with tiles, a search (hub type included) and a filter for waiting or agreed. A hub's
-detail shows its rate card history. Updating one starts from the agreed slabs and touchpoint; the Area
-Manager changes them, picks the payout cycle it applies from (the first of next month, or
-the month after) and says why. An unchanged card, an incomplete one, or one without a reason
-isn't sent, and a hub takes one update at a time. The agreed card stays in force until the
-captain agrees from their bell; the list shows *Waiting for the captain* meanwhile. Another
-captain can't sign in to agree in this prototype, so on an update sent to one of them the dev
-panel stands in for their agreement.
+hub type, the rate card its captain agreed to and its version, and where any update stands —
+*sent back to you* first, then *in review*, then *waiting for the captain* — with tiles, a
+search (hub type included) and a filter by stage. A hub's detail shows its rate card history.
 
-The update view also carries the **hub type**. Changing it shows the new type's ceilings on
-each slab and the touchpoint, and flags anything over them. The hub type is the Area
-Manager's own call and stays **internal**: the captain is never told of it, only of the
-rates. With the rates as agreed, the button reads *Save hub type* and saves just that — the
-captain isn't asked to agree to anything; with new rates it sends the update as before and
-saves the type with it.
+Updating one starts from the agreed slabs and touchpoint, and carries the **hub type**: the
+Area Manager changes the rates, the type, or both, picks the payout cycle it applies from
+(the first of next month, or the month after), says why the rates are changing (the captain
+sees this) and can leave a note for the desks (they see it; the captain never does — it is
+needed when only the type changes). The chosen type's ceilings show on each slab and the
+touchpoint, and anything over them is flagged. An unchanged card, an incomplete one, or one
+without its reason isn't sent, and a hub takes one update at a time.
 
-Rate card updates go **straight from the Area Manager to the captain** — they do not run
-the Cluster Head / Central Admin ceiling chain that a new hub's rate card does — so an update
-has to stay **within its hub type's ceilings**, and a type whose ceilings the agreed rates
-break can only be saved with new rates.
+**Every update is reviewed before the captain hears of it**, the same chain a new hub's rate
+card runs:
+
+```
+AM: rates and/or hub type → CH reviews ─ within the type's ceilings → approves ─┐
+                                        └ above them → raises → Central Admin ──┴→ captain agrees
+                          ↖ sent back by either desk → AM revises and resubmits, or withdraws
+```
+
+The **Cluster Head** and **FM Central Admin** each get a *Rate card updates* tab — what is
+waiting on them, with a count, and what they have decided. A review shows the agreed card
+against the proposed one, the hub type change, whether it sits within that type's ceilings,
+the reason, the note and the trail. Within the ceilings the Cluster Head approves; above them
+they can only raise it to Central Admin; either desk can send it back with a reason. Approved,
+it reaches the captain's bell, and the agreed card stays in force until they agree. **The hub
+type takes effect only when the captain agrees** — and the captain is never told of it: a
+type-only change reaches them as a re-issued rate card, *"the rates are the same as today"*.
 
 ### The approval chain
 
@@ -691,10 +711,11 @@ The panel is contextual to the current phase and exposes exactly those actors:
 | Personal details, KYC cards, hub details | fail the next email code / Aadhaar / PAN / penny-drop / GSTIN / availability call — timeout (504) or service down (503) |
 | KYC GST step, Manage GSTIN, Add new hub | GST portal demo records — fill the GSTIN field with a matching, similar, mismatching, cancelled or unregistered GSTIN |
 | Background verification (pending) | partner times out / partner is down |
-| Login / OTP | log in as a new captain, an existing captain with hubs, or the admin panel — without re-seeding over what is there |
+| Login / OTP | log in as a new captain, an existing captain with hubs, any of the eleven sample captains, or the admin panel — without re-seeding over what is there |
 | Captain Hub · bank change | penny-drop succeeded / failed / bank times out / IMPS down |
 | Captain Hub · hub edit pending | Area Manager approves / rejects it |
 | Captain Hub · live FM hub | Area Manager sends a sample rate card update |
+| Captain Hub or admin · an update in review | the Cluster Head approves, raises or sends it back; Central Admin approves or sends it back |
 | Admin · an update waiting on another captain | that captain agrees to it |
 | Always | reset entire demo |
 
@@ -725,7 +746,7 @@ build from.
 npm install && npm test
 ```
 
-**1568 assertions across 30 groups:**
+**1673 assertions across 31 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -840,7 +861,8 @@ npm install && npm test
    time, the Area Manager's tab, now-against-requested review, approve applying all four
    changes, reject needing a reason and changing nothing, both outcomes shown to the captain
    after signing back in through the login switch, and the dev panel shortcut
-27. **Rate card updates** — the FM hub's agreed card, the bell, the AM's tab and editor
+27. **Rate card updates** — the FM hub's agreed card, the bell, the AM's tab and editor, the
+   update going to the Cluster Head first with the captain's bell quiet until it is approved,
    (unchanged, unexplained and incomplete cards refused, slabs added and removed, the cycle
    picked), one update at a time, the agreed card in force until agreed, the bell count and
    notification, the agreement page with no reject or decline, Agree gated on the tick, the
@@ -863,11 +885,17 @@ npm install && npm test
    captain without moving the request; the AM's hub editor prefilled, refusing an unchanged
    form, unreadable coordinates and a pin outside the pincode, previewing in place, saving
    address, coordinates and vehicle straight to the hub and logging it; editing held back
-   while a captain's edit waits; another captain's hub edited the same way; the hub type
-   saved on its own without the captain, refused when the agreed rates break its ceilings,
-   and saved with new rates; rates above the type's ceilings refused; and the captain's
-   side — three notifications, the hub card saying what changed, dismissing, and an
-   agreement page that never mentions the hub type
+   while a captain's edit waits; another captain's hub edited the same way; a hub type
+   change sent for review (needing a note) and taking effect only when the captain agrees;
+   over-ceiling rates flagged, not refused; an above-ceiling update the Cluster Head can only
+   raise, approved by Central Admin, with its trail; one sent back, revised and resubmitted,
+   and one withdrawn; and the captain's side — three notifications, the hub card saying what
+   changed, dismissing, and a re-issued card that never mentions the hub type
+31. **Sample captains** — the login switch offering all eleven; each signing in to their own
+   hub with their own notification, about their hub only; updates still in review out of
+   sight; a sample captain agreeing to their approved update and dismissing a notice; staying
+   signed in across a reload; signing back in as the existing captain putting every hub back;
+   and the Area Manager seeing the agreement and who was notified
 
 Three notes on how the tests drive the app:
 

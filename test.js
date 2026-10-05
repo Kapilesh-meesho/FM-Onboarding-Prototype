@@ -2195,8 +2195,8 @@ async function testAdminPanel() {
   /* --- Cluster Head --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="ch"]');
-  eq(api.config.ADMIN_TABS.ch.map(t => t.id), ["mine","am","users"],
-     "CH sees its own requests, AM requests and user mapping");
+  eq(api.config.ADMIN_TABS.ch.map(t => t.id), ["mine","am","rates","users"],
+     "CH sees its own requests, AM requests, rate card updates to review and user mapping");
   check(txt(doc).indexOf("Rakesh Sharma") >= 0, "signed in as the Cluster Head");
 
   /* a within-ceiling request the CH can settle */
@@ -2259,8 +2259,8 @@ async function testAdminPanel() {
   /* --- FM Central Admin --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="central"]');
-  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["mine","design","am","ch","zh","users"],
-     "Central has its own approval queue plus the AM, CH and ZH views");
+  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["mine","design","am","ch","zh","rates","users"],
+     "Central has its own approval queue, the AM, CH and ZH views, and raised rate card updates");
   check(txt(doc).indexOf("National view") >= 0, "described as a national view");
 
   eq(api.state.admin.tab, "mine", "Central opens on its own queue");
@@ -3835,18 +3835,42 @@ async function testRateUpdates() {
 
   const u = H.rateUpdateFor("hub-kdg");
   check(!!u, "a valid update is sent");
-  eq(u.status, "pending", "and waits for the captain");
+  eq(u.status, "ch", "to the Cluster Head first \u2014 not straight to the captain");
   eq(u.to, { slabs:[{ from:"0", to:"500", rate:"4.80" }, { from:"501", to:"", rate:"4.30" }], touchpoint:"4.90" },
      "carrying the new card");
   eq(u.effective, H.cycleStart(2), "from the cycle the AM chose");
   eq(kdg().rateCard.slabs[0].rate, "4.50", "the agreed card stays in force until the captain agrees");
-  check(api.state.admin.toast.indexOf("sent to Karan Verma to agree") >= 0, "the AM is told it went to the captain");
-  check(kdgRow().textContent.indexOf("Waiting for the captain") >= 0,
-        "and the list says it is waiting on them");
+  check(api.state.admin.toast.indexOf("Sent to the Cluster Head for review") >= 0,
+        "the AM is told it went to the Cluster Head");
+  check(kdgRow().textContent.indexOf("With the Cluster Head") >= 0, "and the list says it is in review");
   clickSel(doc, '[data-aprate="hub-kdg"]');
-  check(!exists(doc, '[data-testid="ap-rate-editor"]'), "one update at a time — no second one while it waits");
-  check(txt(doc).indexOf("waiting for the captain to agree") >= 0, "the AM sees what was sent");
+  check(!exists(doc, '[data-testid="ap-rate-editor"]'), "one update at a time \u2014 no second one while it is open");
+  check(txt(doc).indexOf("With the Cluster Head since") >= 0, "the AM sees where it is");
   A.adminRateBack();
+
+  /* --- the captain hears nothing while it is in review --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
+  check(!exists(doc, '[data-testid="bell-count"]'), "while it is with the Cluster Head the captain\u2019s bell is quiet");
+  check(!exists(doc, '[data-hub="hub-kdg"] [data-rateopen]'), "and their hub card offers nothing to review");
+
+  /* --- the Cluster Head approves it --- */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="ch"]');
+  const chWaiting = api.state.rateUpdates.filter(x => x.status === "ch").length;
+  eq(sel(doc, '[data-aptab="rates"]').textContent, "Rate card updates (" + chWaiting + ")",
+     "the Cluster Head\u2019s Rate card updates tab counts what waits on them");
+  clickSel(doc, '[data-aptab="rates"]');
+  clickSel(doc, '[data-apru="' + u.id + '"]');
+  check(exists(doc, '[data-testid="ap-ru-review"]'), "the Cluster Head opens it for review");
+  check(sel(doc, '[data-testid="ru-checks"]').textContent.indexOf("Within the Standalone ceilings") >= 0,
+        "seeing it sits within the hub type\u2019s ceilings");
+  click(doc, "ap-ru-approve");
+  eq(H.rateUpdateById(u.id).status, "captain", "approving it sends it on to the captain");
+  check(api.state.admin.toast.indexOf("Karan Verma is notified to agree") >= 0, "who is notified");
 
   /* --- the captain is notified, and can only agree --- */
   A.logout();
@@ -3907,7 +3931,11 @@ async function testRateUpdates() {
   /* --- the dev panel can send one too; the bell rides on onboarding's top bar --- */
   check(devText(doc).indexOf("Send a rate card update for KDG") >= 0, "the dev panel offers a quick update");
   devClick(doc, "rate:send:hub-kdg");
-  eq(H.rateUpdateFor("hub-kdg").status, "pending", "which lands with the captain");
+  eq(H.rateUpdateFor("hub-kdg").status, "ch", "which goes to the Cluster Head");
+  check(devText(doc).indexOf("Cluster Head · " + H.rateUpdateFor("hub-kdg").id) >= 0,
+        "and the dev panel can stand in for the Cluster Head");
+  devClick(doc, "ru:approve:" + H.rateUpdateFor("hub-kdg").id);
+  eq(H.rateUpdateFor("hub-kdg").status, "captain", "approving it there reaches the captain");
   check(api.reload(), "a pending update is saved");
   check(!!H.rateUpdateFor("hub-kdg"), "and survives a reload");
   A.addHubOpen();
@@ -4095,9 +4123,9 @@ async function testAmPortfolio() {
   eq(H.networkHubById("nh-elc").areaSqft, "1800", "and the hub keeps its area");
 
   /* --- a hub with no request, and one with history --- */
-  clickSel(doc, '[data-aphub="nh-dml"]');
+  clickSel(doc, '[data-aphub="nh-mrt"]');
   check(exists(doc, '[data-testid="ap-hub-view"]'), "View hub opens the hub");
-  check(sel(doc, '[data-testid="ap-hub-details"]').textContent.indexOf("No. 14, Old Airport Road, Domlur") >= 0,
+  check(sel(doc, '[data-testid="ap-hub-details"]').textContent.indexOf("No. 5, Outer Ring Road, Marathahalli") >= 0,
         "with its current details");
   check(exists(doc, '[data-testid="ap-hub-view"] [data-testid="map-pin-ok"]'), "its pin on a map");
   check(exists(doc, '[data-testid="ap-hub-history-empty"]'), "and no edit requests yet");
@@ -4120,16 +4148,24 @@ async function testAmPortfolio() {
   clickSel(doc, '[data-aptab="rates"]');
   rows = rowsOf("ap-rate-row");
   eq(rows.length, 11, "the tab lists every live FM hub under the Area Manager");
-  eq(rows.slice(0, 2).map(r => r.getAttribute("data-ratehub")), ["nh-mrt", "nh-whf"],
-     "the two waiting for their captain first");
-  eq(tiles("ap-rate-stats"), ["11", "2", "1"], "the tiles count hubs, waiting updates and agreed ones");
+  eq(rows.slice(0, 6).map(r => r.getAttribute("data-ratehub")),
+     ["nh-hsr", "nh-btm", "nh-dml", "nh-elc", "nh-mrt", "nh-whf"],
+     "sent back to the AM first, then in review, then waiting for their captains");
+  eq(rows.slice(0, 6).map(r => r.getAttribute("data-status")),
+     ["revision", "ch", "central", "ch", "captain", "captain"], "every stage of the review is in the samples");
+  eq(tiles("ap-rate-stats"), ["11", "3", "2", "1"],
+     "the tiles count hubs, updates in review, waiting for captains and sent back");
   check(sel(doc, '[data-ratehub="nh-jpn"]').textContent.indexOf("v2 · agreed 22 Sept 2026") >= 0,
         "a hub whose update was agreed shows its second version");
   check(sel(doc, '[data-ratehub="nh-ind"]').textContent.indexOf("Mall hub") >= 0, "each with its hub type");
-  setSelect("ap-rate-filter", "waiting");
-  eq(rowsOf("ap-rate-row").length, 2, "the filter narrows to updates waiting");
+  setSelect("ap-rate-filter", "review");
+  eq(rowsOf("ap-rate-row").length, 3, "the filter narrows to updates in review");
+  setSelect("ap-rate-filter", "captain");
+  eq(rowsOf("ap-rate-row").length, 2, "or waiting for their captain");
+  setSelect("ap-rate-filter", "revision");
+  eq(rowsOf("ap-rate-row").length, 1, "or sent back");
   setSelect("ap-rate-filter", "agreed");
-  eq(rowsOf("ap-rate-row").length, 9, "or to agreed cards");
+  eq(rowsOf("ap-rate-row").length, 5, "or on an agreed card with nothing open");
   setSelect("ap-rate-filter", "all");
   type(doc, "ap-rate-search", "mall hub");
   eq(rowsOf("ap-rate-row").map(r => r.getAttribute("data-ratehub")), ["nh-mrt", "nh-ind"],
@@ -4144,11 +4180,14 @@ async function testAmPortfolio() {
   r0.value = "4.40"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
   type(doc, "ap-rate-reason", "Koramangala volumes are up after the new seller cluster.");
   click(doc, "ap-rate-send");
-  check(api.state.admin.toast.indexOf("sent to Sunil Rao to agree") >= 0, "it is sent to that captain");
+  check(api.state.admin.toast.indexOf("Sent to the Cluster Head for review") >= 0, "it goes to the Cluster Head");
   const krmUp = H.rateUpdateFor("nh-krm");
-  eq(krmUp && krmUp.captain, "Sunil Rao", "recorded against them");
+  eq(krmUp && krmUp.captain, "Sunil Rao", "recorded against that hub\u2019s captain");
   clickSel(doc, '[data-aprate="nh-krm"]');
-  check(devText(doc).indexOf("Sunil Rao agrees to the update") >= 0, "the dev panel can stand in for their agreement");
+  check(devText(doc).indexOf("Cluster Head · " + krmUp.id) >= 0, "the dev panel can stand in for the Cluster Head");
+  devClick(doc, "ru:approve:" + krmUp.id);
+  eq(krmUp.status, "captain", "whose approval reaches the captain");
+  check(devText(doc).indexOf("Sunil Rao agrees to the update") >= 0, "and then for their agreement");
   devClick(doc, "rateagree:" + krmUp.id);
   const krm = H.networkHubById("nh-krm");
   eq([krm.rateCard.slabs[0].rate, krm.rateCard.version], ["4.40", 2], "agreeing replaces their card as version 2");
@@ -4164,7 +4203,7 @@ async function testAmPortfolio() {
   A.logout();
   devClick(doc, "as:existing");
   login(doc);
-  check(api.state.rateUpdates.some(u => u.status === "pending" && u.hubId.indexOf("nh-") === 0),
+  check(api.state.rateUpdates.some(u => u.status === "captain" && u.hubId.indexOf("nh-") === 0),
         "other captains still have updates waiting");
   check(!exists(doc, '[data-testid="bell-count"]'), "but none of them reach this captain’s bell");
   eq(H.captainNotes().length, 0, "nor their notifications");
@@ -4270,47 +4309,92 @@ async function testAmDirectChanges() {
         "notifying that captain");
   click(doc, "ap-hub-back");
 
-  /* --- 3. the hub type, on the rate card update --- */
+  /* --- 3. hub type and rate changes go to the Cluster Head before the captain --- */
   A.adminTab("rates");
   clickSel(doc, '[data-aprate="hub-kdg"]');
   eq($(doc, "ap-rate-type").value, "standalone", "the update starts from the hub’s type");
   setSelect("ap-rate-type", "lm_as_fm");
-  eq($(doc, "ap-rate-send").textContent, "Save hub type", "with the rates as agreed, the button only saves the type");
+  eq($(doc, "ap-rate-send").textContent, "Send to the Cluster Head", "a hub type change is sent for review");
   click(doc, "ap-rate-send");
-  eq(H.hubById("hub-kdg").category, "lm_as_fm", "the hub type is saved");
-  eq(H.rateUpdateFor("hub-kdg"), null, "and nothing is sent to the captain");
-  check(api.state.admin.toast.indexOf("isn’t asked to agree to anything") >= 0, "the AM is told why");
-  const typeChange = changes().filter(c => c.hubId === "hub-kdg" && c.kind === "type")[0];
-  check(!!typeChange && !typeChange.notify, "the type change is logged, but never notified");
-
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Add a note for the Cluster Head") >= 0,
+        "a type-only change needs a note for the Cluster Head");
+  type(doc, "ap-rate-note", "Kudlu Gate now runs on the LM-as-FM model.");
+  click(doc, "ap-rate-send");
+  const typeUp = H.rateUpdateFor("hub-kdg");
+  check(!!typeUp && typeUp.status === "ch" && typeUp.toCategory === "lm_as_fm", "it goes to the Cluster Head");
+  eq(H.hubById("hub-kdg").category, "standalone", "and the hub type doesn’t change yet");
+  check(!changes().some(c => c.hubId === "hub-kdg" && c.kind === "type"), "nor is a change logged yet");
   clickSel(doc, '[data-aprate="hub-kdg"]');
-  setSelect("ap-rate-type", "mall");
-  check(exists(doc, '[data-rslabrow="0"].over'), "the agreed rates show as over the Mall hub ceiling");
-  click(doc, "ap-rate-send");
-  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("agreed rates are above the Mall hub ceilings") >= 0,
-        "a type whose ceilings the agreed rates break needs new rates too");
-  eq(H.hubById("hub-kdg").category, "lm_as_fm", "so it isn’t saved on its own");
-  const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]'), r1 = sel(doc, '[data-rslab="1"][data-rfield="rate"]');
-  r0.value = "1.90"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
-  eq($(doc, "ap-rate-send").textContent, "Send to captain to agree", "changing a rate turns it into an update for the captain");
-  r1.value = "1.80"; r1.dispatchEvent(new win.Event("input", { bubbles: true }));
-  type(doc, "ap-rate-tp", "1.80");
-  type(doc, "ap-rate-reason", "Kudlu Gate is moving to the mall consolidation model.");
-  click(doc, "ap-rate-send");
-  eq(H.hubById("hub-kdg").category, "mall", "new rates within the new type’s ceilings save both");
-  const kdgUp = H.rateUpdateFor("hub-kdg");
-  check(!!kdgUp && kdgUp.toCategory === "mall" && kdgUp.fromCategory === "lm_as_fm", "the update records the type change for the AM");
-  check(api.state.admin.toast.indexOf("Hub type set to Mall hub — the captain isn’t told.") >= 0,
-        "and the AM is told the captain only hears of the rates");
-
-  clickSel(doc, '[data-aprate="nh-dml"]');
-  const d0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
-  d0.value = "5.40"; d0.dispatchEvent(new win.Event("input", { bubbles: true }));
-  type(doc, "ap-rate-reason", "Higher volumes.");
-  click(doc, "ap-rate-send");
-  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Above the Standalone ceilings") >= 0,
-        "rates above the hub type’s ceilings aren’t sent");
+  check(devText(doc).indexOf("Cluster Head · " + typeUp.id) >= 0, "the dev panel can stand in for the Cluster Head");
+  devClick(doc, "ru:approve:" + typeUp.id);
+  eq(typeUp.status, "captain", "approved, it waits for the captain");
+  eq(H.hubById("hub-kdg").category, "standalone", "the hub type still waits on their agreement");
   A.adminRateBack();
+
+  /* the editor flags rates over a new type's ceilings, but no longer refuses them */
+  clickSel(doc, '[data-aprate="nh-bom"]');
+  setSelect("ap-rate-type", "mall");
+  check(exists(doc, '[data-rslabrow="0"].over') && exists(doc, '[data-testid="ap-rate-above"]'),
+        "rates over the Mall hub ceilings are flagged, with the route they will take");
+  A.adminRateBack();
+
+  /* an update above its ceilings: the Cluster Head raises it, Central Admin decides */
+  clickSel(doc, '[data-aprate="nh-bld"]');
+  const b0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
+  b0.value = "5.40"; b0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  type(doc, "ap-rate-reason", "Bellandur’s volumes doubled this quarter.");
+  click(doc, "ap-rate-send");
+  const bldUp = H.rateUpdateFor("nh-bld");
+  check(!!bldUp && bldUp.status === "ch" && H.ruAbove(bldUp), "it still goes to the Cluster Head first");
+  check(api.state.admin.toast.indexOf("they’ll raise it to Central Admin") >= 0, "the AM is told where it goes next");
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  check(exists(doc, '[data-ru="' + bldUp.id + '"]'), "it is in the Cluster Head’s queue");
+  clickSel(doc, '[data-apru="' + bldUp.id + '"]');
+  check(sel(doc, '[data-testid="ru-checks"]').textContent.indexOf("Above the Standalone ceilings") >= 0,
+        "marked above its ceilings");
+  check(!exists(doc, "#ap-ru-approve") && exists(doc, "#ap-ru-raise"), "so the Cluster Head can only raise it");
+  eq(H.rateUpdateDecide(bldUp, "ch", "approve"), "It’s above the ceilings for its hub type — raise it to Central Admin instead.",
+     "and approving it is refused even by the action");
+  click(doc, "ap-ru-raise");
+  eq(bldUp.status, "central", "raised, it goes to Central Admin");
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="central"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  clickSel(doc, '[data-apru="' + bldUp.id + '"]');
+  click(doc, "ap-ru-approve");
+  eq(bldUp.status, "captain", "Central Admin approves it on to the captain");
+  check((bldUp.trail || []).map(x => x.by + ":" + x.what).join(",") ===
+        "am:sent,ch:raised to Central Admin,central:approved", "with its whole route on the trail");
+
+  /* sending one back to the Area Manager, who revises and resubmits */
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="ch"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  clickSel(doc, '[data-apru="RCU-51130"]');
+  click(doc, "ap-ru-reject");
+  check(txt(doc).indexOf("Say why you’re sending it back") >= 0, "sending one back needs a reason");
+  type(doc, "ap-ru-reason", "Keep the touchpoint where it is.");
+  click(doc, "ap-ru-reject");
+  eq(H.rateUpdateById("RCU-51130").status, "revision", "with one it goes back to the Area Manager");
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  eq(sel(doc, '[data-ratehub="nh-btm"]').getAttribute("data-status"), "revision", "the AM sees it sent back");
+  clickSel(doc, '[data-aprate="nh-btm"]');
+  check(sel(doc, '[data-testid="ap-rate-sentback"]').textContent.indexOf("Keep the touchpoint where it is.") >= 0,
+        "with the reason");
+  eq($(doc, "ap-rate-tp").value, "5.70", "the editor starts from what was proposed");
+  eq($(doc, "ap-rate-send").textContent, "Resubmit to the Cluster Head", "and resubmits it");
+  type(doc, "ap-rate-tp", "5.60");
+  click(doc, "ap-rate-send");
+  eq(H.rateUpdateById("RCU-51130").status, "ch", "back with the Cluster Head");
+  eq(H.rateUpdateById("RCU-51130").to.touchpoint, "5.60", "revised");
+  clickSel(doc, '[data-aprate="nh-hsr"]');
+  click(doc, "ap-rate-withdraw");
+  eq(H.rateUpdateById("RCU-51123").status, "withdrawn", "a sent-back update can be withdrawn instead");
+  eq(H.rateUpdateFor("nh-hsr"), null, "leaving the hub on its agreed card");
 
   /* --- the captain's side --- */
   asCaptain();
@@ -4335,14 +4419,110 @@ async function testAmDirectChanges() {
   clickSel(doc, '[data-amdismiss]');
   eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "dismissing it clears it from the bell");
   click(doc, "bell");
+  check(sel(doc, '[data-note^="rate:"]').textContent.indexOf("the rates are unchanged") >= 0,
+        "a re-issued card says its rates are unchanged");
   clickSel(doc, '[data-note^="rate:"]');
   const page = sel(doc, '[data-testid="rate-update"]').textContent;
-  check(page.indexOf("₹1.90") >= 0, "the captain is shown the new rates");
-  check(!/hub type|mall hub|ceiling|lm-as-fm|standalone/i.test(page), "but never the hub type behind them");
+  check(page.indexOf("re-issued this hub\u2019s rate card") >= 0 && page.indexOf("The rates are the same as today") >= 0,
+        "the captain is asked to agree to the same card");
+  check(!/hub type|ceiling|lm-as-fm|standalone|reclassif/i.test(page), "never told about the hub type behind it");
+  check(page.indexOf("Why it changed") === -1, "and shown no reason, since the rates didn\u2019t change");
   setCheck(doc, "rate-agree-check", true);
   click(doc, "rate-agree");
-  eq(H.hubById("hub-kdg").rateCard.slabs[0].rate, "1.90", "and agrees to them");
+  eq(H.hubById("hub-kdg").category, "lm_as_fm", "the hub type takes effect only now, once they agree");
+  check(changes().some(c => c.hubId === "hub-kdg" && c.kind === "type" && !c.notify),
+        "logged for the Area Manager, never notified");
   check(!exists(doc, '[data-testid="bell-count"]'), "the bell is clear");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
+   31. Sample captains — each has notifications, and can be signed in as
+   ====================================================================== */
+
+async function testSampleCaptains() {
+  section("31. Sample captains — sign in as any of them, with their own notifications");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions, C = api.config;
+  const notes = () => [...doc.querySelectorAll("[data-note]")].map(n => n.textContent);
+  const signInAs = (hubId) => {
+    if (api.state.screen !== "login") A.logout();
+    $(doc, "dev-sample").value = hubId;
+    devClick(doc, "as:sample");
+    login(doc);
+  };
+
+  check(devText(doc).indexOf("Captain · sample, the one above") >= 0, "the login switch offers the sample captains");
+  eq([...doc.querySelectorAll("#dev-sample option")].length, 11, "all eleven of them");
+
+  /* --- every sample captain signs in to their own hub and their own notifications --- */
+  const expected = {
+    "nh-krm": "Hub details updated · Koramangala FM Hub", "nh-hsr": "Hub details updated · HSR Layout FM Hub",
+    "nh-ind": "Hub details updated · Indiranagar FM Hub", "nh-whf": "Rate card update · Whitefield FM Hub (WHF)",
+    "nh-elc": "Hub details updated · Electronic City FM Hub", "nh-bom": "Hub edit approved · Bommasandra FM Hub",
+    "nh-bld": "Hub edit not approved · Bellandur FM Hub", "nh-jpn": "Hub details updated · JP Nagar FM Hub",
+    "nh-mrt": "Rate card update · Marathahalli FM Hub (MRT)", "nh-dml": "Hub details updated · Domlur FM Hub",
+    "nh-btm": "Hub details updated · BTM Layout FM Hub"
+  };
+  C.PORTFOLIO_HUBS.forEach(ph => {
+    signInAs(ph.id);
+    const who = ph.captain;
+    check(api.state.screen === "panel" && txt(doc).indexOf(who) >= 0, who + " lands in their own Captain Hub");
+    check(exists(doc, '[data-hub="' + ph.id + '"]') && api.state.hubs.length === 1, "  with their hub, " + ph.code);
+    const count = sel(doc, '[data-testid="bell-count"]');
+    check(!!count && +count.textContent >= 1, "  and a notification on their bell");
+    click(doc, "bell");
+    check(notes().some(n => n.indexOf(expected[ph.id]) >= 0), "  “" + expected[ph.id] + "”");
+    check(notes().every(n => n.indexOf(ph.name) >= 0), "  all of it about their own hub");
+    click(doc, "bell");
+  });
+
+  /* --- updates still in review stay out of sight --- */
+  signInAs("nh-elc");
+  click(doc, "bell");
+  check(!notes().some(n => n.indexOf("Rate card update") >= 0),
+        "Electronic City’s re-typing is still with the Cluster Head, so its captain hears nothing yet");
+  click(doc, "bell");
+  check(!exists(doc, '[data-hub="nh-elc"] [data-rateopen]'), "and their hub card offers nothing to review");
+
+  /* --- a sample captain takes their side of the flow --- */
+  signInAs("nh-whf");
+  click(doc, "bell");
+  clickSel(doc, '[data-note^="rate:"]');
+  eq(api.state.panel.section, "rateupdate", "Deepa Nair opens the approved rate card update");
+  check(sel(doc, '[data-testid="rate-new"]').textContent.indexOf("₹5.30") >= 0, "showing her new rates");
+  setCheck(doc, "rate-agree-check", true);
+  click(doc, "rate-agree");
+  eq(H.allHubById("nh-whf").rateCard.slabs[0].rate, "5.30", "and agrees — her hub’s card is replaced");
+  eq(H.rateUpdateById("RCU-51102").status, "agreed", "settling the update");
+  signInAs("nh-bom");
+  clickSel(doc, '[data-hedismiss]');
+  check(!exists(doc, '[data-testid="bell-count"]'), "Ritu Agarwal dismisses her approved edit and her bell clears");
+  check(api.reload(), "a sample captain stays signed in across a reload");
+  eq(api.state.sampleCaptain, "nh-bom", "as the same captain");
+  check(exists(doc, '[data-hub="nh-bom"]'), "on the same hub");
+
+  /* --- signing back in as the existing captain puts everyone back --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
+  eq(api.state.sampleCaptain, null, "the existing captain is back");
+  eq(api.state.hubs.map(h => h.code).join(","), "AQT,BEU,JYP,KDG", "with their own four hubs");
+  eq(api.state.networkHubs.length, 11, "and every sample hub back with its captain");
+  check(!exists(doc, '[data-testid="bell-count"]'), "the sample captains’ notifications never reach them");
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  eq(sel(doc, '[data-ratehub="nh-whf"]').getAttribute("data-status"), "agreed",
+     "the Area Manager sees Deepa Nair’s agreement");
+  clickSel(doc, '[data-aptab="edits"]');
+  clickSel(doc, '[data-aphub="nh-krm"]');
+  check(sel(doc, '[data-testid="ap-hub-amchange"]').textContent.indexOf("Sunil Rao notified") >= 0,
+        "and each sample change shows its captain was notified");
 
   api.stopTimers();
   win.close();
@@ -4383,6 +4563,7 @@ async function testAmDirectChanges() {
     await testTypedHubPincode();
     await testAmPortfolio();
     await testAmDirectChanges();
+    await testSampleCaptains();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }
