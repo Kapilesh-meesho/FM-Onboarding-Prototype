@@ -388,8 +388,12 @@ current details while the request waits — the card says so, one request per hu
 rejection, until dismissed.
 
 **The bell** sits at the top right of the Captain Hub, and of onboarding's top bar once the
-captain runs hubs, with a count. It carries **rate card updates** to agree to and decided
-hub edits. An FM hub's card shows its agreed rate card, and *Review update* while one is
+captain runs hubs, with a count. It carries **rate card updates** to agree to, decided hub
+edits, and **changes the Area Manager made directly**: a map pin corrected on the captain's
+own onboarding request, or a live hub's address, coordinates or max vehicle size. Those need
+nothing from the captain — the note opens My Hubs, where the hub card says what changed
+(*"Address: … · Map pin: … · Max vehicle size: … Already live — nothing for you to do."*)
+until it is dismissed. A hub type change is never notified; the captain only hears of rates. An FM hub's card shows its agreed rate card, and *Review update* while one is
 waiting. Opening a rate card update shows the current and updated cards side by side, when
 the change applies, the Area Manager's reason and the Combined rate card blurb, then a
 *"I have read the updated rate card"* tick and **one action: Agree**. There is deliberately
@@ -493,7 +497,8 @@ it sits outside the request's pincode. For the **Area Manager** only, *Edit* ope
 live preview and pincode check the captain's link went through; saving applies the
 correction straight to the request, tags the row **AM updated** with the date, and keeps
 the captain's submission as it was. Nothing is sent back to the captain to verify: the
-request's desk, status and infra checks are untouched. Putting the captain's link back
+request's desk, status and infra checks are untouched. The captain is **notified** — on
+their bell when it is the signed-in captain's own request (`OBD-78219` is Karan Verma's). Putting the captain's link back
 clears the correction, other desks see the pin read-only, and Central Admin's design inputs
 read their lat-long from the effective pin. `OBD-78240` is seeded with the captain's pin
 dropped in Koramangala for its HSR Layout pincode, for the Area Manager to fix.
@@ -524,7 +529,15 @@ opens a request: each detail *now* against *requested*, the requested pin on a m
 pincode check, and the captain's note. **Approve** writes the new details onto the hub;
 **Reject** needs a reason, which the captain sees, and leaves the hub exactly as it was. A
 decided request stays read-only. **View hub** opens any hub — its current details, its pin
-on a map, its rate card with a link to update it, and every edit asked of it.
+on a map, its rate card with a link to update it, and its history: every edit asked of it
+and every change made to it.
+
+From View hub the Area Manager can also **edit a live hub directly** — its **address**, its
+**coordinates** (typed as `12.9346, 77.6262` or pasted as a Google Maps link, with the same
+live map preview and pincode check) and its **max vehicle size**. It applies at once:
+nothing goes to the captain to approve or verify, and the captain is **notified**. An
+unchanged form or a pin outside the hub's pincode isn't saved, and while the captain's own
+edit of the hub is waiting, the Area Manager decides that first.
 
 ### Rate card updates
 
@@ -539,8 +552,17 @@ captain agrees from their bell; the list shows *Waiting for the captain* meanwhi
 captain can't sign in to agree in this prototype, so on an update sent to one of them the dev
 panel stands in for their agreement.
 
+The update view also carries the **hub type**. Changing it shows the new type's ceilings on
+each slab and the touchpoint, and flags anything over them. The hub type is the Area
+Manager's own call and stays **internal**: the captain is never told of it, only of the
+rates. With the rates as agreed, the button reads *Save hub type* and saves just that — the
+captain isn't asked to agree to anything; with new rates it sends the update as before and
+saves the type with it.
+
 Rate card updates go **straight from the Area Manager to the captain** — they do not run
-the Cluster Head / Central Admin ceiling chain that a new hub's rate card does.
+the Cluster Head / Central Admin ceiling chain that a new hub's rate card does — so an update
+has to stay **within its hub type's ceilings**, and a type whose ceilings the agreed rates
+break can only be saved with new rates.
 
 ### The approval chain
 
@@ -703,7 +725,7 @@ build from.
 npm install && npm test
 ```
 
-**1520 assertions across 29 groups:**
+**1568 assertions across 30 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -837,6 +859,15 @@ npm install && npm test
    waiting updates first, hub types, versions, filters and search; sending another captain
    an update and the dev panel standing in for their agreement; their requests kept off the
    signed-in captain's bell; and the captain's own hubs joining the lists for fifteen
+30. **AM direct changes** — a map pin corrected on an onboarding request notifying its
+   captain without moving the request; the AM's hub editor prefilled, refusing an unchanged
+   form, unreadable coordinates and a pin outside the pincode, previewing in place, saving
+   address, coordinates and vehicle straight to the hub and logging it; editing held back
+   while a captain's edit waits; another captain's hub edited the same way; the hub type
+   saved on its own without the captain, refused when the agreed rates break its ceilings,
+   and saved with new rates; rates above the type's ceilings refused; and the captain's
+   side — three notifications, the hub card saying what changed, dismissing, and an
+   agreement page that never mentions the hub type
 
 Three notes on how the tests drive the app:
 

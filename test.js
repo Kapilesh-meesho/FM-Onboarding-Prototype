@@ -3565,7 +3565,8 @@ async function testAmMapEdit() {
   check(!exists(doc, '[data-testid="ap-map-editor"]'), "the editor closes");
   check(exists(doc, '[data-testid="ap-map-updated"]'), "the row is tagged AM updated");
   check(!exists(doc, '[data-testid="ap-map-warn"]'), "and the pincode warning clears");
-  check(txt(doc).indexOf("not sent back to the captain") >= 0, "saying it was not sent back to the captain");
+  check(txt(doc).indexOf("the captain is notified, with nothing to re-verify") >= 0,
+        "saying the captain is notified, with nothing to re-verify");
   eq(req().mapLink, "https://maps.google.com/?q=12.9352,77.6245", "the captain’s submission is kept as it was");
   eq(H.apMapLink(req()), req().am.mapLink, "the panel uses the corrected pin from here on");
 
@@ -3812,7 +3813,7 @@ async function testRateUpdates() {
         "an unchanged card is not sent");
   const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
   r0.value = "4.80"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
-  type(doc, "ap-rate-tp", "5.20");
+  type(doc, "ap-rate-tp", "4.90");
   click(doc, "ap-rate-send");
   check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Say why the rates are changing") >= 0,
         "a change needs a reason the captain will see");
@@ -3835,7 +3836,7 @@ async function testRateUpdates() {
   const u = H.rateUpdateFor("hub-kdg");
   check(!!u, "a valid update is sent");
   eq(u.status, "pending", "and waits for the captain");
-  eq(u.to, { slabs:[{ from:"0", to:"500", rate:"4.80" }, { from:"501", to:"", rate:"4.30" }], touchpoint:"5.20" },
+  eq(u.to, { slabs:[{ from:"0", to:"500", rate:"4.80" }, { from:"501", to:"", rate:"4.30" }], touchpoint:"4.90" },
      "carrying the new card");
   eq(u.effective, H.cycleStart(2), "from the cycle the AM chose");
   eq(kdg().rateCard.slabs[0].rate, "4.50", "the agreed card stays in force until the captain agrees");
@@ -3880,7 +3881,7 @@ async function testRateUpdates() {
 
   eq(H.rateUpdateById(u.id).status, "agreed", "agreeing settles the update");
   eq(kdg().rateCard.slabs.map(sl => sl.rate), ["4.80", "4.30"], "the hub’s rate card is now the updated one");
-  eq(kdg().rateCard.touchpoint, "5.20", "touchpoint included");
+  eq(kdg().rateCard.touchpoint, "4.90", "touchpoint included");
   eq(kdg().rateCard.version, 2, "as the card’s second version");
   check(txt(doc).indexOf("Rate card updated") >= 0, "the captain sees it took effect");
   check(!exists(doc, '[data-testid="bell-count"]'), "and the bell clears");
@@ -4185,6 +4186,168 @@ async function testAmPortfolio() {
   win.close();
 }
 
+/* =========================================================================
+   30. Changes the Area Manager makes directly — the captain is told, not asked
+   ====================================================================== */
+
+async function testAmDirectChanges() {
+  section("30. AM direct changes — map pin, hub details, hub type");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions;
+  const at = (pin, dLat = 0, dLng = 0) => "https://maps.google.com/?q=" +
+    (H.PIN_AREAS[pin].lat + dLat).toFixed(4) + "," + (H.PIN_AREAS[pin].lng + dLng).toFixed(4);
+  const setSelect = (id, v) => { const el = $(doc, id); el.value = v; el.dispatchEvent(new win.Event("change", { bubbles: true })); };
+  const changes = () => api.state.amChanges;
+  const asAdmin = () => { A.logout(); devClick(doc, "as:admin"); login(doc); clickSel(doc, '[data-aprole="am"]'); };
+  const asCaptain = () => { A.logout(); devClick(doc, "as:existing"); login(doc); };
+
+  devClick(doc, "as:existing");
+  login(doc);
+  asAdmin();
+
+  /* --- 1. a map pin corrected on an onboarding request notifies its captain --- */
+  A.adminOpen("OBD-78219");                       // Karan Verma's own hub application
+  click(doc, "ap-map-edit");
+  type(doc, "ap-map", at("560076", 0.0003, 0.0002));
+  click(doc, "ap-map-save");
+  check(api.state.admin.toast.indexOf("Karan Verma has been notified") >= 0, "saving the pin says the captain was notified");
+  const mapChange = changes().filter(c => c.requestId === "OBD-78219")[0];
+  check(!!mapChange && mapChange.kind === "map" && mapChange.notify && !mapChange.seen, "a notification is raised for them");
+  check(txt(doc).indexOf("the captain is notified, with nothing to re-verify") >= 0, "and the context card says so");
+  eq(H.apById("OBD-78219").stage, "ch", "nothing goes back to the captain — the request stays where it was");
+  A.adminOpen("OBD-78240");
+  click(doc, "ap-map-edit");
+  type(doc, "ap-map", at("560102"));
+  click(doc, "ap-map-save");
+  check(changes().some(c => c.requestId === "OBD-78240" && c.captain === "Neha S"), "another request’s captain is notified too");
+
+  /* --- 2. the AM edits a live hub's address, coordinates and max vehicle size --- */
+  A.adminTab("edits");
+  clickSel(doc, '[data-aphub="hub-aqt"]');
+  click(doc, "ah-edit");
+  check(exists(doc, '[data-testid="ap-hub-editor"]'), "Edit hub details opens on the hub");
+  eq([$(doc, "ah-address").value, $(doc, "ah-map").value, $(doc, "ah-vehicle").value],
+     ["Koramangala, Bengaluru", "12.9349, 77.6251", "7MT_20FT"], "prefilled with the address, coordinates and vehicle");
+  click(doc, "ah-save");
+  check(sel(doc, '[data-testid="ap-hub-error"]').textContent.indexOf("Nothing has changed yet") >= 0,
+        "an unchanged form is not saved");
+  type(doc, "ah-map", "somewhere near the lake");
+  click(doc, "ah-save");
+  check(sel(doc, '[data-testid="ap-hub-error"]').textContent.indexOf("Enter coordinates like") >= 0,
+        "unreadable coordinates are refused");
+  const mapIn = $(doc, "ah-map");
+  type(doc, "ah-map", "12.9116, 77.6474");
+  check($(doc, "ah-map") === mapIn, "typing coordinates previews in place");
+  check(exists(doc, '#ah-map-preview [data-testid="map-pin-bad"]'), "a pin in HSR Layout previews as outside 560034");
+  click(doc, "ah-save");
+  check(txt(doc).indexOf("not the hub’s pincode 560034") >= 0, "and is refused on save");
+  type(doc, "ah-address", "No. 3, 1st Cross, Koramangala 5th Block, Bengaluru");
+  type(doc, "ah-map", "12.9338, 77.6236");
+  check(exists(doc, '#ah-map-preview [data-testid="map-pin-ok"]'), "coordinates inside the pincode preview as inside");
+  setSelect("ah-vehicle", "9MT_6W");
+  click(doc, "ah-save");
+  const aqt = H.hubById("hub-aqt");
+  eq([aqt.address, aqt.mapLink, aqt.maxVehicle],
+     ["No. 3, 1st Cross, Koramangala 5th Block, Bengaluru", "https://maps.google.com/?q=12.9338,77.6236", "9MT_6W"],
+     "saving applies all three straight to the hub");
+  check(api.state.admin.toast.indexOf("Karan Verma has been notified") >= 0, "and notifies its captain");
+  check(!api.state.hubEdits.some(e => e.hubId === "hub-aqt" && e.status === "pending"),
+        "nothing is waiting for the captain to approve");
+  check(sel(doc, '[data-testid="ap-hub-amchange"]').textContent.indexOf("Updated by you") >= 0,
+        "the hub’s history records the change");
+  click(doc, "ap-hub-back");
+
+  clickSel(doc, '[data-aphub="nh-krm"]');
+  check(!exists(doc, "#ah-edit") && exists(doc, '[data-testid="ap-hub-edit-blocked"]'),
+        "while a captain’s own edit is waiting, the AM decides it first");
+  click(doc, "ap-hub-back");
+  clickSel(doc, '[data-aphub="nh-dml"]');
+  click(doc, "ah-edit");
+  setSelect("ah-vehicle", "10MT_22FT");
+  click(doc, "ah-save");
+  eq(H.networkHubById("nh-dml").maxVehicle, "10MT_22FT", "another captain’s hub can be changed the same way");
+  check(sel(doc, '[data-testid="ap-hub-amchange"]').textContent.indexOf("Kavya Joshi notified") >= 0,
+        "notifying that captain");
+  click(doc, "ap-hub-back");
+
+  /* --- 3. the hub type, on the rate card update --- */
+  A.adminTab("rates");
+  clickSel(doc, '[data-aprate="hub-kdg"]');
+  eq($(doc, "ap-rate-type").value, "standalone", "the update starts from the hub’s type");
+  setSelect("ap-rate-type", "lm_as_fm");
+  eq($(doc, "ap-rate-send").textContent, "Save hub type", "with the rates as agreed, the button only saves the type");
+  click(doc, "ap-rate-send");
+  eq(H.hubById("hub-kdg").category, "lm_as_fm", "the hub type is saved");
+  eq(H.rateUpdateFor("hub-kdg"), null, "and nothing is sent to the captain");
+  check(api.state.admin.toast.indexOf("isn’t asked to agree to anything") >= 0, "the AM is told why");
+  const typeChange = changes().filter(c => c.hubId === "hub-kdg" && c.kind === "type")[0];
+  check(!!typeChange && !typeChange.notify, "the type change is logged, but never notified");
+
+  clickSel(doc, '[data-aprate="hub-kdg"]');
+  setSelect("ap-rate-type", "mall");
+  check(exists(doc, '[data-rslabrow="0"].over'), "the agreed rates show as over the Mall hub ceiling");
+  click(doc, "ap-rate-send");
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("agreed rates are above the Mall hub ceilings") >= 0,
+        "a type whose ceilings the agreed rates break needs new rates too");
+  eq(H.hubById("hub-kdg").category, "lm_as_fm", "so it isn’t saved on its own");
+  const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]'), r1 = sel(doc, '[data-rslab="1"][data-rfield="rate"]');
+  r0.value = "1.90"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  eq($(doc, "ap-rate-send").textContent, "Send to captain to agree", "changing a rate turns it into an update for the captain");
+  r1.value = "1.80"; r1.dispatchEvent(new win.Event("input", { bubbles: true }));
+  type(doc, "ap-rate-tp", "1.80");
+  type(doc, "ap-rate-reason", "Kudlu Gate is moving to the mall consolidation model.");
+  click(doc, "ap-rate-send");
+  eq(H.hubById("hub-kdg").category, "mall", "new rates within the new type’s ceilings save both");
+  const kdgUp = H.rateUpdateFor("hub-kdg");
+  check(!!kdgUp && kdgUp.toCategory === "mall" && kdgUp.fromCategory === "lm_as_fm", "the update records the type change for the AM");
+  check(api.state.admin.toast.indexOf("Hub type set to Mall hub — the captain isn’t told.") >= 0,
+        "and the AM is told the captain only hears of the rates");
+
+  clickSel(doc, '[data-aprate="nh-dml"]');
+  const d0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
+  d0.value = "5.40"; d0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  type(doc, "ap-rate-reason", "Higher volumes.");
+  click(doc, "ap-rate-send");
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Above the Standalone ceilings") >= 0,
+        "rates above the hub type’s ceilings aren’t sent");
+  A.adminRateBack();
+
+  /* --- the captain's side --- */
+  asCaptain();
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "3",
+     "the captain has three notifications: the map pin, the hub details and the rate card");
+  click(doc, "bell");
+  const notes = () => [...doc.querySelectorAll("[data-note]")].map(n => n.textContent);
+  check(notes().some(n => n.indexOf("Map pin corrected · OBD-78219") >= 0), "the map pin correction");
+  check(notes().some(n => n.indexOf("Hub details updated · Koramangala Hub") >= 0), "the hub details change");
+  check(notes().some(n => n.indexOf("Rate card update · Kudlu Gate Hub (KDG)") >= 0), "the rate card update");
+  check(!notes().some(n => /hub type|mall hub|ceiling/i.test(n)), "and nothing about the hub type");
+  clickSel(doc, '[data-note="amchange:' + mapChange.id + '"]');
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "2", "reading the map pin note clears it");
+  click(doc, "bell");
+  clickSel(doc, '[data-note^="amchange:"]');
+  eq(api.state.panel.section, "hubs", "the hub details note leads to My Hubs");
+  const card = sel(doc, '[data-hub="hub-aqt"] [data-testid="hub-am-updated"]');
+  check(!!card && card.textContent.indexOf("Address: No. 3, 1st Cross, Koramangala 5th Block") >= 0 &&
+        card.textContent.indexOf("Max vehicle size: 9MT_6W") >= 0 && card.textContent.indexOf("Map pin: 12.9338, 77.6236") >= 0,
+        "where the hub card says what changed");
+  check(card.textContent.indexOf("nothing for you to do") >= 0, "with nothing for the captain to do");
+  clickSel(doc, '[data-amdismiss]');
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "dismissing it clears it from the bell");
+  click(doc, "bell");
+  clickSel(doc, '[data-note^="rate:"]');
+  const page = sel(doc, '[data-testid="rate-update"]').textContent;
+  check(page.indexOf("₹1.90") >= 0, "the captain is shown the new rates");
+  check(!/hub type|mall hub|ceiling|lm-as-fm|standalone/i.test(page), "but never the hub type behind them");
+  setCheck(doc, "rate-agree-check", true);
+  click(doc, "rate-agree");
+  eq(H.hubById("hub-kdg").rateCard.slabs[0].rate, "1.90", "and agrees to them");
+  check(!exists(doc, '[data-testid="bell-count"]'), "the bell is clear");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -4219,6 +4382,7 @@ async function testAmPortfolio() {
     await testRateUpdates();
     await testTypedHubPincode();
     await testAmPortfolio();
+    await testAmDirectChanges();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }

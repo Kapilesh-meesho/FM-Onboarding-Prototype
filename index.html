@@ -1753,6 +1753,7 @@ function blankState() {
     hubEdits: [],              // captains' requested hub changes, decided by the Area Manager
     rateUpdates: [],           // Area Manager rate card changes, waiting for the captain to agree
     networkHubs: [],           // other captains' hubs under the Area Manager (sample portfolio)
+    amChanges: [],             // changes the Area Manager made directly — the captain is told, not asked
     seededExisting: false      // the dev panel's existing captain is loaded — don't re-seed over it
   };
 }
@@ -1811,6 +1812,7 @@ function seedExistingCaptain() {
   S.activeHubId = "hub-aqt";
   S.hubEdits = S.hubEdits.filter(function (e) { return isNetworkHubId(e.hubId); });
   S.rateUpdates = S.rateUpdates.filter(function (u) { return isNetworkHubId(u.hubId); });
+  S.amChanges = (S.amChanges || []).filter(function (c) { return !c.hubId || isNetworkHubId(c.hubId); });
   S.seededExisting = true;
 }
 
@@ -2025,6 +2027,55 @@ function amHubs() {
   return S.hubs.filter(function (h) { return h.status !== "in_progress"; }).concat(S.networkHubs || []);
 }
 
+/* Changes the Area Manager makes directly --------------------------------------
+   A map pin corrected on an onboarding request, or a live hub's address,
+   coordinates or max vehicle size. They apply at once — nothing goes back to
+   the captain to verify — and the captain is notified. A hub type change is
+   logged too, but the captain is never told: the hub type stays internal. */
+var AM_CHANGE_FIELDS = { address:"Address", mapLink:"Map pin", maxVehicle:"Max vehicle size",
+                         category:"Hub type" };
+
+function joinAnd(list) {
+  return list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+}
+function digitsOf(p) { return String(p || "").replace(/\D/g, "").replace(/^91(?=\d{10}$)/, ""); }
+
+function logAmChange(o) {
+  var c = Object.assign({
+    id:"AMC-" + String(10000 + Math.floor(Math.random() * 90000)),
+    kind:"details", hubId:null, requestId:null, hubCode:"", hubName:"", captain:"", phone:"",
+    fields:[], before:{}, after:{}, at:fmtDay(new Date()), by:ADMIN_ROLES.am.person.name,
+    notify:true, seen:false
+  }, o);
+  S.amChanges = S.amChanges || [];
+  S.amChanges.push(c);
+  return c;
+}
+/* Whether a change reached the signed-in captain: their own hub, or their own
+   onboarding request (matched on the phone they sign in with). */
+function amChangeIsMine(c) {
+  if (c.hubId) return !!hubById(c.hubId);
+  return !!S.phone && digitsOf(c.phone) === digitsOf(S.phone);
+}
+function amChangeFor(hubId) {               // the latest unseen change the captain should hear about
+  var list = (S.amChanges || []).filter(function (c) {
+    return c.hubId === hubId && c.notify && !c.seen;
+  });
+  return list[list.length - 1] || null;
+}
+function amChangeById(id) {
+  for (var i = 0; i < (S.amChanges || []).length; i++) if (S.amChanges[i].id === id) return S.amChanges[i];
+  return null;
+}
+function amChangeValue(k, v) {
+  return k === "mapLink" ? fmtPin(v) : k === "category" ? ((HUB_CATEGORIES[v] || {}).label || "—") : (v || "—");
+}
+function amChangeSummary(c) {
+  return c.fields.filter(function (k) { return k !== "category"; }).map(function (k) {
+    return AM_CHANGE_FIELDS[k] + ": " + amChangeValue(k, c.after[k]);
+  }).join(" · ");
+}
+
 /* Rate card updates -----------------------------------------------------------
    The Area Manager changes an agreed rate card on a live FM hub; the captain
    agrees to it from the bell. There is deliberately no decline — a captain with
@@ -2071,6 +2122,23 @@ function cycleStart(monthsAhead) {
   return fmtDay(new Date(d.getFullYear(), d.getMonth() + monthsAhead, 1));
 }
 
+function draftRateCard(d) {
+  return { slabs:d.slabs.map(function (sl) {
+             return { from:String(sl.from).trim(), to:String(sl.to).trim(), rate:String(sl.rate).trim() }; }),
+           touchpoint:String(d.touchpoint || "").trim() };
+}
+/* The update's button says what it will do — send the captain new rates, or
+   only save the hub type when the rates are as agreed. Patched in place as the
+   rates are typed. */
+function rateSendLabel(h, d) {
+  var typeChanged = !!d.category && d.category !== h.category;
+  return typeChanged && sameRateCard(draftRateCard(d), h.rateCard) ? "Save hub type" : "Send to captain to agree";
+}
+function paintRateSend() {
+  var b = document.getElementById("ap-rate-send"), h = S.admin.rate && allHubById(S.admin.rate);
+  if (b && h && S.admin.rateDraft) b.textContent = rateSendLabel(h, S.admin.rateDraft);
+}
+
 /* Agreeing makes the update the hub's rate card, as its next version. */
 function applyRateAgreement(u, h) {
   h.rateCard = { slabs:JSON.parse(JSON.stringify(u.to.slabs)), touchpoint:u.to.touchpoint,
@@ -2089,6 +2157,19 @@ function captainNotes() {
       title:"Rate card update · " + u.hubName + " (" + u.hubCode + ")",
       sub:"Your Area Manager changed this hub’s rates from " + u.effective + ".",
       cta:"Review and agree →" });
+  });
+  (S.amChanges || []).forEach(function (c) {
+    if (!c.notify || c.seen || !amChangeIsMine(c)) return;
+    out.push(c.hubId
+      ? { kind:"amchange", id:c.id, act:false, title:"Hub details updated · " + c.hubName,
+          sub:"Your Area Manager changed the " +
+              joinAnd(c.fields.map(function (k) { return AM_CHANGE_FIELDS[k].toLowerCase(); })) +
+              ". It’s already live — nothing for you to do.",
+          cta:"View hub →" }
+      : { kind:"amchange", id:c.id, act:false, title:"Map pin corrected · " + c.requestId,
+          sub:"Your Area Manager moved the pin for " + c.hubName + " to " + fmtPin(c.after.mapLink) +
+              ". Nothing for you to verify.",
+          cta:"Got it" });
   });
   S.hubEdits.forEach(function (e) {
     if (e.status === "pending" || e.seen || !hubById(e.hubId)) return;
@@ -2706,7 +2787,8 @@ function apReq(o) {
 /* The hub's map pin as the panel uses it: the Area Manager's correction if
    they made one, otherwise what the captain submitted. */
 function apMapLink(r) { return (r.am && r.am.mapLink) || r.mapLink || ""; }
-var AM_MAP_HINT = "Saved straight to this request — the captain is not asked to verify it again.";
+var AM_MAP_HINT = "Saved straight to this request — the captain is not asked to verify it again, " +
+                  "just told it changed.";
 
 /* A request only reaches the Cluster Head by passing the Area Manager's infra
    check first, so seeded downstream requests carry that work as done. Without
@@ -2891,6 +2973,7 @@ function blankAdmin() {
            edit:null, editReason:"", editError:"",      // an open hub-edit request
            rate:null, rateDraft:null, rateError:"",      // a hub whose rate card the AM is updating
            hubView:null,                                 // a hub opened from the Hub edits list
+           hubEditing:false, hubDraft:null, hubError:"",  // the AM editing that hub's details
            hubSearch:"", hubFilter:"all", rateSearch:"", rateFilter:"all" };
 }
 
@@ -3174,6 +3257,14 @@ function hubCard(h) {
           esc(parseMapLink(h.mapLink) ? "map pin " + fmtPin(h.mapLink) : fmtPin(h.mapLink)) + '</span></div>' +
         '<div class="pr"><button class="btn btn-ghost" data-hubedit="' + esc(h.id) + '">Edit hub details</button>' +
         '</div></div>';
+    }
+    var amc = amChangeFor(h.id);
+    if (amc && !editingDetails) {
+      detailsRow += '<div style="padding:0 20px 16px"><div class="notice info" data-testid="hub-am-updated" ' +
+        'style="margin:0"><b>Your Area Manager updated this hub on ' + esc(amc.at) + '</b>' +
+        esc(amChangeSummary(amc)) + '. Already live — nothing for you to do.' +
+        '<div style="margin-top:10px"><button class="btn btn-ghost" data-amdismiss="' + esc(amc.id) + '">' +
+        'Dismiss</button></div></div></div>';
     }
     if (he && he.status !== "pending" && !he.seen && !editingDetails) {
       detailsRow += he.status === "approved"
@@ -3687,7 +3778,7 @@ function apMapRow(r) {
     (r.am.mapLink
       ? '<div class="row"><span class="k"></span><span class="v mute" style="font-weight:500;font-size:11px">' +
         'Corrected by the Area Manager' + (r.am.mapOn ? ' on ' + esc(r.am.mapOn) : '') +
-        ' · not sent back to the captain</span></div>'
+        ' · the captain is notified, with nothing to re-verify</span></div>'
       : '');
 }
 
@@ -4392,9 +4483,12 @@ function apRateDetail(h) {
       '<table class="ap-table" data-testid="ap-rate-history"><thead><tr><th>Update</th><th>Was</th><th>Now</th>' +
         '<th>Agreed</th><th>Applies from</th></tr></thead><tbody>' +
       past.map(function (x) {
+        var typeMoved = x.toCategory && x.fromCategory && x.toCategory !== x.fromCategory;
         return '<tr><td class="id">' + esc(x.id) + '</td><td style="white-space:normal">' + esc(rateSummary(x.from)) +
-          '</td><td style="white-space:normal">' + esc(rateSummary(x.to)) + '</td><td>' + esc(x.agreedOn) +
-          '</td><td>' + esc(x.effective) + '</td></tr>';
+          '</td><td style="white-space:normal">' + esc(rateSummary(x.to)) +
+          (typeMoved ? apSub('hub type ' + esc(HUB_CATEGORIES[x.fromCategory].label) + ' → ' +
+                             esc(HUB_CATEGORIES[x.toCategory].label)) : '') +
+          '</td><td>' + esc(x.agreedOn) + '</td><td>' + esc(x.effective) + '</td></tr>';
       }).join("") + '</tbody></table>'
     : '';
   var head = '<button class="btn-link" id="ap-rate-back" style="margin-bottom:12px">‹ ' +
@@ -4420,8 +4514,10 @@ function apRateDetail(h) {
       '</div></div></div>';
   }
 
+  var cm = HUB_CATEGORIES[d.category] || HUB_CATEGORIES[h.category];
   var rows = d.slabs.map(function (sl, i) {
-    return '<div class="slab-row" data-rslabrow="' + i + '">' +
+    var over = cm && rateOk(sl.rate) && +sl.rate > cm.ceiling;
+    return '<div class="slab-row' + (over ? ' over' : '') + '" data-rslabrow="' + i + '">' +
       '<div class="sf"><span class="sl">Orders from</span>' +
         '<input data-rslab="' + i + '" data-rfield="from" inputmode="numeric" value="' + esc(sl.from) + '"></div>' +
       '<div class="sf"><span class="sl">Orders to</span>' +
@@ -4429,6 +4525,8 @@ function apRateDetail(h) {
           'value="' + esc(sl.to) + '"></div>' +
       '<div class="sf"><span class="sl">Slab rate (₹ / shipment)</span>' +
         '<input data-rslab="' + i + '" data-rfield="rate" inputmode="decimal" value="' + esc(sl.rate) + '"></div>' +
+      (cm ? '<div class="sf ceil"><span class="sl">Ceiling</span><span class="cv' + (over ? ' over' : '') + '">₹' +
+            cm.ceiling.toFixed(2) + (over ? ' · over' : '') + '</span></div>' : '') +
       '<button class="srm" data-rslabdel="' + i + '" title="Remove slab"' +
         (d.slabs.length < 2 ? ' disabled' : '') + '>✕</button>' +
     '</div>';
@@ -4440,14 +4538,31 @@ function apRateDetail(h) {
   return '<div class="ap-detail" data-testid="ap-rate-detail">' + head +
     '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin-bottom:8px">' +
       'Agreed rate card</span>' + rateCardRowsHtml(h.rateCard) +
-    '<div class="slabs" style="margin-top:18px" data-testid="ap-rate-editor">' +
-      '<div class="sh"><div><b>Updated rate card</b><span>Change the slabs or the touchpoint rate. The ' +
-        'captain agrees to the whole card.</span></div></div>' +
+    '<div class="fl" style="margin-top:18px" data-testid="ap-rate-type"><label>Hub type</label><div class="box">' +
+      '<select id="ap-rate-type" style="border:0;background:transparent;width:100%;font:inherit">' +
+      CATEGORY_ORDER.map(function (k) {
+        var x = HUB_CATEGORIES[k];
+        return '<option value="' + k + '"' + (d.category === k ? ' selected' : '') + '>' + esc(x.label) +
+          ' · slab ≤ ₹' + x.ceiling.toFixed(2) + ' · touchpoint ≤ ₹' + x.tpCeiling.toFixed(2) + '</option>';
+      }).join("") + '</select></div>' +
+      '<div class="hint">' + (d.category !== h.category
+        ? 'Changing from ' + esc((HUB_CATEGORIES[h.category] || {}).label || "—") + '. '
+        : '') + 'Internal to VALMO — the captain sees only the rates, never the hub type.</div></div>' +
+    '<div class="slabs" style="margin-top:6px" data-testid="ap-rate-editor">' +
+      '<div class="sh"><div><b>Updated rate card</b><span>Change the slabs or the touchpoint rate' +
+        (cm ? ', within the ' + esc(cm.label) + ' ceilings' : '') + '. The captain agrees to the whole ' +
+        'card.</span></div></div>' +
       rows +
       '<button class="btn btn-ghost" id="ap-rate-add" style="margin-top:4px">＋ Add slab</button>' +
-      '<div class="slab-tp"><div class="sf" style="max-width:230px">' +
-        '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
-        '<input id="ap-rate-tp" inputmode="decimal" value="' + esc(d.touchpoint) + '"></div></div>' +
+      (function () {
+        var tpOver = cm && rateOk(d.touchpoint) && +d.touchpoint > cm.tpCeiling;
+        return '<div class="slab-tp' + (tpOver ? ' over' : '') + '">' +
+          '<div class="sf" style="max-width:230px">' +
+          '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
+          '<input id="ap-rate-tp" inputmode="decimal" value="' + esc(d.touchpoint) + '"></div>' +
+          (cm ? '<div class="sf ceil"><span class="sl">Ceiling</span><span class="cv' + (tpOver ? ' over' : '') + '">₹' +
+                cm.tpCeiling.toFixed(2) + (tpOver ? ' · over' : '') + '</span></div>' : '') + '</div>';
+      })() +
     '</div>' +
     '<div class="grid2" style="margin-top:16px">' +
       '<div class="fl"><label>Applies from</label><div class="box"><select id="ap-rate-eff" ' +
@@ -4461,7 +4576,7 @@ function apRateDetail(h) {
     (S.admin.rateError ? '<div class="notice bad" data-testid="ap-rate-error">' + esc(S.admin.rateError) + '</div>' : '') +
     '<div style="display:flex;gap:10px;justify-content:flex-end">' +
       '<button class="btn btn-ghost" id="ap-rate-cancel">Cancel</button>' +
-      '<button class="btn btn-primary" id="ap-rate-send">Send to captain to agree</button></div>' +
+      '<button class="btn btn-primary" id="ap-rate-send">' + esc(rateSendLabel(h, d)) + '</button></div>' +
     hist +
     '</div></div></div>';
 }
@@ -4513,7 +4628,9 @@ function apEditList() {
                    : x.st === "inactive" ? '<span class="st grey">Hub inactive</span>'
                    :                       '<span class="st grey">No open request</span>';
         var act = x.st === "pending"
-          ? '<button class="btn btn-primary" data-apedit="' + esc(e.id) + '">Review</button>'
+          ? '<button class="btn btn-primary" data-apedit="' + esc(e.id) + '">Review</button>' +
+            '<button class="btn-link" data-aphub="' + esc(h.id) + '" style="display:block;margin:6px 0 0 auto;' +
+            'font-size:12px">View hub</button>'
           : '<button class="btn btn-ghost" data-aphub="' + esc(h.id) + '">View hub</button>';
         return '<tr data-testid="ap-hub-row" data-hubrow="' + esc(h.id) + '" data-status="' + x.st + '">' +
           '<td class="id">Hub ' + esc(h.code) + apSub(esc(h.name) + ' · ' + esc(h.role)) + '</td>' +
@@ -4552,11 +4669,38 @@ function apEditList() {
 }
 
 /* One hub under the Area Manager: what it runs on now, and every edit asked of it. */
+/* Coordinates typed straight in ("12.9346, 77.6262") or a Google Maps link. */
+var AH_MAP_HINT = "Coordinates (12.9346, 77.6262) or a Google Maps link. Saved straight to the hub — " +
+                  "the captain is notified, with nothing to verify.";
+var AH_COORDS_ERR = "Enter coordinates like 12.9346, 77.6262, or a Google Maps link.";
+function parseCoords(t) {
+  var m = String(t || "").trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  return m ? { lat:+m[1], lng:+m[2] } : null;
+}
+function linkFromCoords(t) {
+  var c = parseCoords(t);
+  return c ? "https://maps.google.com/?q=" + c.lat + "," + c.lng : String(t || "").trim();
+}
+function coordsText(link) {
+  var c = parseMapLink(link);
+  return c ? c.lat + ", " + c.lng : String(link || "");
+}
+function samePin(a, b) {
+  if (a === b) return true;
+  var x = parseMapLink(a), y = parseMapLink(b);
+  return !!x && !!y && Math.abs(x.lat - y.lat) < 1e-6 && Math.abs(x.lng - y.lng) < 1e-6;
+}
+
+/* One hub under the Area Manager: what it runs on now, everything asked of it
+   or changed on it, and — for the Area Manager — its address, coordinates and
+   max vehicle size to change directly. */
 function apHubView(h) {
   var o = hubOwner(h), area = PIN_AREAS[h.pincode], cat = HUB_CATEGORIES[h.category];
   var edits = S.hubEdits.filter(function (e) { return e.hubId === h.id; }).slice().reverse();
+  var mine = (S.amChanges || []).filter(function (c) { return c.hubId === h.id; }).slice().reverse();
   var pend = edits.filter(function (e) { return e.status === "pending"; })[0];
   var ru = h.rateCard ? rateUpdateFor(h.id) : null;
+  var am = S.admin.role === "am", editing = am && S.admin.hubEditing && S.admin.hubDraft;
   var row = function (k, v) {
     return '<div class="row"><span class="k">' + k + '</span>' +
       '<span class="v" style="max-width:66%;white-space:normal">' + v + '</span></div>';
@@ -4569,18 +4713,60 @@ function apHubView(h) {
       ? '<a href="' + esc(h.mapLink) + '" target="_blank" rel="noopener" style="color:var(--cyan-ink);' +
         'text-decoration:none">Google Maps share link ↗</a>'
       : '—';
-  var hist = edits.length
-    ? '<table class="ap-table" data-testid="ap-hub-history"><thead><tr><th>Request</th><th>Changes</th>' +
-        '<th>Status</th><th>Sent</th><th style="text-align:right"></th></tr></thead><tbody>' +
-      edits.map(function (e) {
-        var m = HE_STATUS[e.status];
-        return '<tr><td class="id">' + esc(e.id) + '</td><td>' + esc(editChanges(e)) + '</td>' +
-          '<td><span class="st ' + m.tone + '">' + m.label + '</span></td><td>' + esc(e.submittedOn) + '</td>' +
-          '<td style="text-align:right"><button class="btn btn-ghost" data-apedit="' + esc(e.id) + '">' +
-            (e.status === "pending" ? "Review" : "View") + '</button></td></tr>';
-      }).join("") + '</tbody></table>'
+
+  var histRows = mine.map(function (x) {
+      var fields = x.fields.map(function (k) { return AM_CHANGE_FIELDS[k]; }).join(", ");
+      return '<tr data-testid="ap-hub-amchange"><td class="id">' + esc(x.id) + '</td><td>' + esc(fields) + '</td>' +
+        '<td>' + (x.kind === "type" ? '<span class="st grey">Hub type · internal</span>'
+                                    : '<span class="st green">Updated by you</span>') + '</td>' +
+        '<td>' + esc(x.at) + '</td><td style="text-align:right;font-size:11px;color:var(--muted)">' +
+          (x.notify ? esc(o.name) + ' notified' : 'Not shown to the captain') + '</td></tr>';
+    }).concat(edits.map(function (e) {
+      var m = HE_STATUS[e.status];
+      return '<tr><td class="id">' + esc(e.id) + '</td><td>' + esc(editChanges(e)) + '</td>' +
+        '<td><span class="st ' + m.tone + '">' + m.label + '</span></td><td>' + esc(e.submittedOn) + '</td>' +
+        '<td style="text-align:right"><button class="btn btn-ghost" data-apedit="' + esc(e.id) + '">' +
+          (e.status === "pending" ? "Review" : "View") + '</button></td></tr>';
+    }));
+  var hist = histRows.length
+    ? '<table class="ap-table" data-testid="ap-hub-history"><thead><tr><th>Change</th><th>What</th>' +
+        '<th>Status</th><th>Date</th><th style="text-align:right"></th></tr></thead><tbody>' +
+      histRows.join("") + '</tbody></table>'
     : '<p style="margin:0;font-size:12px;color:var(--muted)" data-testid="ap-hub-history-empty">' +
-      'No edit requests for this hub yet.</p>';
+      'No edit requests or changes for this hub yet.</p>';
+
+  var editor = "";
+  if (editing) {
+    var d = S.admin.hubDraft;
+    editor = '<div class="slabs" data-testid="ap-hub-editor" style="margin-bottom:16px">' +
+      '<div class="sh"><div><b>Edit hub details</b><span>Applied straight away — ' + esc(o.name) +
+        ' is notified, with nothing to approve or verify.</span></div></div>' +
+      '<div class="fl"><label>Hub address</label><div class="box">' +
+        '<input id="ah-address" value="' + esc(d.address) + '"></div></div>' +
+      '<div class="fl"><label>Hub coordinates</label><div class="box" id="ah-map-box">' +
+        '<input id="ah-map" placeholder="12.9346, 77.6262 or a Google Maps link" value="' + esc(d.coords) + '">' +
+        '</div><div class="hint" id="ah-map-hint">' + esc(AH_MAP_HINT) + '</div></div>' +
+      '<div id="ah-map-preview">' + mapPreviewHtml(linkFromCoords(d.coords), h.pincode) + '</div>' +
+      '<div class="fl"><label>Max vehicle size</label><div class="box">' +
+        '<select id="ah-vehicle" style="border:0;background:transparent;width:100%;font:inherit">' +
+        VEHICLE_TYPES.map(function (v) {
+          return '<option value="' + esc(v) + '"' + (d.maxVehicle === v ? ' selected' : '') + '>' + esc(v) + '</option>';
+        }).join("") + '</select></div>' +
+        '<div class="hint">The largest vehicle the hub can take — everything smaller fits.</div></div>' +
+      (S.admin.hubError ? '<div class="notice bad" data-testid="ap-hub-error">' + esc(S.admin.hubError) + '</div>' : '') +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" id="ah-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="ah-save">Save changes</button></div>' +
+    '</div>';
+  }
+  var editBar = !am || editing || h.status !== "active" ? ""
+    : '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">' +
+        '<span style="font-size:11px;font-weight:700;color:var(--cyan-label)">Hub details</span>' +
+        (pend
+          ? '<span style="font-size:11px;color:var(--muted)" data-testid="ap-hub-edit-blocked">Decide the ' +
+            'captain’s edit first, before changing the details yourself.</span>'
+          : '<button class="btn btn-ghost" id="ah-edit">Edit hub details</button>') +
+      '</div>';
 
   return '<div class="ap-detail" data-testid="ap-hub-view">' +
     '<button class="btn-link" id="ap-hub-back" style="margin-bottom:12px">‹ Back to hub edits</button>' +
@@ -4597,6 +4783,7 @@ function apHubView(h) {
           esc(editChanges(pend)) + ' · sent ' + esc(pend.submittedOn) + '</span>' +
           '<button class="btn btn-primary" data-apedit="' + esc(pend.id) + '">Review</button></div>'
         : '') +
+      editor + editBar +
       '<div class="kv" style="margin-bottom:16px" data-testid="ap-hub-details">' +
         row("Hub address", esc(h.address || "—")) +
         row("Pincode", esc(h.pincode || "—") + (area ? ' · ' + esc(area.name) : '')) +
@@ -4612,9 +4799,9 @@ function apHubView(h) {
                 '</button>')
           : '') +
       '</div>' +
-      mapPreviewHtml(h.mapLink, h.pincode) +
+      (editing ? '' : mapPreviewHtml(h.mapLink, h.pincode)) +
       '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin:16px 0 8px">' +
-        'Edit requests</span>' + hist +
+        'History</span>' + hist +
     '</div></div></div>';
 }
 
@@ -6597,10 +6784,17 @@ var A = {
     r.am.mapDraft = link;
     var chk = checkMapPin(link, r.pincode);
     if (!chk.ok) { r.am.mapError = chk.msg; save(); render(); return; }
+    var before = apMapLink(r);
     // putting back exactly what the captain sent clears the correction
     r.am.mapLink = link === r.mapLink ? "" : link;
     r.am.mapOn = r.am.mapLink ? fmtDay(new Date()) : "";
     r.am.mapEditing = false; r.am.mapDraft = ""; r.am.mapError = "";
+    /* the captain is told the pin moved — not asked to verify it */
+    if (apMapLink(r) !== before) {
+      logAmChange({ kind:"map", requestId:r.id, hubName:r.hubAppId || r.id, captain:r.captain, phone:r.phone,
+                    fields:["mapLink"], before:{ mapLink:before }, after:{ mapLink:apMapLink(r) } });
+      S.admin.toast = r.id + ": map pin saved — " + r.captain + " has been notified.";
+    }
     save(); render();
   },
   amVehicleEdit: function (open) {
@@ -6949,6 +7143,11 @@ var A = {
     if (e) e.seen = true;
     save(); render();
   },
+  amChangeDismiss: function (id) {
+    var c = amChangeById(id);
+    if (c) c.seen = true;
+    save(); render();
+  },
   /* The Area Manager's decision. Approving writes the requested details onto
      the hub; rejecting needs a reason and leaves the hub untouched. */
   hubEditDecide: function (id, approve, reason) {
@@ -6972,6 +7171,9 @@ var A = {
   openNote: function (kind, id) {
     S.panel.bellOpen = false;
     if (kind === "rate") { A.openRateUpdate(id); return; }
+    var amc = kind === "amchange" && amChangeById(id);
+    /* a change to an onboarding request has no hub to show — reading it is enough */
+    if (amc && !amc.hubId) { amc.seen = true; save(); render(); return; }
     S.screen = "panel"; S.panel.section = "hubs"; S.panel.tab = "hubs";
     save(); render();
   },
@@ -7121,6 +7323,7 @@ var A = {
   adminTab: function (tab) {
     S.admin.tab = tab; S.admin.selected = null; S.admin.toast = "";
     S.admin.edit = null; S.admin.rate = null; S.admin.rateDraft = null; S.admin.hubView = null;
+    S.admin.hubEditing = false; S.admin.hubDraft = null; S.admin.hubError = "";
     save(); render();
   },
   /* A hub from the Hub edits list: its details, and every edit asked of it. */
@@ -7129,7 +7332,53 @@ var A = {
     S.admin.hubView = id; S.admin.toast = "";
     save(); render();
   },
-  adminHubBack: function () { S.admin.hubView = null; save(); render(); },
+  adminHubBack: function () {
+    S.admin.hubView = null; S.admin.hubEditing = false; S.admin.hubDraft = null; S.admin.hubError = "";
+    save(); render();
+  },
+  /* The Area Manager changes a live hub's address, coordinates or max vehicle
+     size directly. Nothing goes to the captain to approve or verify; they are
+     notified. Not while the captain's own edit of the hub is waiting. */
+  adminHubEdit: function () {
+    var h = allHubById(S.admin.hubView);
+    if (!h || S.admin.role !== "am" || h.status !== "active") return;
+    if (S.hubEdits.some(function (e) { return e.hubId === h.id && e.status === "pending"; })) return;
+    S.admin.hubEditing = true; S.admin.hubError = "";
+    S.admin.hubDraft = { address:h.address || "", coords:coordsText(h.mapLink), maxVehicle:h.maxVehicle || "" };
+    save(); render();
+  },
+  adminHubCancel: function () {
+    S.admin.hubEditing = false; S.admin.hubDraft = null; S.admin.hubError = "";
+    save(); render();
+  },
+  adminHubField: function (k, v) {
+    var d = S.admin.hubDraft;
+    if (d && k in d) { d[k] = v == null ? "" : String(v); save(); }
+  },
+  adminHubSave: function () {
+    var h = allHubById(S.admin.hubView), d = S.admin.hubDraft;
+    if (!h || !d || S.admin.role !== "am" || !S.admin.hubEditing) return;
+    var before = { address:h.address || "", mapLink:h.mapLink || "", maxVehicle:h.maxVehicle || "" };
+    var after = { address:String(d.address || "").trim(), mapLink:linkFromCoords(d.coords),
+                  maxVehicle:String(d.maxVehicle || "").trim() };
+    if (samePin(before.mapLink, after.mapLink)) after.mapLink = before.mapLink;   // same pin, other spelling
+    var chk = checkMapPin(after.mapLink, h.pincode);
+    var err = !after.address ? "Enter the hub address."
+      : !chk.ok ? (chk.code === "empty" || chk.code === "format" ? AH_COORDS_ERR : chk.msg)
+      : !V.vehicle(after.maxVehicle) ? ERR.hubVehicle
+      : "";
+    var fields = Object.keys(before).filter(function (k) { return before[k] !== after[k]; });
+    if (!err && !fields.length) err = "Nothing has changed yet — edit at least one detail to save.";
+    if (err) { S.admin.hubError = err; save(); render(); return; }
+    var pick = function (o) { var x = {}; fields.forEach(function (k) { x[k] = o[k]; }); return x; };
+    fields.forEach(function (k) { h[k] = after[k]; });
+    var owner = hubOwner(h);
+    logAmChange({ kind:"details", hubId:h.id, hubCode:h.code, hubName:h.name, captain:owner.name,
+                  phone:owner.phone, fields:fields, before:pick(before), after:pick(after) });
+    S.admin.hubEditing = false; S.admin.hubDraft = null; S.admin.hubError = "";
+    S.admin.toast = "Hub " + h.code + " updated — " + owner.name + " has been notified.";
+    save(); render();
+  },
   adminListFilter: function (k, v) {
     if (["hubSearch", "hubFilter", "rateSearch", "rateFilter"].indexOf(k) < 0) return;
     S.admin[k] = v == null ? "" : String(v);
@@ -7143,13 +7392,14 @@ var A = {
     if (!h || !h.rateCard || S.admin.role !== "am") return;
     S.admin.rate = hubId; S.admin.rateError = ""; S.admin.toast = "";
     S.admin.rateDraft = { slabs:JSON.parse(JSON.stringify(h.rateCard.slabs)),
-                          touchpoint:h.rateCard.touchpoint, effective:cycleStart(1), reason:"" };
+                          touchpoint:h.rateCard.touchpoint, effective:cycleStart(1), reason:"",
+                          category:HUB_CATEGORIES[h.category] ? h.category : "standalone" };
     save(); render();
   },
   adminRateBack: function () { S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = ""; save(); render(); },
   adminRateSlab: function (i, k, v) {
     var d = S.admin.rateDraft;
-    if (d && d.slabs[i]) { d.slabs[i][k] = v; save(); }
+    if (d && d.slabs[i]) { d.slabs[i][k] = v; save(); paintRateSend(); }
   },
   adminRateAddSlab: function () {
     var d = S.admin.rateDraft;
@@ -7166,21 +7416,48 @@ var A = {
   },
   adminRateField: function (k, v) {
     var d = S.admin.rateDraft;
-    if (d) { d[k] = v; save(); }
+    if (!d) return;
+    d[k] = v; save();
+    if (k === "category") { S.admin.rateError = ""; render(); }   // the ceilings change with it
+    else paintRateSend();
   },
+  /* Sends the captain an update when the rates change. The hub type is the
+     Area Manager's own call: it is saved here too, and the captain never hears
+     of it — only of the rates. Both have to sit within the type's ceilings,
+     since an update has no sign-off chain to go above them. */
   adminRateSend: function () {
     var h = allHubById(S.admin.rate), d = S.admin.rateDraft;
     if (!h || !d || rateUpdateFor(h.id)) return;
-    var to = { slabs:d.slabs.map(function (sl) {
-                 return { from:String(sl.from).trim(), to:String(sl.to).trim(), rate:String(sl.rate).trim() }; }),
-               touchpoint:String(d.touchpoint || "").trim() };
-    var err = !slabsValid(to.slabs) || !rateOk(to.touchpoint)
+    var to = draftRateCard(d);
+    var cat = HUB_CATEGORIES[d.category] ? d.category : h.category, cm = HUB_CATEGORIES[cat];
+    var ratesChanged = !sameRateCard(to, h.rateCard), typeChanged = cat !== h.category;
+    var card = ratesChanged ? to : h.rateCard;
+    var over = cm && (card.slabs.some(function (sl) { return +sl.rate > cm.ceiling; }) || +card.touchpoint > cm.tpCeiling);
+    var ceil = cm ? "slab rates within ₹" + cm.ceiling.toFixed(2) + " and the touchpoint within ₹" +
+                    cm.tpCeiling.toFixed(2) : "";
+    var err = ratesChanged && (!slabsValid(to.slabs) || !rateOk(to.touchpoint))
         ? "Every slab needs a starting volume, a rate and an upper bound above its start, and the hub needs a touchpoint rate."
-      : sameRateCard(to, h.rateCard) ? "These are the rates already agreed — change at least one to send an update."
-      : !String(d.reason || "").trim() ? "Say why the rates are changing — the captain sees this."
+      : !ratesChanged && !typeChanged
+        ? "These are the rates already agreed — change at least one, or the hub type, to save."
+      : over && ratesChanged ? "Above the " + cm.label + " ceilings — keep the " + ceil + "."
+      : over ? "The agreed rates are above the " + cm.label + " ceilings — change the rates too (" + ceil +
+               "), and the captain is asked to agree to them."
+      : ratesChanged && !String(d.reason || "").trim() ? "Say why the rates are changing — the captain sees this."
       : "";
     if (err) { S.admin.rateError = err; save(); render(); return; }
-    var m = ADMIN_ROLES.am.person, owner = hubOwner(h);
+    var m = ADMIN_ROLES.am.person, owner = hubOwner(h), fromCat = h.category;
+    if (typeChanged) {
+      logAmChange({ kind:"type", hubId:h.id, hubCode:h.code, hubName:h.name, captain:owner.name, phone:owner.phone,
+                    fields:["category"], before:{ category:fromCat }, after:{ category:cat }, notify:false, seen:true });
+      h.category = cat;
+    }
+    var typeNote = typeChanged ? " Hub type set to " + cm.label + " — the captain isn’t told." : "";
+    if (!ratesChanged) {
+      S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = "";
+      S.admin.toast = "Hub type set to " + cm.label + ". The rates haven’t changed, so " + owner.name +
+                      " isn’t asked to agree to anything.";
+      save(); render(); return;
+    }
     S.rateUpdates.push({
       id:"RCU-" + String(10000 + Math.floor(Math.random() * 90000)),
       hubId:h.id, hubCode:h.code, hubName:h.name,
@@ -7189,10 +7466,11 @@ var A = {
       fromAgreedOn:h.rateCard.agreedOn || "",
       to:to, effective:d.effective, reason:String(d.reason).trim(),
       by:m.name, byPhone:m.phone || "+91 98450 11223",
+      fromCategory:fromCat, toCategory:cat,           // the AM's record only — never shown to the captain
       status:"pending", sentOn:fmtDay(new Date()), agreedOn:""
     });
     S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = "";
-    S.admin.toast = "Rate card update sent to " + owner.name + " to agree.";
+    S.admin.toast = "Rate card update sent to " + owner.name + " to agree." + typeNote;
     save(); render();
   },
   adminEditOpen: function (id) {
@@ -7872,6 +8150,21 @@ function bindAdmin() {
     el.addEventListener("click", function () { A.adminHubOpen(el.getAttribute("data-aphub")); });
   });
   on("ap-hub-back", "click", A.adminHubBack);
+  on("ah-edit", "click", A.adminHubEdit);
+  on("ah-cancel", "click", A.adminHubCancel);
+  on("ah-save", "click", A.adminHubSave);
+  on("ah-address", "input", function (e) { A.adminHubField("address", e.target.value); });
+  on("ah-vehicle", "change", function (e) { A.adminHubField("maxVehicle", e.target.value); });
+  var ahHub = S.admin.hubView && allHubById(S.admin.hubView);
+  if (ahHub) {
+    var ahPaint = function (v, loud) {
+      paintMapPreview(linkFromCoords(v), ahHub.pincode, loud, "ah-map", AH_MAP_HINT);
+      var code = checkMapPin(linkFromCoords(v), ahHub.pincode).code, hint = document.getElementById("ah-map-hint");
+      if (loud && hint && (code === "format" || code === "empty")) hint.textContent = AH_COORDS_ERR;
+    };
+    on("ah-map", "input", function (e) { A.adminHubField("coords", e.target.value); ahPaint(e.target.value, false); });
+    on("ah-map", "change", function (e) { ahPaint(e.target.value, true); });
+  }
   on("ap-hub-search", "input", function (e) { A.adminListFilter("hubSearch", e.target.value); });
   on("ap-hub-filter", "change", function (e) { A.adminListFilter("hubFilter", e.target.value); });
   on("ap-rate-search", "input", function (e) { A.adminListFilter("rateSearch", e.target.value); });
@@ -7885,6 +8178,7 @@ function bindAdmin() {
   on("ap-rate-send", "click", A.adminRateSend);
   on("ap-rate-tp", "input", function (e) { A.adminRateField("touchpoint", e.target.value); });
   on("ap-rate-eff", "change", function (e) { A.adminRateField("effective", e.target.value); });
+  on("ap-rate-type", "change", function (e) { A.adminRateField("category", e.target.value); });
   on("ap-rate-reason", "input", function (e) { A.adminRateField("reason", e.target.value); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-rslab]"), function (el) {
     el.addEventListener("input", function () {
@@ -8034,6 +8328,9 @@ function bindPanel() {
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-hedismiss]"), function (el) {
     el.addEventListener("click", function () { A.hubEditDismiss(el.getAttribute("data-hedismiss")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-amdismiss]"), function (el) {
+    el.addEventListener("click", function () { A.amChangeDismiss(el.getAttribute("data-amdismiss")); });
   });
   on("he-cancel", "click", A.hubEditCancel);
   on("he-submit", "click", A.hubEditSubmit);
@@ -8387,6 +8684,7 @@ function devDo(cmd) {
       else { S.profile = blankProfile(); S.hubs = []; S.activeHubId = null;
              S.hubEdits = S.hubEdits.filter(function (e) { return isNetworkHubId(e.hubId); });
              S.rateUpdates = S.rateUpdates.filter(function (u) { return isNetworkHubId(u.hubId); });
+             S.amChanges = (S.amChanges || []).filter(function (c) { return !c.hubId || isNetworkHubId(c.hubId); });
              S.seededExisting = false;
              S.roles = { LM: blankRole("LM"), FM: blankRole("FM") }; }
       save(); render();
@@ -8494,6 +8792,7 @@ if (typeof window !== "undefined") {
       rateUpdateById: rateUpdateById, rateUpdateFor: rateUpdateFor, rateHubs: rateHubs,
       captainNotes: captainNotes, cycleStart: cycleStart,
       amHubs: amHubs, allHubById: allHubById, hubOwner: hubOwner, networkHubById: networkHubById,
+      amChangeById: amChangeById, parseCoords: parseCoords, linkFromCoords: linkFromCoords,
       nameScore: nameScore, gstNameCheck: gstNameCheck, gstLookup: gstLookup,
       vehicleTonnage: vehicleTonnage, vehicleRank: vehicleRank,
       impliedVehicles: impliedVehicles, smallerThan: smallerThan,
