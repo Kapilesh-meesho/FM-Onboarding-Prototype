@@ -445,7 +445,7 @@ the panel picker from `panel-select`, with four consoles:
 | **Area Manager** | Infra hard-gate checklist and VLS field pre-check; map pin corrections; captains' **hub edits**; **rate card updates** |
 | **Cluster Head** | Interview and the AM's rate card — approve within ceiling, raise above it, or send back; the same for AM rate card and hub type updates on live hubs |
 | **Zonal Head** | Monitoring only — AM and CH pendency. Approves nothing |
-| **FM Central Admin** | Design alignment and above-ceiling rate cards — onboarding and updates raised to them — plus user mapping |
+| **FM Central Admin** | Design alignment and above-ceiling rate cards — onboarding and updates raised to them |
 
 Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
 SLA chip — over a request table with search and status filters, and stat tiles. Each row
@@ -506,6 +506,16 @@ clears the correction, other desks see the pin read-only, and Central Admin's de
 read their lat-long from the effective pin. `OBD-78240` is seeded with the captain's pin
 dropped in Koramangala for its HSR Layout pincode, for the Area Manager to fix.
 
+### Samples in every tab
+
+Every tab of every admin panel opens on sample rows: the Area Manager's requests, hub edits
+and rate card updates; the Cluster Head's requests, the AM's requests and updates to review;
+the Zonal Head's AM and CH pendency; and Central Admin's own queue (`OBD-78263`, an
+Electronic City mini-hub priced over both ceilings and raised by the Cluster Head), its design
+approvals (`OBD-78240`'s carting design, sent for alignment), the AM and CH views and raised
+updates. There is no *User mapping* tab on any panel, and Central has no *ZH requests* tab:
+in the FM chain the Zonal Head approves nothing, so nothing ever waits with them.
+
 ### The Area Manager's portfolio
 
 The Area Manager (Priya Sharma, *Bengaluru South & East*) holds **every hub under them**,
@@ -537,12 +547,12 @@ The Area Manager's **Hub edits** tab (with a pending count) lists **every hub un
 with where its latest edit request stands — *Edit to review* first, then approved and
 rejected, then hubs with no request — with tiles for hubs, edits to review, approved and
 rejected, a search over hub, captain, phone and pincode, and a status filter. **Review**
-opens a request: each detail *now* against *requested*, the requested pin on a map with its
-pincode check, and the captain's note. **Approve** writes the new details onto the hub;
-**Reject** needs a reason, which the captain sees, and leaves the hub exactly as it was. A
-decided request stays read-only. **View hub** opens any hub — its current details, its pin
-on a map, its rate card with a link to update it, and its history: every edit asked of it
-and every change made to it.
+opens a request: each detail *now* against *requested*, and the requested pin on a map with
+its pincode check. **Approve** writes the new details onto the hub; **Reject** needs a
+reason, which the captain sees, and leaves the hub exactly as it was. **View hub** opens any
+hub — its current details, its pin on a map, and its rate card with a link to update it.
+There is no history on screen for now: every edit asked of a hub and every change made to it
+is kept in the data (`hubEdits`, `amChanges`), ready for a backend log.
 
 From View hub the Area Manager can also **edit a live hub directly** — its **address**, its
 **coordinates** (typed as `12.9346, 77.6262` or pasted as a Google Maps link, with the same
@@ -559,12 +569,11 @@ hub type, the rate card its captain agreed to and its version, and where any upd
 search (hub type included) and a filter by stage. A hub's detail shows its rate card history.
 
 Updating one starts from the agreed slabs and touchpoint, and carries the **hub type**: the
-Area Manager changes the rates, the type, or both, picks the payout cycle it applies from
-(the first of next month, or the month after), says why the rates are changing (the captain
-sees this) and can leave a note for the desks (they see it; the captain never does — it is
-needed when only the type changes). The chosen type's ceilings show on each slab and the
-touchpoint, and anything over them is flagged. An unchanged card, an incomplete one, or one
-without its reason isn't sent, and a hub takes one update at a time.
+Area Manager changes the rates, the type, or both — nothing else. There is no reason, note or
+date to fill in: why a rate is changing is talked through offline, and an update **applies
+from the day the captain agrees**. The chosen type's ceilings show on each slab and the
+touchpoint, and anything over them is flagged. An unchanged or incomplete card isn't sent,
+and a hub takes one update at a time.
 
 **Every update is reviewed before the captain hears of it**, the same chain a new hub's rate
 card runs:
@@ -576,9 +585,10 @@ AM: rates and/or hub type → CH reviews ─ within the type's ceilings → appr
 ```
 
 The **Cluster Head** and **FM Central Admin** each get a *Rate card updates* tab — what is
-waiting on them, with a count, and what they have decided. A review shows the agreed card
-against the proposed one, the hub type change, whether it sits within that type's ceilings,
-the reason, the note and the trail. Within the ceilings the Cluster Head approves; above them
+waiting on them, with a count, and what they decided that is **still pending** further along
+(an agreed or withdrawn update drops off; it stays in the data with its trail). A review shows
+the agreed card against the proposed one, the hub type change, whether it sits within that
+type's ceilings, and the trail. Within the ceilings the Cluster Head approves; above them
 they can only raise it to Central Admin; either desk can send it back with a reason. Approved,
 it reaches the captain's bell, and the agreed card stays in force until they agree. **The hub
 type takes effect only when the captain agrees** — and the captain is never told of it: a
@@ -746,7 +756,7 @@ build from.
 npm install && npm test
 ```
 
-**1673 assertions across 31 groups:**
+**1704 assertions across 32 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -861,13 +871,13 @@ npm install && npm test
    time, the Area Manager's tab, now-against-requested review, approve applying all four
    changes, reject needing a reason and changing nothing, both outcomes shown to the captain
    after signing back in through the login switch, and the dev panel shortcut
-27. **Rate card updates** — the FM hub's agreed card, the bell, the AM's tab and editor, the
-   update going to the Cluster Head first with the captain's bell quiet until it is approved,
-   (unchanged, unexplained and incomplete cards refused, slabs added and removed, the cycle
-   picked), one update at a time, the agreed card in force until agreed, the bell count and
-   notification, the agreement page with no reject or decline, Agree gated on the tick, the
-   card replaced as its next version, hub edit outcomes on the bell, the dev panel shortcut,
-   and the bell on onboarding's top bar
+27. **Rate card updates** — the FM hub's agreed card, the bell, the AM's tab and editor
+   (unchanged and incomplete cards refused, slabs added and removed, no date, reason or note
+   to fill in), the update going to the Cluster Head first with the captain's bell quiet
+   until it is approved, one update at a time, the agreed card in force until agreed, the bell
+   count and notification, the agreement page with no reject or decline, Agree gated on the
+   tick, the card replaced as its next version from the day it is agreed, hub edit outcomes on
+   the bell, the dev panel shortcut, and the bell on onboarding's top bar
 28. **Typing the hub pincode** — the field after the map link takes a pincode: a complete
    serviceable one is chosen with the caret kept in place, the city resolved and the map pin
    checked; unserviceable, malformed and sixth pincodes are refused at the field; a pick from
@@ -886,7 +896,7 @@ npm install && npm test
    form, unreadable coordinates and a pin outside the pincode, previewing in place, saving
    address, coordinates and vehicle straight to the hub and logging it; editing held back
    while a captain's edit waits; another captain's hub edited the same way; a hub type
-   change sent for review (needing a note) and taking effect only when the captain agrees;
+   change sent for review and taking effect only when the captain agrees;
    over-ceiling rates flagged, not refused; an above-ceiling update the Cluster Head can only
    raise, approved by Central Admin, with its trail; one sent back, revised and resubmitted,
    and one withdrawn; and the captain's side — three notifications, the hub card saying what
@@ -896,6 +906,12 @@ npm install && npm test
    sight; a sample captain agreeing to their approved update and dismissing a notice; staying
    signed in across a reload; signing back in as the existing captain putting every hub back;
    and the Area Manager seeing the agreement and who was notified
+32. **A leaner admin panel** — every tab of every admin panel holding sample rows; no User
+   mapping or ZH requests tab; the Cluster Head's "Decided by you" keeping only what is still
+   pending, dropping agreed and withdrawn updates while their trail stays logged; no reason,
+   note or date on an update, at any desk or for the captain, and an update applying from the
+   day the captain agrees; no note on a captain's hub edit; and no history on View hub while
+   every edit and change stays logged
 
 Three notes on how the tests drive the app:
 
