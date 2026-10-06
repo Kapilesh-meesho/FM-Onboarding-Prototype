@@ -94,7 +94,9 @@ Two things follow from the order, and both are handled rather than left to break
 - **Continue-button labels are derived from the phase list**, not hardcoded, so reordering
   phases cannot leave a button pointing at the wrong screen. Each phase carries an explicit
   mid-sentence name (`lc`) because lowercasing the title produced *"cluster Head review"*
-  and *"area Manager verification"*.
+  and *"area Manager verification"*. The one exception is the button after Cluster Head
+  approval, which just says *Continue*, so neither flow points the captain at a security
+  deposit from there.
 
 The shared phases reuse the same screens and components. The differences below are
 deliberate product decisions, not gaps in the build.
@@ -773,7 +775,7 @@ build from.
 npm install && npm test
 ```
 
-**1760 assertions across 33 groups:**
+**1762 assertions across 33 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -806,7 +808,8 @@ npm install && npm test
    captured for both roles
 10b. **Phase order** — both role orders pinned, hub details asserted ahead of background
    verification and Cluster Head review, every continue-button label checked against the
-   screen it actually leads to, and proper nouns checked for capitalisation
+   screen it actually leads to (Cluster Head approval just says *Continue*), and proper nouns
+   checked for capitalisation
 10c. **Back navigation, and no location photo** — Back absent on page 1 and past hub
    details, present and correctly labelled on pages 2 and 3, values still editable after a
    round trip, per-item KYC reopen with re-gating, and reopening a submitted hub; no photo

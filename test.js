@@ -511,6 +511,9 @@ async function testFMCombined() {
   ["Hub category","ceiling","Standalone"].forEach(w =>
     check(rateTxt.indexOf(w) === -1, "the slab card reveals no internals: " + w));
 
+  eq($(doc, "ch-continue").textContent.trim(), "Continue →",
+     "the button after Cluster Head approval just says Continue");
+  check(mainTxt(doc).toLowerCase().indexOf("deposit") === -1, "and nothing on the screen mentions a deposit");
   click(doc, "ch-continue");
   eq(api.helpers.phaseId(), "ag",
      "FM CH approved → agreements (no security deposit, no AM phase)");
@@ -1527,7 +1530,7 @@ async function testPhaseOrder() {
 
   eq(seen.hub, "Continue to background verification →", "hub details points at BGV");
   eq(seen.bgv, "Continue to Cluster Head review →", "BGV points at Cluster Head review");
-  eq(seen.ch,  "Continue to security deposit →", "Cluster Head points at the deposit");
+  eq(seen.ch,  "Continue →", "Cluster Head approval just says Continue");
   eq(seen.sd,  "Continue to Area Manager verification →", "deposit points at the Area Manager");
   eq(seen.am,  "Continue to agreements →", "Area Manager points at agreements");
   /* Proper nouns must survive: deriving the label by lowercasing the phase

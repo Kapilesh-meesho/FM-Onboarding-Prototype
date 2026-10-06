@@ -6012,7 +6012,6 @@ function phaseCH(r) {
   }
 
   if (ch.status === "approved") {
-    var nxtLabel = nextLabel(r);
     inner = statusBlock("ok", "Cluster Head review approved",
         ch.decidedBy === "central"
           ? "Your request and rate card were approved."
@@ -6023,8 +6022,10 @@ function phaseCH(r) {
       '<div class="tl">' +
         tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Approved on " + fmtDay(new Date())) +
       '</div>' +
+      /* Just "Continue": the button names no next step, so neither flow is
+         pointed at a security deposit from here. */
       '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
-        '<button class="btn btn-primary" id="ch-continue">' + nxtLabel + '</button></div>';
+        '<button class="btn btn-primary" id="ch-continue">Continue →</button></div>';
     side = sideDefault(r, chContactCard());
 
   } else if (ch.status === "central") {
