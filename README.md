@@ -4,8 +4,10 @@ A clickable prototype of Valmo's captain self-serve onboarding, covering **two r
 two different journeys**: the existing **LM Captain** flow (9 phases, as designed) and the
 new **FM Captain** flow (7 phases, which diverges after role selection).
 
-Everything is one file. Open `index.html` in a browser — no build step, no server, no
-dependencies. All CSS and JS are inline and the Valmo logo is embedded as a data URI.
+Everything is one file. Open `index.html` in a browser — no build step, no server. All CSS
+and JS are inline and the Valmo logo is embedded as a data URI. The one thing fetched is the
+map: Leaflet from unpkg and tiles from OpenStreetMap, so the maps need an internet
+connection.
 
 ```bash
 open index.html
@@ -240,13 +242,10 @@ nothing the captain can usefully edit.
 | Max vehicle size the location can accommodate | one of the 24 listed types |
 
 All three are required to submit, and they appear in the submitted summary alongside the
-address. A **photo of the location is optional** — the button sits inside the Google Maps
-link field, beside the input, and an uploaded image renders as a small thumbnail with its
-file name, click-to-enlarge, and Remove. It is stored as a data URL downscaled to 640px via
-canvas, because a full-size phone photo would exhaust the `localStorage` quota on its own.
-Files that are not images, are too large, or do not decode are refused with a reason rather
-than stored as a broken thumbnail. For FM these are the inputs that feed the Area Manager's survey and, through it,
-the hub categorisation that sets the benchmark ceiling.
+address. There is **no location photo**: hub details takes the map pin and nothing else, and
+an older save that still carries a photo drops it on load. For FM these are the inputs that
+feed the Area Manager's survey and, through it, the hub categorisation that sets the
+benchmark ceiling.
 
 Vehicle size is **one input**: the captain picks only the largest vehicle the hub can take,
 and everything smaller is assumed to fit. The field stays one row tall and opens a panel on
@@ -276,11 +275,16 @@ countdown is: a full `render()` would replace the search input and drop focus mi
 > collapsing stays visible and testable; if that second entry is genuinely a separate
 > vehicle, correct it there.
 
-**The map pin is previewed and checked against the hub's pincode.** Hub details reads the
-coordinates out of the pasted Google Maps link — `?q=lat,lng`, `/@lat,lng,zoom`, a place
-link's `!3d…!4d…` pin (which wins over where the map was scrolled), and
-`/place|search|dir/lat,lng` — and shows the pin on an embedded Google map with a link out.
-The pin is then checked against the pincode the captain picked:
+**The pin is dropped on a map, or read from a pasted link, and checked against the hub's
+pincode.** The map under the Google Maps link field can be tapped: a tap drops the pin there,
+and the pin can be dragged. Either way the field fills with a Maps link built from the
+coordinates (`https://maps.google.com/?q=12.90834,77.60419`, to five decimal places) and the
+latitude and longitude show under the map. A pasted link works too: the coordinates are read
+out of it — `?q=lat,lng`, `/@lat,lng,zoom`, a place link's `!3d…!4d…` pin (which wins over
+where the map was scrolled), and `/place|search|dir/lat,lng` — and the pin moves there, with
+the map following it. Before there is a pin, the map opens on the hub's pincode, or on one
+the captain has mentioned, or on central Bengaluru. The pin is navy until there is a
+pincode to check it against, then green inside it and red outside:
 
 | Pin | Result |
 |---|---|
@@ -288,14 +292,25 @@ The pin is then checked against the pincode the captain picked:
 | Nearer another pincode | ✗ *This pin is in 560034 (Koramangala), not the hub's pincode 560076.* |
 | More than 4 km from the pincode's area | ✗ names the distance |
 | Outside India, or impossible coordinates | ✗ |
-| A short `maps.app.goo.gl` share link | ✓ accepted as it is — it opens in Google Maps; it has no coordinates in it, so it isn't previewed or pincode-checked here |
+| A short `maps.app.goo.gl` share link | ✓ accepted as it is — it opens in Google Maps; it has no coordinates in it, so it isn't shown or pincode-checked here, and the map offers a tap instead |
 | A text search with no pin | ✗ asks for a link with the hub pinned |
 | No pincode picked yet | previewed, checked once one is picked |
 
 The check runs live once a link has coordinates (a half-typed link is left alone until the
-field is left), blocks submit with the same message, and the preview is patched in place so
-the field keeps focus. Reverse geocoding is **simulated** from pincode centroids
-(`PIN_AREAS`) so the prototype stays self-contained; the embed needs no API key.
+field is left) and on every tap or drag, and it blocks submit with the same message. The map
+is never redrawn while it is used: its pin moves in place, so the field keeps focus and the
+map keeps its view, and a re-render puts the map back where it was left. Reverse geocoding
+is **simulated** from pincode centroids (`PIN_AREAS`) so the prototype stays self-contained.
+
+The map is **Leaflet over OpenStreetMap tiles**, because Google's keyless embed can show a
+pin but can't say where someone tapped, and its JavaScript API needs a key. A real build
+uses the Google Maps SDK. The tiles come from the OpenStreetMap Germany server
+(`tile.openstreetmap.de`) because `tile.openstreetmap.org` refuses a page opened straight
+from disk, which sends no referrer; openstreetmap.org takes over if the first server keeps
+failing. If Leaflet can't load, the pin shows on Google's embed instead and can't be tapped.
+The same map is used wherever a pin is set: hub details, the captain's **Edit hub details**,
+the Area Manager's pin correction and the Area Manager's live-hub edit. Where a pin is only
+shown (View hub, a hub edit under review) the map can be moved around but the pin can't.
 
 **A failed backend call says why, and resumes from the same step.** Every call a captain
 makes can fail the way the real service would — the email code, DigiLocker/UIDAI (at the
@@ -497,7 +512,8 @@ visible that a correction happened — the context card shows the effective size
 
 The context card shows where the captain's pin is — linking to Google Maps — and warns when
 it sits outside the request's pincode. For the **Area Manager** only, *Edit* opens the same
-live preview and pincode check the captain's link went through; saving applies the
+map and pincode check the captain's link went through — tap the map or drag the pin to move
+it, or paste a link; saving applies the
 correction straight to the request, tags the row **AM updated** with the date, and keeps
 the captain's submission as it was. Nothing is sent back to the captain to verify: the
 request's desk, status and infra checks are untouched. The captain is **notified** — on
@@ -555,8 +571,9 @@ There is no history on screen for now: every edit asked of a hub and every chang
 is kept in the data (`hubEdits`, `amChanges`), ready for a backend log.
 
 From View hub the Area Manager can also **edit a live hub directly** — its **address**, its
-**coordinates** (typed as `12.9346, 77.6262` or pasted as a Google Maps link, with the same
-live map preview and pincode check) and its **max vehicle size**. It applies at once:
+**coordinates** (a tap on the map or a dragged pin fills them as `12.96946, 77.75299`; they
+can also be typed, or pasted as a Google Maps link, with the same pincode check) and its
+**max vehicle size**. It applies at once:
 nothing goes to the captain to approve or verify, and the captain is **notified**. An
 unchanged form or a pin outside the hub's pincode isn't saved, and while the captain's own
 edit of the hub is waiting, the Area Manager decides that first.
@@ -756,7 +773,7 @@ build from.
 npm install && npm test
 ```
 
-**1704 assertions across 32 groups:**
+**1760 assertions across 33 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -790,11 +807,11 @@ npm install && npm test
 10b. **Phase order** — both role orders pinned, hub details asserted ahead of background
    verification and Cluster Head review, every continue-button label checked against the
    screen it actually leads to, and proper nouns checked for capitalisation
-10c. **Back navigation and the location photo** — Back absent on page 1 and past hub
+10c. **Back navigation, and no location photo** — Back absent on page 1 and past hub
    details, present and correctly labelled on pages 2 and 3, values still editable after a
-   round trip, per-item KYC reopen with re-gating, reopening a submitted hub, and the photo:
-   optional, thumbnail rendering, enlarge, remove, and refusal of non-images, oversized
-   files and undecodable images
+   round trip, per-item KYC reopen with re-gating, and reopening a submitted hub; no photo
+   upload on hub details or row in its summary, and an older save that carries a photo
+   loading without it
 11. **Captain Hub** — the login switch; existing captain seeding and landing; `HB-01`
    grouping, per-hub codes and GST state; `PR-01` masking; the full bank-change journey
    including lockout, validation and a failed penny-drop; per-hub GSTIN add/update/remove;
@@ -846,8 +863,8 @@ npm install && npm test
    be forced in; the pick survives a failed submit; an older save is migrated; an existing
    captain adding a hub picks one; and the availability notice counts properly
 22. **Map pin** — every link format parsed, every outcome of the check (inside, another
-   pincode, too far, abroad, impossible, text search, no pincode yet), the embedded map and
-   badges, live checking that keeps the field, a half-typed link left alone until the field
+   pincode, too far, abroad, impossible, text search, no pincode yet), Google's embed (the
+   fallback without Leaflet) and badges, live checking that keeps the field, a half-typed link left alone until the field
    is left, submit blocked with the same message, the summary row, and a short share link
    accepted as it is — linked out to Google Maps, submitting, and saved by the Area Manager
 23. **API failures and resume** — each failing call (email, Aadhaar at send and at fetch,
@@ -912,13 +929,25 @@ npm install && npm test
    note or date on an update, at any desk or for the captain, and an update applying from the
    day the captain agrees; no note on a captain's hub edit; and no history on View hub while
    every edit and change stays logged
+33. **Dropping the pin on the map** — where a map opens; on hub details a map before any
+   link, OpenStreetMap tiles credited, a tap filling the link and dropping a draggable pin,
+   the pin navy, green or red as the check goes, its latitude and longitude under the map, a
+   drag out of the pincode flagged without moving the map, five decimal places, a pasted
+   link moving the pin and the map, a cleared link and a share link, a re-render keeping the
+   view, and submitting with the tapped pin; the same on the captain's Edit hub details and
+   the Area Manager's pin correction and live-hub edit (coordinates as latitude, longitude);
+   View hub and a hub edit under review showing a pin that can't be moved; every replaced
+   map let go; and, without Leaflet, a pick still landing on Google's embed
 
-Three notes on how the tests drive the app:
+Four notes on how the tests drive the app:
 
 - `markAgreementRead()` stands in for scroll-to-end, because jsdom has no layout and
   therefore no real `scrollHeight`. The test separately asserts the checkbox is disabled
   before and enabled after.
 - Activation fan-out runs on real timers; the tests wait for it rather than stubbing it.
+- jsdom loads no external scripts, so the page never gets Leaflet. Group 33 hands it a
+  stand-in (`mockLeaflet`) that records the view, tiles, pin and handlers and fires taps and
+  drags; every other group runs on Google's embed, the fallback.
 - The harness awaits the app's own `DOMContentLoaded` boot before driving anything. jsdom
   fires that after the constructor returns, so without the wait the app's boot lands
   mid-test and re-renders the DOM out from under whatever is being driven.
@@ -949,6 +978,10 @@ These were found by driving the build in a real browser, not by the original sui
 5. **A hub outside the new-hub list couldn't be edited at all.** Indiranagar Hub runs in
    560038, which isn't on the serviceable list for *new* hubs, so its own pincode failed the
    check. A hub keeping its pincode is now accepted; only a changed one must be serviceable.
+6. **A tap on the map picked a role.** The map's frame carried `data-pick`, the attribute the
+   role cards use, so the role-card click handler took a tap on the map for a pick of a role
+   called `hub-map` and broke the flow. The map's attributes are now all `data-map-*`, and a
+   test clicks the frame and checks the role and phase are unchanged.
 
 ---
 

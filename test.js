@@ -34,11 +34,12 @@ function eq(actual, expected, msg) {
 /* The app boots on DOMContentLoaded. jsdom fires that asynchronously, after the
    constructor returns — so the harness must wait for it, or the app's own boot()
    lands mid-test and re-renders the DOM out from under whatever we are driving. */
-async function boot() {
+async function boot({ beforeParse } = {}) {
   const dom = new JSDOM(HTML, {
     runScripts: "dangerously",
     url: "http://localhost/",
-    pretendToBeVisual: true
+    pretendToBeVisual: true,
+    beforeParse
   });
   const win = dom.window;
 
@@ -1539,14 +1540,14 @@ async function testPhaseOrder() {
 }
 
 /* =========================================================================
-   10c. Stepping back through the opening phases, and the optional photo
+   10c. Stepping back through the opening phases, and no location photo
    ====================================================================== */
 
-// a 1x1 gif, enough to stand in for an uploaded image
+// a 1x1 gif, standing in for a photo an older save still carries
 const TINY_IMG = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 async function testBackAndPhoto() {
-  section("10c. Back navigation and the optional location photo");
+  section("10c. Back navigation, and no location photo");
   const { win, doc, api } = await boot();
   const E = api.errors;
 
@@ -1619,69 +1620,36 @@ async function testBackAndPhoto() {
         "no Back from background verification — the flow has handed off");
   check(!exists(doc, "#phase-back"), "and no Back button is rendered there");
 
-  /* ---- the optional location photo ---- */
+  /* ---- no location photo: hub details takes the map pin and nothing else ---- */
   api.reset();
   login(doc);
   pickRole(doc, "LM");
   doPersonalDetails(doc);
   doKyc(doc, "LM");
   eq(api.helpers.phaseId(), "hub", "back at hub details");
-
-  check(exists(doc, "#hub-photo-btn"), "an upload button sits beside the map link");
-  check(!!sel(doc, "#hub-map").closest(".box").querySelector("#hub-photo-btn"),
-        "the button is inside the map link field, beside the input");
-  check(exists(doc, "#hub-photo-file"), "backed by a real file input");
-  eq($(doc, "hub-photo-file").getAttribute("accept"), "image/*", "which accepts images");
-  check(!exists(doc, '[data-testid="hub-photo"]'), "no thumbnail before anything is uploaded");
-  check($(doc, "hub-photo-btn").textContent.indexOf("Add photo") >= 0, "button offers to add one");
-
-  /* the photo is optional — hub details submits without it */
+  check(!exists(doc, "#hub-photo-btn") && !exists(doc, "#hub-photo-file") &&
+        !exists(doc, 'input[type="file"]'), "hub details has no photo upload");
+  check(mainTxt(doc).toLowerCase().indexOf("photo") < 0, "and doesn’t mention a photo");
+  check(typeof api.actions.setHubPhoto === "undefined", "nor any action to attach one");
+  check(!("photo" in api.helpers.R().hub), "the hub record has no photo field");
   doHubDetails(doc, { address: "No. 42, Koramangala" });
-  check(api.helpers.R().hub.submitted, "hub details submits with no photo attached");
-  check(!api.helpers.R().hub.photo, "and no photo is recorded");
-  click(doc, "hub-edit");
+  check(api.helpers.R().hub.submitted, "hub details submits");
+  check(txt(doc).indexOf("Location photo") < 0, "and the summary shows no photo row");
 
-  /* uploading renders a thumbnail */
-  api.actions.setHubPhoto(TINY_IMG, "gate.jpg");
-  check(exists(doc, '[data-testid="hub-photo"]'), "a thumbnail appears once uploaded");
-  const thumb = $(doc, "hub-photo-thumb");
-  check(!!thumb && thumb.tagName === "IMG", "the thumbnail is a rendered image");
-  eq(thumb.getAttribute("src"), TINY_IMG, "showing the uploaded image itself");
-  check(txt(doc).indexOf("gate.jpg") >= 0, "the file name is shown");
-  check($(doc, "hub-photo-btn").textContent.indexOf("Replace photo") >= 0,
-        "the button now offers to replace it");
-
-  /* it can be viewed full size and removed */
-  click(doc, "hub-photo-thumb");
-  check(exists(doc, "#photo-lb"), "clicking the thumbnail opens it full size");
-  click(doc, "photo-lb");
-  check(!exists(doc, "#photo-lb"), "and clicking again closes it");
-  click(doc, "hub-photo-remove");
-  check(!api.helpers.R().hub.photo, "Remove clears the photo");
-  check(!exists(doc, '[data-testid="hub-photo"]'), "and the thumbnail goes away");
-
-  /* non-images and oversized images are refused */
-  api.actions.setHubPhoto("not-a-data-url", "notes.txt");
-  check(txt(doc).indexOf(E.photoType) >= 0, "a non-image is refused");
-  check(!api.helpers.R().hub.photo, "and nothing is stored");
-  api.actions.setHubPhoto("data:image/png;base64," + "A".repeat(2000001), "huge.png");
-  check(txt(doc).indexOf(E.photoSize) >= 0, "an oversized image is refused");
-  check(!api.helpers.R().hub.photo, "and nothing is stored");
-
-  /* A file that claims to be an image but does not decode used to be stored
-     anyway, rendering as a broken thumbnail with no explanation. */
-  api.actions.setHubPhoto(TINY_IMG, "ok.gif");
-  api.actions.rejectHubPhoto(E.photoUnreadable);
-  check(txt(doc).indexOf(E.photoUnreadable) >= 0, "an undecodable image is refused");
-  check(!api.helpers.R().hub.photo, "and any previous photo is cleared rather than left broken");
-  check(!exists(doc, '[data-testid="hub-photo"]'), "no broken thumbnail is rendered");
-
-  /* it survives submission and reaches the summary */
-  api.actions.setHubPhoto(TINY_IMG, "gate.jpg");
-  click(doc, "hub-submit");
-  check(api.helpers.R().hub.submitted, "submits with a photo attached");
-  check(!!sel(doc, '.kv .row img'), "the submitted summary renders the photo");
-  check(txt(doc).indexOf("Location photo") >= 0, "and labels it");
+  /* a save from before the photo was dropped loads without it */
+  const KEY = "valmo.captain.onboarding.v1";
+  const saved = JSON.parse(win.localStorage.getItem(KEY));
+  saved.roles.LM.hub.photo = TINY_IMG;
+  saved.roles.LM.hub.photoName = "gate.jpg";
+  saved.hubs = (saved.hubs || []).concat([{ id: "h-old", code: "OLD", name: "Old hub", role: "LM",
+    status: "active", photo: TINY_IMG, photoName: "gate.jpg" }]);
+  win.localStorage.setItem(KEY, JSON.stringify(saved));
+  check(api.reload(), "an older save still loads");
+  check(!("photo" in api.helpers.R().hub) && !("photoName" in api.helpers.R().hub),
+        "its hub details lose the photo");
+  check(api.state.hubs.every((h) => !("photo" in h) && !("photoName" in h)), "and so do its hubs");
+  api.actions.hubEdit();                     // any change saves the state again
+  check(win.localStorage.getItem(KEY).indexOf(TINY_IMG) < 0, "and once saved again, no image data is kept");
 
   api.stopTimers();
   win.close();
@@ -3044,7 +3012,11 @@ async function testMapPin() {
   doPersonalDetails(doc);
   doKyc(doc, "FM");
   pickPincode(doc, "560076");
-  check(!exists(doc, '[data-testid="map-preview"]'), "no preview before a link is pasted");
+  /* the harness has no Leaflet, so the map falls back to Google's embed: before
+     a link there is nothing to show, and it says to paste one */
+  check(exists(doc, '#hub-map-preview [data-testid="map-off"]'), "before a link, the map says to paste one");
+  check(!exists(doc, '[data-testid="map-pin-ok"]') && !exists(doc, '[data-testid="map-pin-bad"]'),
+        "with no pin to judge");
 
   const input = $(doc, "hub-map");
   type(doc, "hub-map", at("560076"));
@@ -4633,6 +4605,250 @@ async function testLeanAdmin() {
   win.close();
 }
 
+/* =========================================================================
+   33. Dropping the pin on the map — captain and Area Manager
+   ====================================================================== */
+
+/* jsdom loads no external scripts, so the page never gets Leaflet. This stand-in
+   records what the app asks of it (the view, the tiles, the pin and the
+   handlers) and lets a test fire a tap or a drag the way Leaflet would. */
+function mockLeaflet() {
+  const maps = [];
+  const layer = (kind, props) => Object.assign({
+    kind, handlers: {}, map: null,
+    on(ev, fn) { (this.handlers[ev] = this.handlers[ev] || []).push(fn); return this; },
+    fire(ev, d) { (this.handlers[ev] || []).forEach((f) => f(d)); },
+    addTo(m) { this.map = m; m.layers.push(this); return this; },
+    remove() { if (this.map) this.map.removeLayer(this); return this; },
+    setLatLng(ll) { this.latlng = { lat: ll[0], lng: ll[1] }; return this; },
+    getLatLng() { const p = this.latlng; return { lat: p.lat, lng: p.lng, wrap: () => ({ lat: p.lat, lng: p.lng }) }; },
+    setIcon(i) { this.icon = i; return this; }
+  }, props);
+  return {
+    maps,
+    map(el, opts) {
+      const m = {
+        el, opts, view: null, views: 0, handlers: {}, layers: [], removed: false,
+        attributionControl: { prefix: undefined, setPrefix(p) { this.prefix = p; } },
+        setView(ll, zoom) {
+          this.view = { lat: ll[0], lng: ll[1], zoom }; this.views++;
+          (this.handlers.moveend || []).forEach((f) => f());
+          return this;
+        },
+        getCenter() { return { lat: this.view.lat, lng: this.view.lng }; },
+        getZoom() { return this.view.zoom; },
+        on(ev, fn) { (this.handlers[ev] = this.handlers[ev] || []).push(fn); return this; },
+        fire(ev, d) { (this.handlers[ev] || []).forEach((f) => f(d)); },
+        removeLayer(l) { this.layers = this.layers.filter((x) => x !== l); l.map = null; return this; },
+        remove() { this.removed = true; return this; },
+        pin() { return this.layers.filter((l) => l.kind === "marker")[0]; }
+      };
+      el.classList.add("leaflet-container");
+      maps.push(m);
+      return m;
+    },
+    tileLayer(url, opts) { return layer("tiles", { url, opts }); },
+    marker(ll, opts) { return layer("marker", { latlng: { lat: ll[0], lng: ll[1] }, opts, icon: opts.icon }); },
+    divIcon(o) { return o; }
+  };
+}
+
+async function testMapPick() {
+  section("33. Dropping the pin on the map — captain and Area Manager");
+  const L = mockLeaflet();
+  const { win, doc, api } = await boot({ beforeParse: (w) => { w.L = L; } });
+  const H = api.helpers, A = api.actions;
+  const area = (pin) => H.PIN_AREAS[pin];
+  const mapAt = (q) => { const f = sel(doc, q + " .map-frame"); return f && f._lm ? L.maps.find((m) => m.el === f) : null; };
+  const where = (k) => [k.latlng.lat, k.latlng.lng];
+  const tap = (m, lat, lng) => m.fire("click", { latlng: { lat, lng, wrap: () => ({ lat, lng }) } });
+  const drag = (m, lat, lng) => { const k = m.pin(); k.setLatLng([lat, lng]); k.fire("dragend"); };
+
+  /* --- where a map opens --- */
+  const view = (link, pin, near) => H.mapStartView(H.checkMapPin(link, pin), pin, near);
+  eq(view("https://maps.google.com/?q=12.9,77.6", "560076"), { lat: 12.9, lng: 77.6, zoom: 16 }, "a map with a pin opens on it");
+  eq(view("", "560076"), { lat: 12.9081, lng: 77.604, zoom: 14 }, "without one, on the hub’s pincode");
+  eq(view("", null, "560034"), { lat: 12.9352, lng: 77.6245, zoom: 14 }, "or on a pincode the captain has mentioned");
+  eq(view("", null, ""), H.MAP_HOME, "or on central Bengaluru");
+
+  /* --- the captain, on hub details --- */
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  let m = mapAt("#hub-map-preview");
+  check(!!m, "hub details opens with a map the pin can be dropped on");
+  eq(m.view, H.MAP_HOME, "with no pincode yet it opens on central Bengaluru");
+  const tiles = m.layers.find((l) => l.kind === "tiles");
+  check(!!tiles && /^https:\/\/tile\.openstreetmap\.de\//.test(tiles.url),
+        "over OpenStreetMap tiles from a server that also serves a page opened from disk");
+  check(/OpenStreetMap/.test(tiles.opts.attribution), "credited to OpenStreetMap");
+  eq(m.opts.scrollWheelZoom, false, "scrolling the page past it doesn’t zoom the map");
+  check(!m.pin(), "there is no pin until one is dropped");
+  check(sel(doc, '[data-testid="map-pick-hint"]').textContent.indexOf("Tap the map") >= 0, "the map says to tap it");
+  check($(doc, "hub-map-hint").textContent.indexOf("Tap the map to drop the pin") >= 0,
+        "and so does the hint under the link field");
+
+  /* the frame used to share data-pick with the role cards, so a click on it
+     picked a role called "hub-map" */
+  clickSel(doc, "#hub-map-preview .map-frame");
+  eq([api.state.activeRole, H.phaseId()], ["FM", "hub"], "a click on the map is not taken for a role pick");
+
+  tap(m, 12.90834, 77.60419);
+  eq($(doc, "hub-map").value, "https://maps.google.com/?q=12.90834,77.60419", "a tap fills the link field with the pin");
+  eq(H.R().hub.mapLink, "https://maps.google.com/?q=12.90834,77.60419", "and saves it");
+  check(!!m.pin() && m.pin().opts.draggable, "a pin appears that can be dragged");
+  eq(where(m.pin()), [12.90834, 77.60419], "where the map was tapped");
+  check(/\bwait\b/.test(m.pin().icon.className), "navy while there is no pincode to check it against");
+  check(mainTxt(doc).indexOf("Pick the hub pincode to check this pin") >= 0, "and the map says so");
+  check(sel(doc, '#hub-map-preview [data-testid="map-coords"]').textContent.indexOf("12.90834, 77.60419") >= 0,
+        "the latitude and longitude show under the map");
+  eq(L.maps.filter((x) => !x.removed).length, 1, "a tap moves the pin without redrawing the map");
+
+  /* choosing the hub pincode checks the pin, and the map stays where it was */
+  const left = Object.assign({}, m.view);
+  A.typeHubPincode("560076");
+  const m2 = mapAt("#hub-map-preview");
+  check(m.removed && !!m2 && m2 !== m, "a re-render lets the old map go and mounts a new one");
+  eq(m2.view, left, "which opens where the last one was left");
+  check(/\bok\b/.test(m2.pin().icon.className), "the pin turns green inside 560076");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "and is marked inside the pincode");
+  m = m2;
+
+  /* dragging it out of the pincode flags it; the map doesn't move */
+  const views = m.views;
+  drag(m, area("560034").lat, area("560034").lng);
+  check($(doc, "hub-map").value.indexOf("q=12.9352,77.6245") >= 0, "dragging the pin moves the link with it");
+  check(/\bbad\b/.test(m.pin().icon.className), "the pin turns red outside the pincode");
+  check($(doc, "hub-map-hint").textContent.indexOf("560034 (Koramangala)") >= 0,
+        "and the field says which pincode it landed in");
+  check($(doc, "hub-map-box").classList.contains("bad"), "marking the field");
+  eq(m.views, views, "a drag doesn’t move the map");
+
+  tap(m, area("560076").lat + 0.001, area("560076").lng);
+  check(!$(doc, "hub-map-box").classList.contains("bad"), "a tap back inside the pincode clears it");
+  check(/\bok\b/.test(m.pin().icon.className), "and the pin is green again");
+
+  tap(m, 12.908345678, 77.604194321);
+  eq($(doc, "hub-map").value, "https://maps.google.com/?q=12.90835,77.60419", "a tap is kept to five decimal places");
+  A.mapPick("hub-map", NaN, 77.6);
+  eq(H.R().hub.mapLink, "https://maps.google.com/?q=12.90835,77.60419", "a point without coordinates is ignored");
+
+  /* a pasted link moves the pin and brings the map to it */
+  type(doc, "hub-map", "https://www.google.com/maps/place/BTM/@12.9112,77.6062,17z");
+  eq(where(m.pin()), [12.9112, 77.6062], "a pasted link moves the pin");
+  eq([m.view.lat, m.view.lng], [12.9112, 77.6062], "and the map follows it");
+  type(doc, "hub-map", "");
+  check(!m.pin(), "clearing the link takes the pin away");
+  check(exists(doc, '[data-testid="map-pick-hint"]'), "and the map asks for a tap again");
+  type(doc, "hub-map", "https://maps.app.goo.gl/AbC123");
+  check(sel(doc, '[data-testid="map-preview-shared"]').textContent.indexOf("tap the map to drop the pin instead") >= 0,
+        "a share link can’t be shown, so the map offers a tap instead");
+  tap(m, 12.909, 77.605);
+  eq($(doc, "hub-map").value, "https://maps.google.com/?q=12.909,77.605", "and a tap replaces it with the pin");
+
+  doHubDetails(doc, { pin: null, map: $(doc, "hub-map").value });
+  check(H.R().hub.submitted, "hub details submits with the tapped pin");
+  eq(H.R().hub.mapLink, "https://maps.google.com/?q=12.909,77.605", "keeping it");
+  check(m.removed && H.liveMaps().length === 0, "the summary has no map, and the last one is let go");
+  A.mapPick("hub-map", 12.95, 77.6);
+  eq(H.R().hub.mapLink, "https://maps.google.com/?q=12.909,77.605", "a stray tap after submitting changes nothing");
+
+  /* --- the captain asks to move a live hub's pin --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
+  A.hubEditOpen("hub-aqt");
+  m = mapAt("#he-map-preview");
+  check(!!m && !!m.handlers.click, "Edit hub details in the Captain Hub has a map to tap");
+  eq(where(m.pin()), [12.9349, 77.6251], "opening on the hub’s current pin");
+  check(m.pin().opts.draggable, "which can be dragged");
+  tap(m, 12.93387, 77.62133);
+  eq($(doc, "he-map").value, "https://maps.google.com/?q=12.93387,77.62133", "a tap fills the link");
+  eq(api.state.panel.hubEdit.draft.mapLink, "https://maps.google.com/?q=12.93387,77.62133", "and the draft");
+  check(exists(doc, '#he-map-preview [data-testid="map-pin-ok"]'), "checked against the hub’s pincode, 560034");
+  click(doc, "he-submit");
+  const sent = api.state.hubEdits[api.state.hubEdits.length - 1];
+  eq([sent.hubId, sent.after.mapLink], ["hub-aqt", "https://maps.google.com/?q=12.93387,77.62133"],
+     "the edit sent to the Area Manager carries the tapped pin");
+
+  /* --- the Area Manager --- */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+
+  // View hub: the pin can be looked at, not moved
+  A.adminTab("edits");
+  A.adminHubOpen("nh-whf");
+  const vm = mapAt('[data-testid="ap-hub-view"]');
+  check(!!vm && !vm.handlers.click, "View hub shows the pin on a map that takes no taps");
+  check(!!vm.pin() && !vm.pin().opts.draggable, "and whose pin can’t be dragged");
+  const whf = H.allHubById("nh-whf").mapLink;
+  A.mapPick("ah-map", 12.97, 77.75);
+  eq(H.allHubById("nh-whf").mapLink, whf, "a pick with no editor open changes nothing");
+
+  // editing the live hub: a tap fills the coordinates
+  click(doc, "ah-edit");
+  const em = mapAt("#ah-map-preview");
+  check(vm.removed, "opening the editor lets the view map go");
+  check(!!em && !!em.handlers.click && em.pin().opts.draggable, "the editor’s map takes a tap or a drag");
+  tap(em, 12.96946, 77.75299);
+  eq($(doc, "ah-map").value, "12.96946, 77.75299", "a tap fills the hub coordinates as latitude, longitude");
+  eq(api.state.admin.hubDraft.coords, "12.96946, 77.75299", "in the draft too");
+  drag(em, 12.9701, 77.7512);
+  eq($(doc, "ah-map").value, "12.9701, 77.7512", "dragging the pin updates them");
+  check(exists(doc, '#ah-map-preview [data-testid="map-pin-ok"]'), "inside the hub’s pincode, 560066");
+  click(doc, "ah-save");
+  eq(H.allHubById("nh-whf").mapLink, "https://maps.google.com/?q=12.9701,77.7512", "saved to the hub as a Maps link");
+  check(api.state.amChanges.some((c) => c.hubId === "nh-whf" && c.fields.indexOf("mapLink") >= 0),
+        "and the captain is told");
+
+  // correcting the pin on an onboarding request
+  A.adminTab("mine");
+  A.adminOpen("OBD-78219");
+  click(doc, "ap-map-edit");
+  const am = mapAt("#ap-map-preview");
+  check(!!am && !!am.handlers.click, "the pin correction on a request has a map to tap");
+  tap(am, 12.90992, 77.60313);
+  eq($(doc, "ap-map").value, "https://maps.google.com/?q=12.90992,77.60313", "a tap fills the link");
+  click(doc, "ap-map-save");
+  eq(H.apMapLink(H.apById("OBD-78219")), "https://maps.google.com/?q=12.90992,77.60313",
+     "and Save applies it as the Area Manager’s correction");
+  check(exists(doc, '[data-testid="ap-map-updated"]'), "tagged AM updated");
+
+  // a captain's requested pin, under review: looked at, not moved
+  A.adminTab("edits");
+  const withPin = api.state.hubEdits.find((e) => e.status === "pending" &&
+    H.hubEditChanged(e).some((f) => f.id === "mapLink"));
+  A.adminEditOpen(withPin.id);
+  const rm = mapAt('[data-testid="ap-edit-detail"]');
+  check(!!rm && !rm.handlers.click && !rm.pin().opts.draggable,
+        "a requested pin under review can be looked at, not moved");
+
+  const open = L.maps.filter((x) => !x.removed);
+  eq(open.length, doc.querySelectorAll(".map-frame").length, "every map on screen is mounted once");
+  eq(H.liveMaps().length, open.length, "and every map a render replaced has been let go");
+
+  /* --- without Leaflet a pick still lands; the pin shows on Google's embed --- */
+  const plain = await boot();
+  login(plain.doc);
+  pickRole(plain.doc, "FM");
+  doPersonalDetails(plain.doc);
+  doKyc(plain.doc, "FM");
+  plain.api.actions.typeHubPincode("560076");
+  plain.api.actions.mapPick("hub-map", 12.9101, 77.6071);
+  eq($(plain.doc, "hub-map").value, "https://maps.google.com/?q=12.9101,77.6071", "without Leaflet a pick still fills the field");
+  const frame = sel(plain.doc, "#hub-map-preview iframe");
+  check(!!frame && frame.getAttribute("src").indexOf("q=12.9101,77.6071") >= 0, "and Google’s embed shows the pin");
+  check(exists(plain.doc, '[data-testid="map-pin-ok"]'), "checked inside 560076");
+  plain.api.stopTimers();
+  plain.win.close();
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
@@ -4670,6 +4886,7 @@ async function testLeanAdmin() {
     await testAmDirectChanges();
     await testSampleCaptains();
     await testLeanAdmin();
+    await testMapPick();
   } catch (e) {
     bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
   }
