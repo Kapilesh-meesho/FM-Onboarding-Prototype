@@ -57,7 +57,7 @@ The dev panel's **Log in as** switch on the login screen decides which journey y
   them, to see their bell and their side of the flows.
 - **Existing captain · 4 hubs** → straight into the **Captain Hub**, with the hubs from
   `HB-01` already seeded — three LM hubs (two active, one inactive) and one live FM hub,
-  **KDG · Kudlu Gate Hub**, with an agreed rate card for the Area Manager to update.
+  **KDG · Kudlu Gate Hub**, on its seventh rate card version, for the Area Manager to update.
 
 Onboarding always ends by creating a hub the captain then owns, so a new captain who
 completes a flow lands in the same Captain Hub with one hub.
@@ -116,19 +116,34 @@ which this prototype builds. It is not a step the captain waits on as its own sc
 Both roles walk KYC as a sequence, matching `KYC-01`…`KYC-14`: **Aadhaar → PAN → bank →
 GST**, each on its own card, with a confirmation screen between them rather than one long
 scrollable form. The Aadhaar confirmation shows the record fetched from Aadhaar (name, date
-of birth, address); the bank step carries a read-only *account holder name* filled in after
-the penny-drop; GST is a two-way radio where the GSTIN field appears only once *GST
-registered* is chosen. The final card (`KYC-14`) summarises all four, and each row there can
-be reopened and redone individually.
+of birth, address). The bank step asks only for the account number and IFSC — there is no
+*account holder name* field on it; the name the penny-drop returns is shown on the bank
+confirmation afterwards. For LM, GST is a two-way radio where the GSTIN field appears only once
+*GST registered* is chosen; FM goes straight to the GSTIN (see below). The final card
+(`KYC-14`) summarises all four, and each row there can be reopened and redone individually.
 
 **3. KYC differs in four ways.**
 
 | | LM | FM |
 |---|---|---|
-| GST | Optional toggle — *Non-GST* is a valid, complete answer | **Mandatory.** GSTIN required |
+| GST | Optional toggle — *Non-GST* is a valid, complete answer | **Expected.** GSTIN field straight away; no Non-GST option. *Don't have GST?* is a deliberate path the Area Manager approves |
 | MSME registration certificate | — | **Optional upload** |
 | Cancelled cheque | Optional upload | **Not collected** — the ₹1 penny-drop already proves the account |
-| Continue enabled when | Aadhaar + PAN + bank + GST status | Aadhaar + PAN + bank + GST |
+| Continue enabled when | Aadhaar + PAN + bank + GST status | Aadhaar + PAN + bank + a verified GSTIN, or a no-GST declaration |
+
+**FM without GST is deliberate, and the Area Manager approves it.** The FM GST card shows
+the GSTIN field and, under it, a *Don't have GST?* link — there is no Non-GST option to pick.
+The link opens a declaration: a reason (*turnover below the GST threshold*, *applied, GSTIN
+not issued yet*, or *other*) and a confirmation tick, both required. Submitted, KYC
+completes with *No GST · Awaiting Area Manager approval* and the captain carries on. The
+Area Manager decides it on the infra check (*11. Continuing without GST*, Approve or Decline)
+— the infra check can't continue until they do. On the captain's side the review shows the
+AM considering it, and the hub type can't be set until it's decided. Approved, the hub goes
+live without GST and the approval stays on the hub's record. Declined, the captain is asked
+for a GSTIN on the review screen, checked exactly as on KYC, and the review carries on once
+it verifies. Verifying a GSTIN at any point (reopening GST on the KYC summary, say) drops the
+declaration. An existing captain adding an FM hub gets the same *Don't have GST for this
+hub?* link in place of the old disabled Non-GST row.
 
 MSME is collected for FM but does not gate anything: the block is labelled *Optional*, GST
 is the only starred requirement, and the summary records the certificate as *Not provided*
@@ -150,28 +165,37 @@ desk tells the captain the Area Manager is revising the card — no reason, no d
 the word *rejected*. A Central Admin approval reads simply *your request and rate card were
 approved*. The Cluster Head stays the captain's only named contact throughout.
 
-**5. The rate card is approved against a benchmark ceiling** determined by that hub
-category:
+**5. The rate card is approved against ceilings for the hub type and city, and the
+touchpoint is fixed.** Both come from the FM hub rate card sheet.
 
-| Category | Slab ceiling (₹/shipment) | Touchpoint ceiling (₹/shipment) |
-|---|---|---|
-| Standalone (mini-hub) | 3.2 | 6 |
-| Standalone | 5 | 5 |
-| LM-as-FM | 6 | 6 |
-| Mall hub | 2 | 2 |
-| SAH (seller as hub) | 1.5 | 1.5 |
+The **touchpoint rate is fixed per hub type** — no one prices it, the Area Manager included.
+It's shown read-only wherever a card is made (onboarding, an update, a bulk update) and
+changes only with the hub type:
 
-**The touchpoint rate is benchmarked separately**, against a ceiling of its own, because it
-is paid per touchpoint rather than per slab. A card is above threshold if *any* slab rate
-exceeds the slab ceiling **or** the touchpoint rate exceeds the touchpoint ceiling — either
-one alone is enough to turn the submission into an approval request.
+| Hub type | Touchpoint (₹/shipment) |
+|---|---|
+| Standalone (mini-hub) | 6.00 |
+| Standalone | 5.00 |
+| LM-as-FM | 6.00 |
+| Mall hub | 2.00 |
+| SAH (seller as hub) | 0.00 |
+
+**Slab ceilings are per slab.** The sheet has six 2,500-order columns (0–2,500 up to above
+12,500); each slab is held to the column its first order falls in, so a ceiling can step down
+from slab to slab. Mini-hub and SAH ceilings are the same everywhere; Standalone and Mall hub
+ceilings differ by **city** — the prototype carries the rows for the cities its pincodes
+resolve to (Bengaluru, Delhi, Mumbai). A Standalone or Mall hub in a city with no row has no
+ceiling a Cluster Head can approve within, so its card goes to BizFin. The sheet's LM-as-FM
+tab is blank, so LM-as-FM keeps its earlier flat 6.00. A card is above threshold if *any*
+slab is over its own ceiling. Because the touchpoint is fixed, a hub type change that moves it
+(Standalone → LM-as-FM, 5.00 → 6.00) is a rate change the captain is notified of; one between
+types that share it (mini-hub ↔ LM-as-FM) stays internal.
 
 The chain, on both the captain side and the admin panel:
 
-- The **Area Manager** sets the hub type and authors the rate card — slabs plus one
-  touchpoint rate.
-- **Within both ceilings**, the **Cluster Head** approves it.
-- **Above either ceiling**, the Cluster Head cannot settle it and raises it to **Central
+- The **Area Manager** sets the hub type and prices each slab; the touchpoint follows the type.
+- **Within the ceilings**, the **Cluster Head** approves it.
+- **Above any slab's ceiling**, the Cluster Head cannot settle it and raises it to **Central
   Admin**, which approves or rejects.
 - A rejection at either desk sends the card **back to the Area Manager** to revise. It does
   not go to the captain.
@@ -207,24 +231,24 @@ classification, not a mapping feature.)
 
 ### Shared behaviour worth calling out
 
-**The serviceable-pincode check lives on hub details.** It used to sit on personal details,
-which now asks only about the person (name, email, alternate phone). The hub's pincode is
-typed straight into the **Hub pincode** field after the map link — a complete pincode runs
-the same availability check, joins the list and becomes the hub's pincode when VALMO serves
-it, with the city and the map pin checked at once — or picked from the serviceable results,
-which sit between the hub area / estimated manpower row and max vehicle size. The two stay in
-step: a pick fills the field, and a typed pincode shows as chosen in the check. An existing
-captain adding a hub now picks one too, which they previously never did. An older save that kept
-the picks on personal details is migrated onto hub details on load.
+**Pincodes live on hub details, and are never checked.** They used to sit on personal
+details, which now asks only about the person (name, email, alternate phone). There is no
+serviceability check: the hub's own pincode is typed straight into the **Hub pincode** field
+after the map link — any well-formed 6-digit pincode is taken, with the city and the map pin
+checked against it at once — and the **pincodes this hub will service** are listed between
+the hub area / estimated manpower row and max vehicle size. Both are needed to submit: the
+hub's pincode, and at least one to service. The two are separate — typing the hub pincode
+doesn't add it to the list. The submitted summary lists the pincodes serviced. An existing
+captain adding a hub enters them too, which they previously never did. An older save that kept
+pincodes on personal details is migrated onto hub details on load. The Area Manager's edit of
+a live hub's pincode likewise checks only its format.
 
-**Serviceable pincodes take a pasted list.** Rather than adding one at a time, a captain
+**Pincodes to service take a pasted list.** Rather than adding one at a time, a captain
 can type or paste several — separated by commas, semicolons, slashes or whitespace — and
 they are added in one action. Pasting a separated list adds it immediately without pressing
 *Add*. Partial success is the normal case and is reported by reason, for example
 *"Added 3. Skipped 1 not a valid pincode (notapin); 1 already added."* — shown in amber
-rather than red, because some entries did land. The 5-pincode cap still holds, and adding
-any new pincode clears a previous availability result so a stale one can't be carried
-forward.
+rather than red, because some entries did land. The 5-pincode cap still holds.
 
 **The first three phases can be stepped back through.** Personal details, KYC and hub
 details all carry a *← Back* control naming the page it returns to, and captured values are
@@ -317,7 +341,7 @@ shown (View hub, a hub edit under review) the map can be moved around but the pi
 **A failed backend call says why, and resumes from the same step.** Every call a captain
 makes can fail the way the real service would — the email code, DigiLocker/UIDAI (at the
 OTP send or the fetch after it), the Income Tax PAN service, the bank's penny-drop, the GST
-portal, the pincode availability check, the background-check partner, and each activation
+portal, the background-check partner, and each activation
 system. The notice names what didn't go through, **the service's reason**, an error code
 with a reference and time for Support, and that nothing entered is lost. The card's own
 button becomes **Resume verification** (or *Resume*, *Resume check*, *Resume activation*)
@@ -407,21 +431,25 @@ current details while the request waits — the card says so, one request per hu
 rejection, until dismissed.
 
 **The bell** sits at the top right of the Captain Hub, and of onboarding's top bar once the
-captain runs hubs, with a count. It carries **rate card updates** to agree to — only once
-the Cluster Head, or Central Admin, has approved them — decided hub edits, and **changes the
-Area Manager made directly**: a map pin corrected on the captain's
-own onboarding request, or a live hub's address, coordinates or max vehicle size. Those need
-nothing from the captain — the note opens My Hubs, where the hub card says what changed
-(*"Address: … · Map pin: … · Max vehicle size: … Already live — nothing for you to do."*)
-until it is dismissed. A hub type change is never notified; the captain only hears of rates. An FM hub's card shows its agreed rate card, and *Review update* while one is
-waiting. Opening a rate card update shows the current and updated cards side by side, when
-the change applies, the Area Manager's reason and the Combined rate card blurb, then a
-*"I have read the updated rate card"* tick and **one action: Agree**. There is deliberately
-**no reject or decline**; a captain with questions is pointed to call their Area Manager.
-Agreeing makes the update the hub's rate card, as its next version.
+captain runs hubs, with a count. It carries **new rate cards** — published once the Cluster
+Head, or BizFin, has approved them — decided hub edits, and **changes the Area Manager made
+directly**: a map pin corrected on the captain's own onboarding request, or a live hub's
+address, coordinates or max vehicle size. Those need nothing from the captain — the note opens
+My Hubs, where the hub card says what changed until it is dismissed. A hub type change is
+never notified; the captain only hears of rates.
+
+**Every FM hub card has a Rate card section**: a table of the five slabs with their order
+bands and rates, then the touchpoint rate, and the day the card took effect. A card already
+published for a later day shows beneath it as *New rates from …*, in full. **View historic
+rate card updates** opens every card the hub has had, newest first and **five to a page**,
+each with the dates it applied, when it was published, and whether it is in force, upcoming
+or past. There is nothing to agree to: following Legal, the onboarding agreement says the
+rates on Valmo One apply and a revision binds once the captain is told — in the app, by SMS
+and by email, each delivery logged. A revision is never backdated.
 
 **Add new hub** (`HB-07`) asks how the new hub is registered for GST — reuse an
-already-verified GSTIN, continue as Non-GST, or verify a new one — then hands off into the
+already-verified GSTIN, continue as Non-GST (LM only — FM gets *Don't have GST for this hub?*,
+which the Area Manager approves), or verify a new one — then hands off into the
 **original onboarding flow**.
 
 **A Captain Hub bank change whose bank doesn't answer** pauses with the bank's reason and
@@ -449,8 +477,9 @@ One note on that screen:
   review and left an FM hub with no category or rate ceiling. With hub details now ahead of
   background verification it is the correct first stop, so the design's own label is used.
 - **Role choice is an addition.** `HB-07` assumes a single role context, but this prototype
-  has two, so the screen asks which role the new hub is for. FM hubs cannot choose Non-GST,
-  since GST is mandatory for First Mile — the same rule the onboarding KYC enforces.
+  has two, so the screen asks which role the new hub is for. FM hubs have no Non-GST option;
+  a captain without GST takes the deliberate *Don't have GST for this hub?* path instead — the
+  same rule the onboarding KYC follows.
 
 ## Admin panel
 
@@ -462,7 +491,7 @@ the panel picker from `panel-select`, with four consoles:
 | **Area Manager** | Infra hard-gate checklist and VLS field pre-check; map pin corrections; captains' **hub edits**; **rate card updates** |
 | **Cluster Head** | Interview and the AM's rate card — approve within ceiling, raise above it, or send back; the same for AM rate card and hub type updates on live hubs |
 | **Zonal Head** | Monitoring only — AM and CH pendency. Approves nothing |
-| **FM Central Admin** | Design alignment and above-ceiling rate cards — onboarding and updates raised to them |
+| **FM Central Admin** | Three roles, picked in the backend simulator: **BizFin** (above-ceiling rate cards, onboarding and updates, and slab settings), **Design team** (carting design alignment) and **FM Central Ops** (the national view, acting on any AM or CH step, rate card updates with the CH, bulk rate updates, and proposing slab changes) |
 
 Each console shares a shell — sidebar with the signed-in role and scope, admin breadcrumb,
 SLA chip — over a request table with search and status filters, and stat tiles. Each row
@@ -470,7 +499,7 @@ carries the captain's phone under their name, and the search matches it however 
 — spaced as displayed, unspaced, with `+91`, or as a bare `91`-prefixed number — alongside
 request ID, captain name and pincode. Opening a
 request gives the full-page review: the AM infra checklist, the AM rate card, the CH review,
-and the Central Admin approval. Every review carries the read-only *Captain & hub context* card and an
+and BizFin's approval. Every review carries the read-only *Captain & hub context* card and an
 SLA card.
 
 ### The rate card
@@ -483,12 +512,12 @@ rule does not depend on the select to enforce it.
 
 The rate card is **slab-based**: each slab takes an order-volume band and a single rate for
 it — there is no separate forward and reverse rate — plus one **touchpoint rate** for the
-hub, paid on top of the slab rate. The Area Manager can add as many slabs as needed; a new
-one starts where the previous band ended, and the top band's upper bound is left blank to
-mean *and above*. Submission needs a hub type **and** a complete rate card: every slab needs
-a starting volume, a rate and an upper bound above its start, and the hub needs a touchpoint
-rate. Each slab shows its ceiling as it is typed and flags the row if it goes over, and so
-does the touchpoint rate against its own ceiling.
+hub, paid on top of the slab rate. **The slabs are set centrally, per hub type**: five by
+default, in steps of 2,500 orders (0–2,500, 2,501–5,000, 5,001–7,500, 7,501–10,000 and
+10,001 and above). The Area Manager prices them and cannot add, remove or move a band.
+Submission needs a hub type **and** a rate for every slab; the touchpoint rate comes with the
+hub type and can't be typed or changed. Each slab shows its own ceiling as it is typed and
+flags the row if it goes over.
 
 The approved card is what the **captain** then sees — the same bands and the same touchpoint
 rate, on the Cluster Head screen and again on agreements. The hub category and the benchmark
@@ -529,9 +558,9 @@ dropped in Koramangala for its HSR Layout pincode, for the Area Manager to fix.
 Every tab of every admin panel opens on sample rows: the Area Manager's requests, hub edits
 and rate card updates; the Cluster Head's requests, the AM's requests and updates to review;
 the Zonal Head's AM and CH pendency; and Central Admin's own queue (`OBD-78263`, an
-Electronic City mini-hub priced over both ceilings and raised by the Cluster Head), its design
+Electronic City mini-hub priced over its slab ceilings and raised by the Cluster Head), its design
 approvals (`OBD-78240`'s carting design, sent for alignment), the AM and CH views and raised
-updates. There is no *User mapping* tab on any panel, and Central has no *ZH requests* tab:
+updates — split across BizFin, the Design team and FM Central Ops. There is no *User mapping* tab on any panel, and Central has no *ZH requests* tab:
 in the FM chain the Zonal Head approves nothing, so nothing ever waits with them.
 
 ### The Area Manager's portfolio
@@ -541,22 +570,22 @@ and both the Hub edits and Rate card updates tabs work over that list. Signing i
 admin panel seeds **eleven sample FM hubs** run by eleven other captains — Koramangala, HSR
 Layout, Indiranagar, Whitefield, Electronic City, Bommasandra, Bellandur, JP Nagar,
 Marathahalli, Domlur and BTM Layout — each with a hub type, a map pin inside its pincode and
-an agreed rate card within its type's ceilings. The existing captain's own four hubs join
+a rate card within its type's ceilings. The existing captain's own four hubs join
 them once that captain has been loaded, for **fifteen**.
 
 The samples come with work in flight, so each flow can be taken straight away: four hub
 edits waiting for review (a move to a new unit, a map pin fix, extra area, and a relocation
 from HSR Layout to BTM Layout), one approved and already live, one rejected; and rate card
 updates at **every stage** — two with the Cluster Head (one re-typing Electronic City from
-SAH to Standalone mini-hub), one above its ceilings with Central Admin, one sent back to the
-Area Manager, two approved and waiting for their captains, and one agreed earlier (JP Nagar,
-now on its second version).
+SAH to Standalone mini-hub), one above its ceilings with BizFin, one sent back to the
+Area Manager, one published and scheduled for next week (Marathahalli), and two published and
+in force (Whitefield and JP Nagar, each now on its second version).
 
 **Every sample captain has notifications** — an Area Manager change to their hub, a decided
-hub edit, or an approved rate card update — and the login switch can **sign in as any of
+hub edit, or a new rate card — and the login switch can **sign in as any of
 them**: their hub moves into the Captain Hub with their own profile, GSTIN and bell, and they
-can take their side of the flows (agree to a rate card update, dismiss a change, ask for an
-edit). Signing back in as the existing captain puts everyone back. One captain's
+can take their side of the flows (read a new rate card and its history, dismiss a change, ask
+for an edit). Signing back in as the existing captain puts everyone back. One captain's
 notifications never reach another's bell.
 
 ### Hub edits
@@ -583,42 +612,72 @@ edit of the hub is waiting, the Area Manager decides that first.
 ### Rate card updates
 
 The Area Manager's **Rate card updates** tab lists **every live FM hub under them** with its
-hub type, the rate card its captain agreed to and its version, and where any update stands —
-*sent back to you* first, then *in review*, then *waiting for the captain* — with tiles, a
-search (hub type included) and a filter by stage. A hub's detail shows its rate card history.
+hub type, the rate card in force and its version, and where any update stands — *sent back
+to you* first, then *in review*, then *scheduled* — with tiles, a search (hub type included)
+and a filter by stage. A hub's page logs **every version**: when it applied, its rates and
+hub type, who approved it, and how the captain was notified.
 
-Updating one starts from the agreed slabs and touchpoint, and carries the **hub type**: the
-Area Manager changes the rates, the type, or both — nothing else. There is no reason, note or
-date to fill in: why a rate is changing is talked through offline, and an update **applies
-from the day the captain agrees**. The chosen type's ceilings show on each slab and the
-touchpoint, and anything over them is flagged. An unchanged or incomplete card isn't sent,
-and a hub takes one update at a time.
-
-**Every update is reviewed before the captain hears of it**, the same chain a new hub's rate
-card runs:
+Updating one starts from the card in force and carries the **hub type** and an **Applies
+from** date: today or later, never backdated. There is no reason or note — why a rate is
+changing is talked through offline. The slabs come from the hub type's structure; the
+chosen type's ceilings for the hub's city show on each slab, and anything over them is
+flagged. The touchpoint is shown read-only and follows the hub type chosen. An unchanged or incomplete card isn't sent, and a hub takes one update at a time,
+counting one that is published but not yet in force.
 
 ```
-AM: rates and/or hub type → CH reviews ─ within the type's ceilings → approves ─┐
-                                        └ above them → raises → Central Admin ──┴→ captain agrees
+AM: rates and/or hub type, from a day → CH reviews ─ within the ceilings → approves ─┐
+                                                  └ above them → raises → BizFin ───┴→ published
                           ↖ sent back by either desk → AM revises and resubmits, or withdraws
 ```
 
-The **Cluster Head** and **FM Central Admin** each get a *Rate card updates* tab — what is
-waiting on them, with a count, and what they decided that is **still pending** further along
-(an agreed or withdrawn update drops off; it stays in the data with its trail). A review shows
-the agreed card against the proposed one, the hub type change, whether it sits within that
-type's ceilings, and the trail. Within the ceilings the Cluster Head approves; above them
-they can only raise it to Central Admin; either desk can send it back with a reason. Approved,
-it reaches the captain's bell, and the agreed card stays in force until they agree. **The hub
-type takes effect only when the captain agrees** — and the captain is never told of it: a
-type-only change reaches them as a re-issued rate card, *"the rates are the same as today"*.
+**Approving publishes it.** It becomes the hub's next version from its day — or from the day
+it is published, if approval came later — and the captain is notified in the app and by SMS
+and email. Until that day the current card stays in force, and billing reads whichever card
+was in force on each day. **A hub type change takes effect on the same day**, and the captain
+is never told of the type itself. A type change that moves the fixed touchpoint is a rate
+change and is notified like any other; one between types with the same touchpoint (mini-hub
+↔ LM-as-FM) isn't notified and stays out of the captain's history.
+
+The **Cluster Head** and **BizFin** each get a *Rate card updates* tab — what is waiting on
+them, with a count, and what they decided that is **still pending** further along (published
+or withdrawn updates drop off; they stay in the data with their trail). **FM Central Ops**
+works the Cluster Head's queue too.
+
+### Slab settings
+
+BizFin and FM Central Ops have a **Slab settings** tab: the slab structure for each of the
+five hub types, with each slab's upper bound editable, **＋ Add slab** (2,500 orders above the
+last), *Remove* (its orders fold into the next slab up), and *Apply to all five hub types*.
+**FM Central Ops proposes; BizFin approves** — or rejects with a reason — and BizFin can save
+a change directly. Every applied change is logged with who approved it. New rate cards and
+updates are priced on the new structure from then on; cards already priced keep their slabs,
+and an update moves a card onto the new bands with each band taking the rate its orders had.
+
+### Bulk rate card updates
+
+FM Central Ops can update many hubs at once: a comma-separated list of **FM hub codes**, one
+set of slab rates, and an *Applies from* day. There is no touchpoint to set — each hub keeps
+the one fixed for its type. Each listed hub is checked before anything happens:
+**within its own hub type's and city's ceilings it is published straight away, no approval needed**, and its
+captain notified; **above them it goes to BizFin**, who can approve or decline it. A hub is
+left out, with the reason, if it wasn't onboarded through the tool (no signed onboarding
+agreement — `YLK` and `RJN` are sample cases), doesn't exist, isn't an FM hub or isn't active,
+already has an update open or scheduled, sits on a different slab structure, or would get the
+rates it already has. Each bulk update is logged with what happened to every hub.
+
+### Central Admin's three roles
+
+Opening **FM Central Admin** asks, in the backend simulator, which role is signed in:
+**BizFin**, the **Design team** or **FM Central Ops** — and each sees only its own tabs. FM
+Central Ops gets the working screen for any request at the Area Manager's or Cluster Head's
+step, as either desk would. The roles carry generic names; no real person is named.
 
 ### The approval chain
 
 ```
 AM: infra → carting design → hub type + rate card → CH: interview + rating → agreements
-                  ↘ design sent to Central Admin for alignment, in parallel
-                                 ↘ (above ceiling) CH raises → Central Admin → agreements
+                  ↘ design sent to the Design team for alignment, in parallel
+                                 ↘ (above ceiling) CH raises → BizFin → agreements
                                  ↙ (rejected at either desk) back to AM to revise
 ```
 
@@ -639,30 +698,31 @@ the codes have to pass again. Sending the design opens step 3 — the request it
 with the Area Manager, and the design is reviewed by Central Admin in parallel.
 
 **Step 3** is the **hub type** (Standalone, Mall hub, LM-as-FM, SAH…) and the **rate card**
-— an order-volume band and rate per slab, plus one touchpoint rate. The three pages navigate
-both ways, so a reviewer can go back and correct the checklist without losing the rate card.
+— an order-volume band and rate per slab, plus the touchpoint rate the hub type fixes. The
+three pages navigate both ways, so a reviewer can go back and correct the checklist without
+losing the rate card.
 
-The hub type sets two **ceilings** — one for slab rates and one for the touchpoint rate.
-Both are shown inline as the figures are typed, and the offending row is flagged the moment
-it goes over, whether that is a slab or the touchpoint. A card within both ceilings goes
-*Approve & send to CH*; a card over either one goes *Raise approval request to CH* instead —
-it can still be submitted, it just travels as an approval request.
+The hub type and the hub's city set a **ceiling for each slab**, shown inline beside it; the
+offending row is flagged the moment it goes over. The touchpoint rate is shown, not typed —
+choosing the hub type sets it. A card within its ceilings goes *Approve & send to CH*; a card
+with any slab over goes *Raise approval request to CH* instead — it can still be submitted,
+it just travels as an approval request.
 
-The over-ceiling notice names whichever part is actually over, and both when both are:
-*"The highest slab rate is ₹3.00 against a ₹2.00 ceiling, and the touchpoint rate is ₹2.60
-against a ₹2.00 ceiling."* The same sentence is reused on the Cluster Head's banner and on
-Central Admin's, so the three desks cannot end up describing the breach differently.
+The over-ceiling notice names the slab that's over, its rate and its ceiling, and counts any
+others: *"Slab 3 (5,001–7,500 orders) is ₹2.80 against a ₹2.73 ceiling, and 1 more slab is
+over."* The same sentence is reused on the Cluster Head's banner and on BizFin's, so the
+desks cannot end up describing the breach differently.
 
 ### Design alignment
 
-Central Admin has a second queue beside the rate-card one: **Design approvals**, holding
+The **Design team** (a Central Admin role) has its own queue: **Design approvals**, holding
 every design an Area Manager has sent and nobody has aligned yet. It is filtered on the
 design, not on the request's stage, because the two run in parallel.
 
 Opening one shows **Design alignment** — city, hub code, lat-long and map link, pincodes
 served, max vehicle size, hub type, hub address, hub pincode, state, whether it is a split
 or a new expansion, and whether it is multitouch. All of it is read-only except the **FM →
-FMSC mapping**, which Central Admin may re-point before approving; a code they mistype is
+FMSC mapping**, which the Design team may re-point before approving; a code they mistype is
 refused the same way the Area Manager's was. **Approve Design** settles it, and the Area
 Manager sees the approval — and any corrected mapping — on their step 2.
 
@@ -729,23 +789,23 @@ The panel is contextual to the current phase and exposes exactly those actors:
 |---|---|
 | Background verification | mark passed / mark failed |
 | Cluster Head (LM) | approve / reject |
-| Area Manager (FM) | pick hub type (one button per type), then submit rate card within ceiling / above ceiling |
-| Cluster Head (FM) | approve rate card (within ceiling only) / raise to Central Admin (above ceiling only) / reject → back to Area Manager |
-| Central Admin (FM, once raised) | approve rate card / reject → back to Area Manager |
+| Area Manager (FM) | approve / decline a captain's no-GST declaration (first, when there is one); pick hub type (one button per type), then submit rate card within ceiling / above ceiling |
+| Cluster Head (FM) | approve rate card (within ceiling only) / raise to BizFin (above ceiling only) / reject → back to Area Manager |
+| BizFin (FM, once raised) | approve rate card / reject → back to Area Manager |
+| Admin · FM Central Admin | pick the role signed in: BizFin, Design team or FM Central Ops |
 | Area Manager revision (FM, after a rejection) | reprice within ceiling and resubmit |
 | Security deposit (LM only) | force success / failure / quote expired |
 | Area Manager (LM only) | approve / reject (two-strike counter shown) |
 | Agreements | mark agreement scrolled to end |
 | Activation | force failure / force success |
-| Personal details, KYC cards, hub details | fail the next email code / Aadhaar / PAN / penny-drop / GSTIN / availability call — timeout (504) or service down (503) |
+| Personal details, KYC cards | fail the next email code / Aadhaar / PAN / penny-drop / GSTIN call — timeout (504) or service down (503) |
 | KYC GST step, Manage GSTIN, Add new hub | GST portal demo records — fill the GSTIN field with a matching, similar, mismatching, cancelled or unregistered GSTIN |
 | Background verification (pending) | partner times out / partner is down |
 | Login / OTP | log in as a new captain, an existing captain with hubs, any of the eleven sample captains, or the admin panel — without re-seeding over what is there |
 | Captain Hub · bank change | penny-drop succeeded / failed / bank times out / IMPS down |
 | Captain Hub · hub edit pending | Area Manager approves / rejects it |
 | Captain Hub · live FM hub | Area Manager sends a sample rate card update |
-| Captain Hub or admin · an update in review | the Cluster Head approves, raises or sends it back; Central Admin approves or sends it back |
-| Admin · an update waiting on another captain | that captain agrees to it |
+| Captain Hub or admin · an update in review | the Cluster Head approves (publishing it), raises or sends it back; BizFin approves or sends it back |
 | Always | reset entire demo |
 
 Every reject path is reachable. For LM that routes the captain back to the right earlier
@@ -775,11 +835,12 @@ build from.
 npm install && npm test
 ```
 
-**1762 assertions across 33 groups:**
+**1946 assertions across 35 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
-   CH; asserts no SD phase, no AM phase, mandatory GST, MSME optional and not gating, no
+   CH; asserts no SD phase, no AM phase, no account holder field before the penny-drop, the
+   GSTIN field straight away with no Non-GST option, MSME optional and not gating, no
    cheque upload, no hub code at submit, Partner ID instead of vendor ID, hub code issued at
    activation, and the Combined blurb quoting no figure of its own
 3. **FM above ceiling** — the AM prices over the ceiling, the CH cannot settle it and raises
@@ -794,11 +855,14 @@ npm install && npm test
    the app's own auto-advance; SMS-autofill/paste of a full code into one cell spreads
    across all six; partial paste fills forward from the focused cell
 6. **LM two-strike rule** — first rejection routes back to hub details, second escalates
-7. **Benchmark ceilings** — all five categories, ceiling and touchpoint rate
+7. **Ceilings and touchpoints from the rate card sheet** — the fixed touchpoint for all five
+   hub types; per-slab ceilings by column (mini-hub stepping down, SAH and LM-as-FM flat,
+   Standalone and Mall hub by city); *New Delhi* read as Delhi; a city off the sheet having no
+   ceiling, so any card there is above; and how ceilings read
 8. **Dev panel** — every simulated actor reachable, every reject path has a route out
 9. **Bulk pincode entry** — comma/semicolon/slash/whitespace separated input, partial
-   success reporting, within-batch duplicates, the 5-pincode cap, stale-availability reset,
-   and paste-to-add
+   success reporting, within-batch duplicates, the 5-pincode cap, the hub's own pincode left
+   alone when more are added, and paste-to-add
 10. **Hub facility inputs** — vehicle list de-duplication; dropdown open/close incl.
    Escape, outside-click and click-inside; all 24 options in ascending capacity order;
    single-select that closes on pick; the implied-smaller rule (row marking, counts, and
@@ -829,12 +893,12 @@ npm install && npm test
    with per-slab ceilings; the CH's read-only view of that card; role-aware dispatch, so a
    desk never gets a working screen for a request at someone else's stage; and statuses
    limited to *Pending* and *SLA breach*
-13. **Above-ceiling rate card** — the touchpoint rate's own ceiling: a card sitting on both
-   ceilings passing, the touchpoint alone breaching, the row and chip flipping live without
-   a re-render, the notice naming only what is over (and both when both are), the breach
-   travelling to the CH and Central Admin with the ceiling named, and the
-   "what's still missing" hint clearing when the card completes; plus `OBD-78255` reaching
-   the CH flagged over its mall-hub
+13. **Above-ceiling rate card** — per-slab ceilings: the touchpoint fixed at the hub type's and
+   shown read-only, each slab showing its own ceiling, one rate within one slab's ceiling and
+   over the next, only that row flagged and the chip flipping live without a re-render, the
+   notice naming the slab and counting any others, the breach travelling to the CH and BizFin
+   with the ceilings named, and the "what's still missing" hint clearing when the card
+   completes; plus `OBD-78255` reaching the CH flagged over its mall-hub
    ceiling with both *Raise to Central Admin* and *Reject · send back to AM* offered; a
    rejection at either desk returning the request to the Area Manager with a `revision`
    record rather than closing it; the AM opening straight onto the rate page with the
@@ -861,20 +925,21 @@ npm install && npm test
    activation and Captain Hub; and seeded requests whose address matches their pincode and
    whose serving pincodes include their own
 21. **Pincodes on hub details** — personal details asks only about the person; hub details
-   carries the availability check after the address, map link, area and manpower and
-   before max vehicle size; an unserviceable pincode cannot
-   be forced in; the pick survives a failed submit; an older save is migrated; an existing
-   captain adding a hub picks one; and the availability notice counts properly
+   lists the pincodes to service after the address, map link, area and manpower and before
+   max vehicle size; there is no availability check, nothing is marked available or not, and
+   any well-formed pincode is taken; the hub pincode survives a failed submit; both the hub's
+   pincode and one to service are needed; the summary lists the pincodes serviced; an older
+   save is migrated; and an existing captain adding a hub enters one
 22. **Map pin** — every link format parsed, every outcome of the check (inside, another
    pincode, too far, abroad, impossible, text search, no pincode yet), Google's embed (the
    fallback without Leaflet) and badges, live checking that keeps the field, a half-typed link left alone until the field
    is left, submit blocked with the same message, the summary row, and a short share link
    accepted as it is — linked out to Google Maps, submitting, and saved by the Area Manager
 23. **API failures and resume** — each failing call (email, Aadhaar at send and at fetch,
-   PAN, bank, GST, availability, BGV, activation) shows the reason, a reference and that
+   PAN, bank, GST, BGV, activation) shows the reason, a reference and that
    nothing is lost, keeps what was entered, and resumes from the same step; the failure
    survives Save & Exit and a reload, shows on the role card and on an existing captain's
-   in-progress hub; resumed activation keeps the systems that finished; and a Captain Hub
+   in-progress hub (a GSTIN check after a declined no-GST); hub details makes no call to fail; resumed activation keeps the systems that finished; and a Captain Hub
    bank change pauses rather than failing the account
 24. **GSTIN verification** — the fuzzy match (order, case, honorifics, legal-form words,
    spelling slips, middle names, initials, wrong surnames, lone first names, other
@@ -891,47 +956,53 @@ npm install && npm test
    time, the Area Manager's tab, now-against-requested review, approve applying all four
    changes, reject needing a reason and changing nothing, both outcomes shown to the captain
    after signing back in through the login switch, and the dev panel shortcut
-27. **Rate card updates** — the FM hub's agreed card, the bell, the AM's tab and editor
-   (unchanged and incomplete cards refused, slabs added and removed, no date, reason or note
-   to fill in), the update going to the Cluster Head first with the captain's bell quiet
-   until it is approved, one update at a time, the agreed card in force until agreed, the bell
-   count and notification, the agreement page with no reject or decline, Agree gated on the
-   tick, the card replaced as its next version from the day it is agreed, hub edit outcomes on
-   the bell, the dev panel shortcut, and the bell on onboarding's top bar
-28. **Typing the hub pincode** — the field after the map link takes a pincode: a complete
-   serviceable one is chosen with the caret kept in place, the city resolved and the map pin
-   checked; unserviceable, malformed and sixth pincodes are refused at the field; a pick from
-   the check fills it; clearing it clears the hub's pincode; a failed check resumes and
-   chooses what was typed; and the typed pincode is the one the hub submits with
+27. **Rate card updates** — the FM hub's rate card section (five slab rows, then the
+   touchpoint, with its effective date); the history five to a page with Newer and Older; the
+   AM's editor on fixed slabs with an Applies from date (unchanged, incomplete and backdated
+   cards refused); the captain's bell quiet while in review; the Cluster Head's approval
+   publishing it as the next version, scheduled for its day, with billing reading the card in
+   force on each date; the captain notified in the app, by SMS and by email, with nothing to
+   agree to; one update at a time, counting a scheduled one; a late approval applying from the
+   publish day, never backdated; the touchpoint read-only and following a new hub type; a
+   type-only update between types sharing a touchpoint published without notifying the
+   captain; BizFin approving above the ceilings; hub edit outcomes on the bell; the dev panel
+   shortcut; and the bell on onboarding's top bar
+28. **Typing the hub pincode** — the field after the map link takes a pincode: a complete one
+   becomes the hub's pincode with no check, the caret kept in place, the city resolved and
+   the map pin checked; a malformed one is refused at the field; clearing it clears the hub's
+   pincode; it stays separate from the list to service, which is capped at five; and the
+   typed pincode is the one the hub submits with
 29. **The Area Manager's portfolio** — eleven sample hubs, each with its own captain, a pin
-   inside its pincode and a rate card within its type's ceilings; the Hub edits tab listing
+   inside its pincode and a rate card within its type's and city's ceilings, on its fixed
+   touchpoint; the Hub edits tab listing
    every hub with the ones to review first, tiles, search (keeping the caret) and filters;
    approving a relocation and rejecting with a reason on other captains' hubs; the hub view
    with details, map, history and a link to its rate card; the Rate card updates tab with
-   waiting updates first, hub types, versions, filters and search; sending another captain
-   an update and the dev panel standing in for their agreement; their requests kept off the
+   open updates first, hub types, versions, scheduled dates, filters and search; sending another
+   captain an update, published and notified, with the version log; their notices kept off the
    signed-in captain's bell; and the captain's own hubs joining the lists for fifteen
 30. **AM direct changes** — a map pin corrected on an onboarding request notifying its
    captain without moving the request; the AM's hub editor prefilled, refusing an unchanged
    form, unreadable coordinates and a pin outside the pincode, previewing in place, saving
    address, coordinates and vehicle straight to the hub and logging it; editing held back
    while a captain's edit waits; another captain's hub edited the same way; a hub type
-   change sent for review and taking effect only when the captain agrees;
+   change sent for review, published, and taking effect on its day without a notification;
    over-ceiling rates flagged, not refused; an above-ceiling update the Cluster Head can only
-   raise, approved by Central Admin, with its trail; one sent back, revised and resubmitted,
-   and one withdrawn; and the captain's side — three notifications, the hub card saying what
-   changed, dismissing, and a re-issued card that never mentions the hub type
+   raise, approved by BizFin, with its trail; one sent back, revised and resubmitted, and one
+   withdrawn; and the captain's side — two notifications, the hub card saying what changed,
+   dismissing, and never a word about the hub type
 31. **Sample captains** — the login switch offering all eleven; each signing in to their own
    hub with their own notification, about their hub only; updates still in review out of
-   sight; a sample captain agreeing to their approved update and dismissing a notice; staying
-   signed in across a reload; signing back in as the existing captain putting every hub back;
-   and the Area Manager seeing the agreement and who was notified
+   sight; a sample captain opening a new rate card into its history, another's scheduled change
+   on the hub card, and dismissing a notice; staying signed in across a reload; signing back in
+   as the existing captain putting every hub back; and the Area Manager seeing which cards are
+   in force or scheduled
 32. **A leaner admin panel** — every tab of every admin panel holding sample rows; no User
    mapping or ZH requests tab; the Cluster Head's "Decided by you" keeping only what is still
-   pending, dropping agreed and withdrawn updates while their trail stays logged; no reason,
-   note or date on an update, at any desk or for the captain, and an update applying from the
-   day the captain agrees; no note on a captain's hub edit; and no history on View hub while
-   every edit and change stays logged
+   pending, dropping published and withdrawn updates while their trail stays logged; no reason
+   or note on an update, at any desk or for the captain, but the day it applies from; no note
+   on a captain's hub edit; and no history on View hub while every edit and change stays
+   logged
 33. **Dropping the pin on the map** — where a map opens; on hub details a map before any
    link, OpenStreetMap tiles credited, a tap filling the link and dropping a draggable pin,
    the pin navy, green or red as the check goes, its latitude and longitude under the map, a
@@ -941,8 +1012,27 @@ npm install && npm test
    the Area Manager's pin correction and live-hub edit (coordinates as latitude, longitude);
    View hub and a hub edit under review showing a pin that can't be moved; every replaced
    map let go; and, without Leaflet, a pick still landing on Google's embed
+34. **Slabs, Central Admin and bulk updates** — five slabs in 2,500-order steps for every hub
+   type; Central Admin asking which role is signed in, and no real person named; FM Central
+   Ops proposing a slab change (rising slabs required, unchanged refused, add and remove) and
+   BizFin rejecting without a reason refused, then approving it for one hub type; BizFin saving
+   a change for all five, or for one; new cards and updates priced on the new slabs while cards
+   in force keep theirs; FM Central Ops working AM and CH steps and approving a rate card
+   update; bulk updates by comma-separated codes, leaving out hubs not onboarded through the
+   tool, unknown codes, LM hubs, open updates and other slab structures, refusing a backdated
+   day, no touchpoint to set, publishing within the ceilings with no approval and notifying
+   captains on their type's fixed touchpoint, sending one above them to BizFin, who declines
+   it; and an older save's waiting update loaded as published
+35. **FM without GST** — no Non-GST option; *Don't have GST?* opening a declaration that needs
+   a reason and the confirmation, and *I have a GSTIN* backing out; KYC completing with the
+   declaration awaiting the Area Manager; the review showing the AM considering it, and no hub
+   type until it's decided; approved, the hub going live without GST with the approval on
+   record; declined, a GSTIN asked for on the review screen and checked as on KYC; a GSTIN
+   verified later dropping the declaration; the AM's infra check holding on it, approve and
+   decline, and the simulator standing in for the captain; and an existing captain adding an
+   FM hub without GST
 
-Four notes on how the tests drive the app:
+Five notes on how the tests drive the app:
 
 - `markAgreementRead()` stands in for scroll-to-end, because jsdom has no layout and
   therefore no real `scrollHeight`. The test separately asserts the checkbox is disabled
@@ -954,6 +1044,8 @@ Four notes on how the tests drive the app:
 - The harness awaits the app's own `DOMContentLoaded` boot before driving anything. jsdom
   fires that after the constructor returns, so without the wait the app's boot lands
   mid-test and re-renders the DOM out from under whatever is being driven.
+- Each group runs on its own: a harness error in one is reported against that group and the
+  rest still run, so one broken helper doesn't hide every failure after it.
 
 ### Bugs this suite was extended to cover
 
@@ -980,7 +1072,8 @@ These were found by driving the build in a real browser, not by the original sui
    past the card. It is reset inside `.status-head`, and a test checks the computed style.
 5. **A hub outside the new-hub list couldn't be edited at all.** Indiranagar Hub runs in
    560038, which isn't on the serviceable list for *new* hubs, so its own pincode failed the
-   check. A hub keeping its pincode is now accepted; only a changed one must be serviceable.
+   check. A hub keeping its pincode is now accepted. (Since then the serviceability check has
+   gone altogether — a changed pincode only has to be well formed.)
 6. **A tap on the map picked a role.** The map's frame carried `data-pick`, the attribute the
    role cards use, so the role-card click handler took a tap on the map for a pick of a role
    called `hub-map` and broke the flow. The map's attributes are now all `data-map-*`, and a

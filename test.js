@@ -152,12 +152,11 @@ function doPersonalDetails(doc, { name = "Karan Verma" } = {}) {
   click(doc, "pd-continue");
 }
 
-/* The serviceable-pincode check now opens hub details. */
+/* Hub details: the pincodes the hub will service, then the hub's own. */
 function pickPincode(doc, pin) {
   type(doc, "hub-pins", pin);
   click(doc, "hub-addpin");
-  click(doc, "hub-check");
-  clickSel(doc, '[data-selpin="' + pin + '"]');
+  type(doc, "hub-pin", pin);
 }
 
 /* KYC is a sequence of one-record-at-a-time cards (KYC-01…KYC-14), each with a
@@ -187,7 +186,6 @@ function doKyc(doc, role) {
 
   // GST
   if (role === "FM") {
-    clickSel(doc, '[data-gstchoice="registered"]');
     type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
     click(doc, "kyc-gst-go");
   } else {
@@ -227,6 +225,13 @@ function doHubDetails(doc, { pin = "560076",
   type(doc, "hub-manpower", manpower);
   pickMaxVehicle(doc, maxVehicle);
   click(doc, "hub-submit");
+}
+
+/* Slabs come from the central structure — five, in 2,500-order steps — so a
+   test prices every one of them. */
+function priceAllSlabs(api, rate) {
+  const r = api.helpers.apById(api.state.admin.selected);
+  r.rate.slabs.forEach((sl, i) => api.actions.chSlabField(i, "rate", rate));
 }
 
 function doAgreements(doc, api) {
@@ -366,8 +371,7 @@ async function testFMCombined() {
   click(doc, "kyc-ack-pan");
 
   eq(api.helpers.kycStep(api.helpers.R()), "bank", "then the bank account");
-  check(exists(doc, "#kyc-holder"), "with a holder-name field filled in after verification");
-  check(disabled(doc, "kyc-holder"), "which is read-only");
+  check(!exists(doc, "#kyc-holder"), "with no account holder name field before verification");
   check(!exists(doc, "#kyc-cheque-go"),
         "FM has no cancelled-cheque upload (penny-drop covers the bank)");
   type(doc, "kyc-acc", "123456789012");
@@ -377,14 +381,11 @@ async function testFMCombined() {
   eq(api.helpers.R().kyc.bank.holder, "Karan Verma", "the penny-drop returns the holder name");
   click(doc, "kyc-ack-bank");
 
-  /* GST: radio choices, GSTIN only after choosing "GST registered" */
+  /* GST: the GSTIN straight away — no Non-GST option, a deliberate link instead */
   eq(api.helpers.kycStep(api.helpers.R()), "gst", "then GST status");
-  check(exists(doc, '[data-gstchoice="registered"]'), "GST registered is offered");
-  eq(sel(doc, '[data-gstchoice="none"]').getAttribute("aria-disabled"), "true",
-     "FM cannot choose Non-GST — GST is mandatory");
-  check(!exists(doc, "#kyc-gstin"), "the GSTIN field is hidden until GST registered is chosen");
-  clickSel(doc, '[data-gstchoice="registered"]');
-  check(exists(doc, "#kyc-gstin"), "choosing GST registered reveals the GSTIN field");
+  check(!exists(doc, "[data-gstchoice]"), "FM isn’t offered a Non-GST option to pick");
+  check(exists(doc, "#kyc-gstin"), "the GSTIN field is on screen straight away");
+  check(exists(doc, "#kyc-nogst-open"), "with a Don’t have GST? link under it");
   type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
   click(doc, "kyc-gst-go");
 
@@ -438,7 +439,7 @@ async function testFMCombined() {
      "approve is a no-op while hub type is unset");
 
   api.actions.chSetCategory("standalone");     // ceiling 5, touchpoint 5
-  eq(api.helpers.ceilingFor(api.helpers.R()), 5, "Standalone ceiling reads 5");
+  eq(api.helpers.ceilingFor(api.helpers.R()), 3.5, "a Bengaluru Standalone hub’s ceiling reads 3.50");
   check(api.helpers.chCanDecide(api.helpers.R()),
         "Cluster Head can decide once the category arrives");
   /* The category and the ceiling it drives are internal — the captain sees
@@ -580,8 +581,8 @@ async function testFMAboveCeiling() {
   click(doc, "bgv-continue");
   eq(api.helpers.phaseId(), "ch", "reached Cluster Head review");
 
-  api.actions.chSetCategory("mall");            // ceiling 2, touchpoint ceiling 2
-  eq(api.helpers.ceilingFor(api.helpers.R()), 2, "Mall hub ceiling reads 2");
+  api.actions.chSetCategory("mall");            // Bengaluru: 3.50 a slab, touchpoint fixed at 2
+  eq(api.helpers.ceilingFor(api.helpers.R()), 3.5, "a Bengaluru Mall hub’s first-slab ceiling reads 3.50");
 
   /* --- the Area Manager prices above the ceiling --- */
   api.actions.amSubmitRate(true);
@@ -613,7 +614,7 @@ async function testFMAboveCeiling() {
   api.actions.centralReject();
   r = api.helpers.R();
   eq(r.ch.status, "revision", "a Central Admin rejection sends the card back to the AM");
-  eq(r.ch.revision.by, "Central Admin", "and records which desk sent it back");
+  eq(r.ch.revision.by, "BizFin", "and records which desk sent it back");
   check(exists(doc, '[data-testid="ch-revision"]'), "captain sees a revision state");
   check(mainTxt(doc).indexOf("being revised by your Area Manager") >= 0,
         "copy names only the Area Manager");
@@ -1022,23 +1023,49 @@ async function testAmTwoStrike() {
    ====================================================================== */
 
 async function testCeilings() {
-  section("7. Hub category benchmark ceilings");
+  section("7. Hub type ceilings and touchpoints — from the rate card sheet");
   const { win, api } = await boot();
-  const C = api.config.HUB_CATEGORIES;
+  const C = api.config.HUB_CATEGORIES, H = api.helpers;
 
+  /* the touchpoint is fixed per hub type */
   const expected = [
-    ["standalone_mini", "Standalone (mini-hub)", 3.2, 6],
-    ["standalone",      "Standalone",            5,   5],
-    ["lm_as_fm",        "LM-as-FM",              6,   6],
-    ["mall",            "Mall hub",              2,   2],
-    ["sah",             "SAH (seller as hub)",   1.5, 1.5]
+    ["standalone_mini", "Standalone (mini-hub)", 6],
+    ["standalone",      "Standalone",            5],
+    ["lm_as_fm",        "LM-as-FM",              6],
+    ["mall",            "Mall hub",              2],
+    ["sah",             "SAH (seller as hub)",   0]
   ];
-  expected.forEach(([key, label, ceiling, tp]) => {
+  expected.forEach(([key, label, tp]) => {
     const c = C[key];
-    check(c && c.label === label && c.ceiling === ceiling && c.tp === tp,
-          label + " → ceiling " + ceiling + ", touchpoint ₹" + tp,
-          c ? "got ceiling " + c.ceiling + ", tp " + c.tp : "category missing");
+    check(c && c.label === label && c.tp === tp && c.tpCeiling === tp && H.fixedTp(key) === tp.toFixed(2),
+          label + " → touchpoint fixed at ₹" + tp.toFixed(2),
+          c ? "got tp " + c.tp + ", ceiling " + c.tpCeiling : "category missing");
   });
+
+  /* slab ceilings: six 2,500-order columns, a slab held to the one it starts in */
+  eq(api.config.CEILING_COLS, [0, 2500, 5000, 7500, 10000, 12500], "six columns, 2,500 orders apart");
+  eq([0, 2500, 5000, 7500, 10000].map(f => H.slabCeiling("standalone_mini", "Anywhere", f)),
+     [3.2, 3, 2.73, 2.55, 2.38], "mini-hub ceilings step down by slab, the same in every city");
+  eq(H.slabCeiling("standalone_mini", "", 12500), 2.2, "and the column above 12,500 is 2.20");
+  eq(H.slabCeiling("sah", "Mumbai, Maharashtra", 7500), 1.5, "SAH is 1.50 everywhere");
+  eq(H.slabCeiling("lm_as_fm", "Bengaluru", 0), 6, "LM-as-FM keeps its flat 6.00 — the sheet leaves it blank");
+  eq(H.slabCeiling("standalone", "Bengaluru, Karnataka", 0), 3.5, "Standalone in Bengaluru: 3.50");
+  eq([0, 2500, 5000, 7500, 10000].map(f => H.slabCeiling("standalone", "New Delhi, Delhi", f)),
+     [2.65, 2.5, 2.25, 2, 1.75], "Standalone in Delhi steps down from 2.65");
+  eq(H.slabCeiling("mall", "Mumbai, Maharashtra", 0), 3.85, "Mall hub in Mumbai starts at 3.85");
+  eq(H.cityKey("New Delhi, Delhi"), "Delhi", "“New Delhi” reads as the sheet’s Delhi");
+  eq(H.slabCeiling("standalone", "Resolved from pincode", 0), null, "a city off the sheet has no Standalone ceiling");
+
+  /* above or within */
+  const card = rates => ({ slabs:rates.map((r, i) => ({ from:String(i * 2500), to:"", rate:r })) });
+  check(!H.cardAbove("standalone_mini", "", card(["3.20", "3.00", "2.73", "2.55", "2.38"])),
+        "a mini-hub card exactly on every ceiling is within");
+  check(H.cardAbove("standalone_mini", "", card(["3.00", "2.90", "2.80", "2.40", "2.30"])),
+        "one slab over its own ceiling (2.80 against 2.73) puts it above");
+  check(H.cardAbove("standalone", "Jaipur", card(["1.00", "1.00", "1.00", "1.00", "1.00"])),
+        "a Standalone card in a city with no ceilings goes to BizFin, however low");
+  eq(H.ceilingText("standalone_mini", ""), "₹3.20 → ₹2.20", "stepped ceilings read first to last");
+  eq(H.ceilingText("standalone", "Bengaluru"), "₹3.50", "flat ceilings read as one figure");
 
   api.stopTimers();
   win.close();
@@ -1092,21 +1119,21 @@ async function testDevPanel() {
   const dWithin = devText();
   check(dWithin.indexOf("Approve rate card") >= 0,
         "FM CH: approve offered on a within-ceiling card");
-  check(dWithin.indexOf("Raise to Central Admin") === -1,
+  check(dWithin.indexOf("Raise to BizFin") === -1,
         "and raising is not offered on a within-ceiling card");
   check(dWithin.indexOf("back to Area Manager") >= 0, "FM CH: reject offered");
 
   api.actions.amSubmitRate(true);
   const dAbove = devText();
-  check(dAbove.indexOf("Raise to Central Admin") >= 0,
+  check(dAbove.indexOf("Raise to BizFin") >= 0,
         "FM CH: raise offered on an above-ceiling card");
   check(dAbove.indexOf("Approve rate card") === -1,
         "and the Cluster Head cannot approve one");
 
   api.actions.chRaise();
   const d3 = devText();
-  check(d3.indexOf("Central Admin") >= 0, "Central Admin group appears once raised");
-  check(d3.indexOf("Approve rate card") >= 0, "Central Admin approve offered");
+  check(d3.indexOf("BizFin") >= 0, "the BizFin group appears once raised");
+  check(d3.indexOf("Approve rate card") >= 0, "BizFin approve offered");
 
   api.actions.centralReject();
   const d3b = devText();
@@ -1226,13 +1253,10 @@ async function testBulkPincodes() {
   pickRole(doc, "LM");
   api.helpers.goPhase("hub");
   api.actions.addPincodes("560076");
-  api.actions.checkAvailability();
-  api.actions.selectPincode("560076");
-  check(api.helpers.R().hub.checked && api.helpers.R().hub.selected === "560076",
-        "availability checked and a pincode selected");
+  api.actions.typeHubPincode("560076");
   api.actions.addPincodes("560034, 110017");
-  check(!api.helpers.R().hub.checked && !api.helpers.R().hub.selected,
-        "adding more pincodes clears the stale availability result");
+  eq(api.helpers.R().hub.pincodes, ["560076", "560034", "110017"], "more pincodes join the list");
+  eq(api.helpers.R().hub.selected, "560076", "and the hub’s own pincode is left as it was");
 
   /* single-value behaviour is unchanged — precise copy, not a batch summary */
   api.reset();
@@ -1669,6 +1693,11 @@ function devClick(doc, action) {
   el.dispatchEvent(new (doc.defaultView.MouseEvent)("click", { bubbles: true }));
 }
 const devText = (doc) => $(doc, "dev").textContent.replace(/\s+/g, " ");
+/* Central Admin is three roles; the backend simulator picks which is signed in. */
+function asCentral(doc, persona) {
+  clickSel(doc, '[data-aprole="central"]');
+  devClick(doc, "ca:" + persona);
+}
 
 async function testCaptainHub() {
   section("11. Captain Hub — login switch, profile, hubs");
@@ -1806,13 +1835,12 @@ async function testCaptainHub() {
     check(!!sel(doc, '[data-choice="' + c + '"]'), "GST choice offered: " + c));
   check(api.helpers.knownGstins().length > 0, "existing verified GSTINs are available to map");
 
-  /* FM cannot be Non-GST — the rule from onboarding holds here too */
+  /* FM has no Non-GST option — "Don't have GST for this hub?" is the way in */
   api.actions.addHubRole("FM");
-  check(sel(doc, '[data-choice="none"]').getAttribute("aria-disabled") === "true",
-        "Non-GST is not offered for an FM hub");
-  check(txt(doc).indexOf("mandatory for First Mile") >= 0, "and says why");
+  check(!sel(doc, '[data-choice="none"]'), "Non-GST is not offered as an option for an FM hub");
+  check(exists(doc, "#addhub-nogst"), "a Don’t have GST for this hub? link is, instead");
   api.actions.addHubChoice("none");
-  check(api.state.panel.addHub.choice !== "none", "choosing Non-GST for FM is refused");
+  check(api.state.panel.addHub.choice !== "none", "the Non-GST radio route stays shut for FM");
 
   api.actions.addHubChoice("new");
   api.actions.addHubContinue();
@@ -1850,12 +1878,19 @@ async function testCaptainHub() {
   sIn.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
   check($(doc, "addhub-existing") === sIn, "clicking the select does not rebuild the row");
 
-  /* a disabled row is inert without relying on a button's disabled attribute */
+  /* FM: no Non-GST row at all — the deliberate link opens the declaration */
   api.actions.addHubRole("FM");
-  const noneRow = sel(doc, '[data-choice="none"]');
-  eq(noneRow.getAttribute("aria-disabled"), "true", "the Non-GST row is marked disabled for FM");
-  noneRow.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
-  check(api.state.panel.addHub.choice !== "none", "and clicking it does nothing");
+  check(!sel(doc, '[data-choice="none"]'), "there is no Non-GST row for FM");
+  click(doc, "addhub-nogst");
+  check(exists(doc, '[data-testid="addhub-nogst"]'), "Don’t have GST for this hub? opens the declaration");
+  check(!sel(doc, "[data-choice]"), "in place of the GSTIN choices");
+  eq($(doc, "addhub-go").textContent.trim(), "Continue without GST →", "and the button says so");
+  click(doc, "addhub-go");
+  eq(api.state.screen, "panel", "it won’t continue without a reason and the confirmation");
+  check(txt(doc).indexOf("Pick why you don’t have GST.") >= 0 &&
+        txt(doc).indexOf("Tick the box to confirm you don’t have GST.") >= 0, "and says what’s missing");
+  click(doc, "addhub-nogst-cancel");
+  check(!!sel(doc, '[data-choice="new"]'), "I have a GSTIN goes back to the GSTIN choices");
   api.actions.addHubRole("LM");
 
   /* the typed GSTIN actually carries through to the new hub */
@@ -2134,15 +2169,23 @@ async function testAdminPanel() {
   click(doc, "am-to-design"); click(doc, "am-to-rate");
 
   api.actions.amCategory("standalone");
-  eq(api.helpers.apCeiling(amReq), 5, "a Standalone hub sets a ceiling of 5");
-  check(txt(doc).indexOf("₹5.00") >= 0, "the ceiling is shown against the slabs");
+  eq(api.helpers.apCeiling(amReq), 3.5, "a Bengaluru Standalone hub sets a 3.50 slab ceiling");
+  check(txt(doc).indexOf("₹3.50") >= 0, "the ceiling is shown against the slabs");
+  eq(amReq.rate.touchpoint, "5.00", "and the hub type sets the touchpoint: 5.00 for Standalone");
+  check(!exists(doc, "input#am-touchpoint"), "the AM can’t type the touchpoint — it’s shown, not an input");
+  check(sel(doc, '[data-testid="am-tp-fixed"]').textContent.indexOf("₹5.00") >= 0, "it reads ₹5.00");
+  api.actions.amRateField("touchpoint", "9.00");
+  eq(amReq.rate.touchpoint, "5.00", "and it can’t be changed by action either");
 
   /* within the ceiling → straight through to the Cluster Head */
-  api.actions.chSlabField(0, "from", "0");
-  api.actions.chSlabField(0, "to", "500");
-  api.actions.chSlabField(0, "rate", "4.50");
-  api.actions.amRateField("touchpoint", "5.00");
-  check(api.helpers.apWithinThreshold(amReq), "4.50 is within the 5.00 ceiling");
+  eq(amReq.rate.slabs.map(sl => sl.from + "-" + sl.to), ["0-2500", "2501-5000", "5001-7500", "7501-10000", "10001-"],
+     "five slabs in steps of 2,500 orders, the last open-ended");
+  check(!exists(doc, '[data-field="from"]') && !exists(doc, '[data-field="to"]') && !exists(doc, "#ch-slab-add"),
+        "the AM can't type the bands or add a slab — only the rates");
+  api.actions.chSlabField(0, "to", "900");
+  eq(amReq.rate.slabs[0].to, "2500", "and a band can't be changed by action either");
+  priceAllSlabs(api, "3.40");
+  check(api.helpers.apWithinThreshold(amReq), "3.40 is within the 3.50 ceiling");
   check(txt(doc).indexOf("Within ceiling") >= 0, "the card says so");
   check(!disabled(doc, "ap-approve"), "and approve opens");
   check($(doc, "ap-approve").textContent.indexOf("send to CH") >= 0,
@@ -2150,7 +2193,7 @@ async function testAdminPanel() {
 
   /* above the ceiling → it becomes an approval request instead */
   api.actions.chSlabField(0, "rate", "7.00");
-  check(!api.helpers.apWithinThreshold(amReq), "7.00 is above the 5.00 ceiling");
+  check(!api.helpers.apWithinThreshold(amReq), "7.00 is above the 3.50 ceiling");
   check(txt(doc).indexOf("Above ceiling") >= 0, "the card flags it");
   check(exists(doc, '[data-testid="am-over-ceiling"]'), "and explains what happens next");
   check(!disabled(doc, "ap-approve"), "it can still be submitted");
@@ -2201,7 +2244,7 @@ async function testAdminPanel() {
   check(exists(doc, "#ap-central"), "but can raise it to Central Admin");
   click(doc, "ap-central");
   eq(api.helpers.apById("OBD-78222").stage, "central", "which routes it to Central Admin");
-  check(txt(doc).indexOf("Raised to Central Admin") >= 0, "with a confirmation");
+  check(txt(doc).indexOf("Raised to BizFin") >= 0, "with a confirmation");
 
   check(Object.keys(api.config.ADMIN_TABS).every(k =>
           api.config.ADMIN_TABS[k].every(t => t.id !== "users" && t.label !== "User mapping")),
@@ -2228,22 +2271,29 @@ async function testAdminPanel() {
     check(!exists(doc, "#" + id), "the Zonal Head has no " + id.replace("ap-", "") + " action"));
   noSd("the ZH monitoring view");
 
-  /* --- FM Central Admin --- */
+  /* --- FM Central Admin: three roles, picked in the backend simulator --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="central"]');
-  eq(api.config.ADMIN_TABS.central.map(t => t.id), ["mine","design","am","ch","rates"],
-     "Central has its own approval queue, design approvals, the AM and CH views, and raised rate card updates");
-  check(txt(doc).indexOf("National view") >= 0, "described as a national view");
+  check(exists(doc, '[data-testid="ap-central-pick"]'), "Central Admin first asks which role is signed in");
+  check(devText(doc).indexOf("Central Admin role") >= 0, "and the backend simulator offers the three");
+  eq(Object.keys(api.config.CENTRAL_TABS), ["bizfin", "design", "ops"], "BizFin, the Design team and FM Central Ops");
+  eq(api.config.CENTRAL_TABS.bizfin.map(t => t.id), ["mine", "rates", "slabs"],
+     "BizFin: above-ceiling rate cards at onboarding, above-ceiling updates, and slab settings");
+  eq(api.config.CENTRAL_TABS.design.map(t => t.id), ["design"], "the Design team: the carting design queue");
+  eq(api.config.CENTRAL_TABS.ops.map(t => t.id), ["all", "am", "ch", "rates", "bulk", "slabs"],
+     "FM Central Ops: the national view, AM and CH steps, rate card updates, bulk updates and slab settings");
+  devClick(doc, "ca:bizfin");
+  check(txt(doc).indexOf("Central Admin · BizFin") >= 0, "signed in as BizFin");
 
-  eq(api.state.admin.tab, "mine", "Central opens on its own queue");
+  eq(api.state.admin.tab, "mine", "BizFin opens on its own queue");
   const centralRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
   check(centralRows.indexOf("OBD-78222") >= 0, "holding what the Cluster Head raised");
   clickSel(doc, '[data-apopen="OBD-78222"]');
-  check(txt(doc).indexOf("Central Admin · rate card approval") >= 0, "opens the Central approval");
+  check(txt(doc).indexOf("BizFin · rate card approval") >= 0, "opens the BizFin approval");
   check(exists(doc, '[data-testid="central-above-threshold"]'),
         "stating what was over ceiling and by how much");
   check(txt(doc).indexOf("Raised by the Cluster Head") >= 0, "attributed to the Cluster Head");
-  check(exists(doc, "#ap-approve"), "Central Admin can approve it");
+  check(exists(doc, "#ap-approve"), "BizFin can approve it");
   click(doc, "ap-approve");
   eq(api.helpers.apById("OBD-78222").settled, "approved", "and does");
   eq(api.helpers.apById("OBD-78222").stage, "done", "which settles the request");
@@ -2281,7 +2331,7 @@ async function testCeilingEscalation() {
   const sample = api.helpers.apById("OBD-78255");
   eq(sample.stage, "ch", "the sample sits with the Cluster Head");
   eq(sample.hubCategory, "mall", "on a mall hub");
-  eq(api.helpers.apCeiling(sample), 2, "whose ceiling is 2");
+  eq(api.helpers.apCeiling(sample), 3.5, "whose ceiling in Bengaluru is 3.50");
   check(!api.helpers.apWithinThreshold(sample), "and its rate card is above that");
   eq(sample.rateEscalated, true, "so it arrived as an approval request");
   check(apVisible(doc).indexOf("OBD-78255") >= 0, "and it is in the CH queue");
@@ -2320,8 +2370,7 @@ async function testCeilingEscalation() {
   check(txt(doc).indexOf("Rate is too high for this catchment.") >= 0, "and the reason");
 
   /* reprice within the ceiling and it goes straight through */
-  api.actions.chSlabField(0, "rate", "1.80");
-  api.actions.chSlabField(1, "rate", "1.60");
+  priceAllSlabs(api, "1.80");
   check(api.helpers.apWithinThreshold(api.helpers.apById("OBD-78255")),
         "repriced inside the ceiling");
   check($(doc, "ap-approve").textContent.indexOf("send to CH") >= 0,
@@ -2341,7 +2390,7 @@ async function testCeilingEscalation() {
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="am"]');
   clickSel(doc, '[data-apopen="OBD-78255"]');
-  api.actions.chSlabField(0, "rate", "3.50");
+  api.actions.chSlabField(0, "rate", "3.90");
   click(doc, "ap-approve");
   eq(api.helpers.apById("OBD-78255").rateEscalated, true, "above ceiling again");
   eq(api.helpers.apById("OBD-78255").stage, "ch", "so it goes to the Cluster Head for approval");
@@ -2352,13 +2401,13 @@ async function testCeilingEscalation() {
   click(doc, "ap-central");
   eq(api.helpers.apById("OBD-78255").stage, "central", "the CH raises it to Central Admin");
 
-  /* --- Central Admin can approve or reject --- */
+  /* --- BizFin can approve or reject --- */
   api.actions.adminSwitchRole();
-  clickSel(doc, '[data-aprole="central"]');
-  eq(api.state.admin.tab, "mine", "Central opens on its own queue");
+  asCentral(doc, "bizfin");
+  eq(api.state.admin.tab, "mine", "BizFin opens on its own queue");
   check(apVisible(doc).indexOf("OBD-78255") >= 0, "where the raised request is waiting");
   clickSel(doc, '[data-apopen="OBD-78255"]');
-  check(txt(doc).indexOf("Central Admin · rate card approval") >= 0, "opening the approval");
+  check(txt(doc).indexOf("BizFin · rate card approval") >= 0, "opening the approval");
   check(exists(doc, '[data-testid="central-above-threshold"]'), "with the overage stated");
   check(txt(doc).indexOf("Raised by the Cluster Head") >= 0, "attributed to the Cluster Head");
   check(exists(doc, "#ap-approve") && exists(doc, "#ap-reject"),
@@ -2368,7 +2417,7 @@ async function testCeilingEscalation() {
   click(doc, "ap-reject");
   const bounced = api.helpers.apById("OBD-78255");
   eq(bounced.stage, "am", "a Central rejection also returns it to the Area Manager");
-  eq(bounced.revision.by, "Central Admin", "naming Central Admin as the sender");
+  eq(bounced.revision.by, "BizFin", "naming BizFin as the sender");
   eq(bounced.settled, null, "and the request stays open");
 
   /* send it back up the same way and approve it this time */
@@ -2381,13 +2430,13 @@ async function testCeilingEscalation() {
   clickSel(doc, '[data-apopen="OBD-78255"]');
   click(doc, "ap-central");
   api.actions.adminSwitchRole();
-  clickSel(doc, '[data-aprole="central"]');
+  asCentral(doc, "bizfin");
   clickSel(doc, '[data-apopen="OBD-78255"]');
   click(doc, "ap-approve");
   eq(api.helpers.apById("OBD-78255").settled, "approved", "Central Admin approves the rate card");
   eq(api.helpers.apById("OBD-78255").stage, "done", "which settles the request");
 
-  /* --- the touchpoint rate is benchmarked against its own ceiling --- */
+  /* --- every slab has its own ceiling; the touchpoint is fixed --- */
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="am"]');
   clickSel(doc, '[data-apopen="OBD-78222"]');
@@ -2398,77 +2447,60 @@ async function testCeilingEscalation() {
   api.actions.designField("onboarding", "expansion");
   api.actions.designValidate();
   api.actions.designSend();
-  api.actions.amCategory("mall");
-  api.actions.chSlabField(0, "rate", "1.80");
-  api.actions.amRateField("touchpoint", "2.00");
+  api.actions.amCategory("standalone_mini");
+  priceAllSlabs(api, "2.30");
 
   const req = () => api.helpers.apById("OBD-78222");
-  eq(api.helpers.apCeiling(req()), 2, "a mall hub caps slab rates at 2");
-  eq(api.helpers.apTpCeiling(req()), 2, "and the touchpoint at 2 as well");
-  check(api.helpers.apWithinThreshold(req()), "a card on both ceilings is within threshold");
-  check(!exists(doc, '[data-testid="am-tp"].over'), "the touchpoint row is not flagged");
+  eq(req().rate.touchpoint, "6.00", "a mini-hub’s touchpoint is fixed at 6.00");
+  eq(api.helpers.apTpCeiling(req()), 6, "so its touchpoint ceiling is the same 6.00");
+  eq([...doc.querySelectorAll("[data-slabrow] .cv")].map(c => c.textContent.trim()),
+     ["₹3.20", "₹3.00", "₹2.73", "₹2.55", "₹2.38"], "each slab shows its own ceiling, stepping down");
+  check(api.helpers.apWithinThreshold(req()), "2.30 a slab is within every one of them");
 
-  /* the slab rates stay put; only the touchpoint goes over */
-  type(doc, "am-touchpoint", "2.60");
-  check(api.helpers.tpOverCeiling(req()), "raising only the touchpoint breaches its ceiling");
-  check(!api.helpers.slabOverCeiling(req(), req().rate.slabs[0]),
-        "while the slab rate is still inside its own");
-  check(!api.helpers.apWithinThreshold(req()),
-        "so the card as a whole is above threshold");
-  check(exists(doc, '[data-testid="am-tp"].over'), "the touchpoint row is flagged in place");
-  eq($(doc, "am-tp-ceiling").textContent.trim(), "₹2.00 · over", "with its ceiling marked over");
+  /* the same rate can be within one slab's ceiling and over another's */
+  api.actions.chSlabField(0, "rate", "2.80");
+  check(!api.helpers.slabOverCeiling(req(), req().rate.slabs[0]), "2.80 is within the first slab’s 3.20");
+  api.actions.chSlabField(2, "rate", "2.80");
+  check(api.helpers.slabOverCeiling(req(), req().rate.slabs[2]), "but over the third slab’s 2.73");
+  eq(doc.querySelectorAll(".slab-row.over").length, 1, "only that slab is flagged");
+  eq(sel(doc, '[data-slabrow="2"] .cv').textContent.trim(), "₹2.73 · over", "with its ceiling marked over");
   eq($(doc, "am-rate-status").textContent.trim(), "Above ceiling", "and the card chip follows");
-  check(txt(doc).indexOf("The touchpoint rate is ₹2.60 against a ₹2.00 ceiling.") >= 0,
-        "the notice names the touchpoint, not a slab");
-  check(txt(doc).indexOf("highest slab rate") === -1,
-        "and does not claim a slab rate is over when none is");
-  eq($(doc, "ap-approve").textContent.indexOf("Raise approval request") >= 0, true,
-     "so it submits as an approval request");
-
-  /* both over at once reads as one sentence */
-  api.actions.chSlabField(0, "rate", "3.00");
-  check(txt(doc).indexOf("The highest slab rate is ₹3.00 against a ₹2.00 ceiling, and " +
-                         "the touchpoint rate is ₹2.60 against a ₹2.00 ceiling.") >= 0,
-        "with both breaches stated together when both are over");
-
-  /* back within the touchpoint ceiling and only the slab is named */
-  type(doc, "am-touchpoint", "1.90");
-  check(!api.helpers.tpOverCeiling(req()), "lowering it clears the touchpoint breach");
-  check(txt(doc).indexOf("touchpoint rate is") === -1, "and the notice drops it");
-  check(!apiTpFlagged(doc), "and the row is no longer flagged");
+  check(txt(doc).indexOf("Slab 3 (5,001–7,500 orders) is ₹2.80 against a ₹2.73 ceiling.") >= 0,
+        "the notice names the slab, its rate and its ceiling");
+  api.actions.chSlabField(4, "rate", "2.50");
+  check(txt(doc).indexOf("against a ₹2.73 ceiling, and 1 more slab is over.") >= 0,
+        "a second slab over is counted, not listed");
+  api.actions.chSlabField(4, "rate", "2.30");
 
   /* the "what's still missing" hint must not survive the card being completed */
   check($(doc, "am-rate-incomplete").hidden,
-        "the incomplete-card hint is gone once every field is filled");
-  api.actions.amRateField("touchpoint", "");
+        "the incomplete-card hint is gone once every slab is priced");
+  api.actions.chSlabField(1, "rate", "");
   check(!$(doc, "am-rate-incomplete").hidden, "and comes back when one is cleared");
-  api.actions.amRateField("touchpoint", "2.60");
+  api.actions.chSlabField(1, "rate", "2.90");
   check($(doc, "am-rate-incomplete").hidden, "without needing a full re-render");
 
-  /* it carries downstream: the CH sees the touchpoint ceiling and the breach */
-  type(doc, "am-touchpoint", "2.60");
-  api.actions.chSlabField(0, "rate", "1.80");
+  /* it carries downstream */
   click(doc, "ap-approve");
-  eq(req().stage, "ch", "an over-touchpoint card still routes to the Cluster Head");
+  eq(req().stage, "ch", "an over-ceiling card still routes to the Cluster Head");
   eq(req().rateEscalated, true, "as an approval request");
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="ch"]');
   clickSel(doc, '[data-apopen="OBD-78222"]');
-  check(txt(doc).indexOf("Touchpoint ceiling (Mall hub)") >= 0,
-        "the CH's read-only card names the touchpoint ceiling");
-  check(txt(doc).indexOf("₹2.60 / shipment · above ceiling") >= 0,
-        "and flags the touchpoint as above it");
-  check(txt(doc).indexOf("The touchpoint rate is ₹2.60 against a ₹2.00 ceiling.") >= 0,
-        "with the banner naming the touchpoint breach");
+  check(txt(doc).indexOf("Slab ceilings (Standalone (mini-hub), Bengaluru)") >= 0 &&
+        txt(doc).indexOf("₹3.20 → ₹2.20") >= 0, "the CH's read-only card names the ceilings it was held to");
+  check(txt(doc).indexOf("₹6.00 / shipment · fixed for Standalone (mini-hub)") >= 0,
+        "and shows the touchpoint as fixed for the hub type");
+  check(txt(doc).indexOf("₹2.80 / shipment · above ceiling") >= 0, "with the slab over its ceiling flagged");
   check(!exists(doc, "#ap-approve"), "the CH cannot settle it");
   api.actions.chRate(4);
   check(exists(doc, "#ap-central"), "and once their own review is done, must raise it");
   click(doc, "ap-central");
   api.actions.adminSwitchRole();
-  clickSel(doc, '[data-aprole="central"]');
+  asCentral(doc, "bizfin");
   clickSel(doc, '[data-apopen="OBD-78222"]');
-  check(txt(doc).indexOf("For a Mall hub, the touchpoint rate is ₹2.60") >= 0,
-        "and Central Admin is told which ceiling was breached");
+  check(txt(doc).indexOf("For a Standalone (mini-hub), slab 3 (5,001–7,500 orders) is ₹2.80") >= 0,
+        "and BizFin is told which ceiling was breached");
 
   /* --- a desk looking at someone else's request gets read-only, not ZH copy --- */
   api.actions.adminSwitchRole();
@@ -2497,7 +2529,6 @@ async function testCeilingEscalation() {
   win.close();
 }
 
-const apiTpFlagged = (doc) => !!doc.querySelector('[data-testid="am-tp"].over');
 
 /* =========================================================================
    18. FM captain copy — nothing internal leaks through
@@ -2549,8 +2580,9 @@ async function testFMCaptainCopy() {
   click(doc, "ch-continue");
   scanFM(doc, "agreements");
   /* the agreement text itself, which the captain scrolls through in full */
-  check(txt(doc).indexOf("Rate card revisions follow Valmo\u2019s internal approval process") >= 0,
-        "the service agreement points at an internal process, naming no desk");
+  check(txt(doc).indexOf("The rates shown for your hub on Valmo One apply") >= 0 &&
+        txt(doc).indexOf("the revision binds from that date") >= 0,
+        "the service agreement says the rates on Valmo One apply and revisions bind on notice, naming no desk");
   check(txt(doc).indexOf("Rate card values are set by your Area Manager") >= 0,
         "the rate card checkbox credits the Area Manager");
   check(txt(doc).indexOf("captured during Cluster Head review") === -1,
@@ -2714,8 +2746,7 @@ async function testCartingDesign() {
 
   /* --- Central Admin aligns the design --- */
   api.actions.adminSwitchRole();
-  clickSel(doc, '[data-aprole="central"]');
-  clickSel(doc, '[data-aptab="design"]');
+  asCentral(doc, "design");
   check(apVisible(doc).indexOf("OBD-78222") >= 0, "it appears in Central Admin's design queue");
   clickSel(doc, '[data-apopen="OBD-78222"]');
   check(txt(doc).indexOf("Design alignment") >= 0, "opening it shows the design alignment");
@@ -2845,8 +2876,7 @@ async function testCopyConsistency() {
   b.api.actions.designValidate();
   b.api.actions.designSend();
   b.api.actions.adminSwitchRole();
-  clickSel(b.doc, '[data-aprole="central"]');
-  b.api.actions.adminTab("design");
+  asCentral(b.doc, "design");
   b.api.actions.adminOpen(fresh.id);
   check(txt(b.doc).indexOf("Not set yet") >= 0,
         "the design alignment shows hub type as not set yet");
@@ -2858,11 +2888,11 @@ async function testCopyConsistency() {
 }
 
 /* =========================================================================
-   21. Serviceable pincodes live on hub details
+   21. Pincodes live on hub details — entered, never checked
    ====================================================================== */
 
 async function testPincodesOnHub() {
-  section("21. Serviceable pincodes live on hub details");
+  section("21. Pincodes live on hub details — entered, never checked");
   const { win, doc, api } = await boot();
 
   login(doc);
@@ -2871,7 +2901,7 @@ async function testPincodesOnHub() {
   /* --- personal details asks only about the person --- */
   check(!exists(doc, "#hub-pins") && !exists(doc, "#pd-pin"),
         "personal details has no pincode field");
-  check(txt(doc).indexOf("Serviceable pincodes") === -1, "and no pincode section");
+  check(txt(doc).indexOf("Pincodes this hub will service") === -1, "and no pincode section");
   check(txt(doc).indexOf("Check availability") === -1, "and no availability check");
   doPersonalDetails(doc);
   eq(api.helpers.phaseId(), "kyc", "personal details continues with no pincode at all");
@@ -2880,11 +2910,11 @@ async function testPincodesOnHub() {
   eq(api.config.PHASES.FM[2].sub, "Pincode, address and facility",
      "it lists it under hub details instead");
 
-  /* --- hub details carries the check, between the facility size and the vehicle --- */
+  /* --- hub details lists them, between the facility size and the vehicle --- */
   doKyc(doc, "FM");
   eq(api.helpers.phaseId(), "hub", "KYC → hub details");
   const order = txt(doc);
-  check(order.indexOf("Serviceable pincodes") >= 0, "hub details carries the pincode check");
+  check(order.indexOf("Pincodes this hub will service") >= 0, "hub details lists the pincodes to service");
   const picker = sel(doc, '[data-testid="pincode-picker"]');
   const isBefore = (a, b) => !!(a.compareDocumentPosition(b) & win.Node.DOCUMENT_POSITION_FOLLOWING);
   check(isBefore($(doc, "hub-address"), picker) && isBefore($(doc, "hub-map"), picker),
@@ -2892,25 +2922,41 @@ async function testPincodesOnHub() {
   check(isBefore($(doc, "hub-area"), picker) && isBefore($(doc, "hub-manpower"), picker),
         "and after hub area and estimated manpower");
   check(isBefore(picker, $(doc, "veh-toggle")), "and before max vehicle size");
-  check(txt(doc).indexOf("Type the hub\u2019s pincode, or pick one from the serviceable pincodes below.") >= 0,
-        "the hub pincode field points down to it");
-  check($(doc, "hub-check").disabled, "Check availability waits for a pincode");
+  check(txt(doc).indexOf("The 6-digit pincode the hub sits in.") >= 0, "the hub pincode field says what it wants");
+  check(!exists(doc, "#hub-check") && txt(doc).indexOf("Check availability") === -1,
+        "there is no availability check any more");
   type(doc, "hub-pins", "560076, 700001");
   click(doc, "hub-addpin");
-  check(!$(doc, "hub-check").disabled, "and enables once one is added — no email gate any more");
-  click(doc, "hub-check");
-  check(exists(doc, '[data-selpin="560076"]'), "the serviceable pincode is offered");
-  check(!exists(doc, '[data-selpin="700001"]'), "the unserviceable one is not");
-  api.actions.selectPincode("700001");
-  eq(api.helpers.R().hub.selected, null, "an unserviceable pincode cannot be forced in");
-  clickSel(doc, '[data-selpin="560076"]');
-  eq($(doc, "hub-pin").value, "560076", "the chosen pincode shows in the hub pincode field");
+  eq(api.helpers.R().hub.pincodes, ["560076", "700001"], "any valid pincodes are taken, as entered");
+  check(!sel(doc, ".pchip.ok") && !sel(doc, ".pchip.no") &&
+        sel(doc, '[data-testid="pincode-picker"]').textContent.indexOf("✓") === -1,
+        "none is marked available or unavailable");
+  check(!exists(doc, "[data-selpin]"), "and there is nothing to pick from");
+  type(doc, "hub-pin", "560076");
+  eq(api.helpers.R().hub.selected, "560076", "the hub pincode is whatever is typed");
   eq($(doc, "hub-city").value, "Bengaluru, Karnataka", "and resolves the city");
 
   /* --- picks survive a submit failure elsewhere on the form --- */
   api.actions.hubSubmit({ address: "", mapLink: "", areaSqft: "", manpower: "", maxVehicle: "" });
-  eq(api.helpers.R().hub.selected, "560076", "a failed submit keeps the chosen pincode");
+  eq(api.helpers.R().hub.selected, "560076", "a failed submit keeps the hub pincode");
   check(txt(doc).indexOf(api.errors.pincodeSelect) === -1, "and does not complain about it");
+
+  /* --- both are needed to submit, nothing more --- */
+  api.actions.removePincode("560076");
+  api.actions.removePincode("700001");
+  api.actions.typeHubPincode("");
+  api.actions.hubSubmit({ address: "Plot 7", mapLink: mapFor(doc, "560076"), areaSqft: "4000", manpower: "12",
+                          maxVehicle: "7MT_20FT" });
+  check(!api.helpers.R().hub.submitted, "with no pincodes at all it won’t submit");
+  eq(api.helpers.R().hub.errors.hubPin, api.errors.pincodeSelect, "it asks for the hub’s pincode");
+  eq(api.helpers.R().hub.errors.pincode, api.errors.pincodeNone, "and for at least one to service");
+  api.actions.addPincodes("700001");
+  api.actions.typeHubPincode("700001");
+  api.actions.hubSubmit({});
+  check(api.helpers.R().hub.submitted, "a pincode VALMO had never listed is fine");
+  check(txt(doc).indexOf("Pincodes serviced") >= 0 && txt(doc).indexOf("700001") >= 0,
+        "and the summary lists the pincodes it services");
+  click(doc, "hub-edit");
 
   /* --- an older save that kept pincodes on personal details is migrated --- */
   const old = JSON.parse(win.localStorage.getItem(api.STORE_KEY));
@@ -2940,30 +2986,13 @@ async function testPincodesOnHub() {
   b.api.actions.addHubContinue();
   eq(b.api.helpers.phaseId(), "hub", "adding a hub starts at hub details");
   check(exists(b.doc, '[data-testid="pincode-picker"]'),
-        "with the pincode check, which it never had before");
-  eq(b.api.helpers.R().hub.pincode, "", "the new hub has no pincode until one is picked");
+        "with the pincodes to service, which it never had before");
+  eq(b.api.helpers.R().hub.pincode, "", "the new hub has no pincode until one is entered");
   doHubDetails(b.doc, { pin: "560102", address: "Unit 3, HSR Layout, Bengaluru" });
-  eq(b.api.helpers.R().hub.pincode, "560102", "and records the one it picks");
+  eq(b.api.helpers.R().hub.pincode, "560102", "and records the one entered");
   b.api.stopTimers();
   b.win.close();
 
-  /* --- the availability notice counts properly --- */
-  const c = await boot();
-  login(c.doc);
-  pickRole(c.doc, "FM");
-  c.api.helpers.goPhase("hub");
-  const A = c.api.actions;
-  const notice = () => sel(c.doc, '[data-testid="pincode-picker"] .notice.ok b').textContent;
-  A.addPincodes("560076"); A.checkAvailability();
-  eq(notice(), "Your pincode is available", "one pincode, available");
-  A.addPincodes("560034, 999999"); A.checkAvailability();
-  eq(notice(), "2 of 3 pincodes are available", "some available");
-  A.removePincode("560034"); A.checkAvailability();
-  eq(notice(), "1 of 2 pincodes is available", "one of several available");
-  A.removePincode("999999"); A.addPincodes("560034"); A.checkAvailability();
-  eq(notice(), "All 2 pincodes are available", "all available");
-  c.api.stopTimers();
-  c.win.close();
 }
 
 /* =========================================================================
@@ -3055,9 +3084,8 @@ async function testMapPin() {
 
   /* choosing the pincode the pin is actually in clears it */
   api.actions.addPincodes("560034");
-  api.actions.checkAvailability();
-  api.actions.selectPincode("560034");
-  check(exists(doc, '[data-testid="map-pin-ok"]'), "re-picking the pincode re-checks the pin");
+  api.actions.typeHubPincode("560034");
+  check(exists(doc, '[data-testid="map-pin-ok"]'), "re-entering the pincode re-checks the pin");
   doHubDetails(doc, { pin: null, map: at("560034") });
   check(H.R().hub.submitted, "and the hub submits");
   check(txt(doc).indexOf("Map location") >= 0 && txt(doc).indexOf("12.93520, 77.62450") >= 0,
@@ -3188,7 +3216,6 @@ async function testApiFailures() {
   check(H.R().kyc.bank.done, "resume verifies the account");
   click(doc, "kyc-ack-bank");
 
-  clickSel(doc, '[data-gstchoice="registered"]');
   A.armFail("gst", "down");
   type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
   click(doc, "kyc-gst-go");
@@ -3199,17 +3226,8 @@ async function testApiFailures() {
   click(doc, "kyc-continue");
   eq(H.phaseId(), "hub", "KYC completes after four resumed failures");
 
-  /* --- hub details: the availability check --- */
-  eq(devText(doc).indexOf("service down"), -1, "the availability check only times out");
-  A.armFail("pincode", "timeout");
-  type(doc, "hub-pins", "560076");
-  click(doc, "hub-addpin");
-  click(doc, "hub-check");
-  check(failText().indexOf(C.API_FAIL.pincode.timeout) >= 0, "availability: the timeout is explained");
-  check(!exists(doc, '[data-selpin="560076"]'), "no pincode can be picked from a check that did not run");
-  eq($(doc, "hub-check").textContent, "Resume check", "its button becomes Resume check");
-  click(doc, "hub-check");
-  check(exists(doc, '[data-selpin="560076"]') && !failBox(), "resume runs the check");
+  /* --- hub details makes no call that can fail --- */
+  eq(devText(doc).indexOf("Simulate an API failure"), -1, "hub details has nothing to fail — no availability check");
   doHubDetails(doc);
   click(doc, "hub-continue");
 
@@ -3296,25 +3314,29 @@ async function testApiFailures() {
   e.api.helpers.seedExistingCaptain();
   login(e.doc);
   e.api.actions.openPanel("hubs", "hubs");
+  /* an FM hub added without GST, declined by the AM: the GSTIN check pauses */
   e.api.actions.addHubOpen();
-  e.api.actions.addHubRole("LM");
-  e.api.actions.addHubChoice("none");
-  e.api.actions.addHubContinue();
-  e.api.actions.armFail("pincode", "timeout");
-  type(e.doc, "hub-pins", "560102");
-  click(e.doc, "hub-addpin");
-  click(e.doc, "hub-check");
+  e.api.actions.addHubRole("FM");
+  e.api.actions.addHubNoGst(true);
+  e.api.actions.addHubContinue({ reason: e.api.config.NO_GST_REASONS[0], confirm: true });
+  doHubDetails(e.doc, { pin: "560102", address: "Unit 3, HSR Layout, Bengaluru" });
+  click(e.doc, "hub-continue");
+  eq(e.api.helpers.phaseId(), "ch", "the added hub reaches the review");
+  devClick(e.doc, "nogst:decline");
+  e.api.actions.armFail("gst", "down");
+  type(e.doc, "ch-gstin", "29ABCDE1234F1Z5");
+  click(e.doc, "ch-gstin-go");
   click(e.doc, "save-exit");
   eq(e.api.state.screen, "panel", "saving and exiting returns to the hub list");
   const pausedHub = sel(e.doc, '[data-testid="hub-paused"]');
-  check(!!pausedHub && pausedHub.textContent.indexOf("Pincode availability check didn’t go through") >= 0 &&
-        pausedHub.textContent.indexOf(C.API_FAIL.pincode.timeout) >= 0,
+  check(!!pausedHub && pausedHub.textContent.indexOf("didn’t go through") >= 0 &&
+        pausedHub.textContent.indexOf(C.API_FAIL.gst.down) >= 0,
         "the in-progress hub says what is waiting, and why");
   clickSel(e.doc, "[data-resume]");
-  eq(e.api.helpers.phaseId(), "hub", "Resume onboarding reopens hub details");
+  eq(e.api.helpers.phaseId(), "ch", "Resume onboarding reopens the review");
   check(!!failBox(e.doc), "with the failure still explained");
-  click(e.doc, "hub-check");
-  check(exists(e.doc, '[data-selpin="560102"]'), "and the check resumes");
+  click(e.doc, "ch-gstin-go");
+  eq(e.api.helpers.R().kyc.gst.registered, true, "and the GSTIN check resumes and goes through");
   e.api.stopTimers();
   e.win.close();
 }
@@ -3462,7 +3484,6 @@ async function testGstVerification() {
   type(b.doc, "kyc-ifsc", "HDFC0001234");
   click(b.doc, "kyc-bank-go");
   click(b.doc, "kyc-ack-bank");
-  clickSel(b.doc, '[data-gstchoice="registered"]');
   check(devText(b.doc).indexOf("GST portal · demo records") >= 0, "KYC: the demo records are listed");
   type(b.doc, "kyc-gstin", "29ZZZZZ9999Z1Z9");
   click(b.doc, "kyc-gst-go");
@@ -3617,9 +3638,10 @@ async function testHubEdits() {
   check(sel(doc, '[data-testid="hub-edit-error"]').textContent.indexOf("Nothing has changed yet") >= 0,
         "an unchanged form is not sent");
 
-  type(doc, "he-pin", "700001");
+  type(doc, "he-pin", "70001");
   click(doc, "he-submit");
-  check(txt(doc).indexOf("VALMO isn’t opening hubs in 700001 yet") >= 0, "an unserviceable pincode is refused");
+  check(txt(doc).indexOf(api.errors.pincodeFormat) >= 0, "a malformed pincode is refused");
+  check(txt(doc).indexOf("VALMO isn’t opening hubs") === -1, "but there is no serviceability check any more");
   type(doc, "he-pin", "560102");
   type(doc, "he-area", "50");
   click(doc, "he-submit");
@@ -3741,30 +3763,59 @@ async function testHubEdits() {
 }
 
 /* =========================================================================
-   27. Rate card updates — the AM changes an agreed card, the captain agrees
+   27. Rate card updates — published with an effective date, the captain told
    ====================================================================== */
 
 async function testRateUpdates() {
-  section("27. Rate card updates — bell notification, Agree only");
+  section("27. Rate card updates — published with an effective date, the captain notified");
   const { win, doc, api } = await boot();
   const H = api.helpers, A = api.actions;
   const kdg = () => H.hubById("hub-kdg");
+  const today = H.todayIso(), soon = H.addDaysIso(today, 3);
+  const setDate = (id, v) => { const el = $(doc, id); el.value = v; el.dispatchEvent(new win.Event("change", { bubbles: true })); };
+  const setRate = (i, v) => { const el = sel(doc, '[data-rslab="' + i + '"][data-rfield="rate"]'); el.value = v;
+                              el.dispatchEvent(new win.Event("input", { bubbles: true })); };
 
   devClick(doc, "as:existing");
   login(doc);
 
-  /* --- the agreed card, and the bell --- */
-  const rateRow = sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate"]');
-  check(!!rateRow && rateRow.textContent.indexOf("₹4.50 (0–500 orders) · ₹4.00 (501+ orders) · touchpoint ₹5.00") >= 0,
-        "the FM hub card shows its agreed rate card");
-  check(rateRow.textContent.indexOf("Agreed 14 Feb 2026") >= 0, "and when it was agreed");
-  check(!exists(doc, '[data-hub="hub-aqt"] [data-testid="hub-rate"]'), "LM hubs have no rate card row");
-  check(!!sel(doc, ".hub-topbar #bell"), "the Captain Hub has a bell at the top right");
-  check(!exists(doc, '[data-testid="bell-count"]'), "with nothing to show yet");
-  click(doc, "bell");
-  check(sel(doc, '[data-testid="bell-menu"]').textContent.indexOf("You’re all caught up.") >= 0,
-        "opening it says so");
-  click(doc, "bell");
+  /* --- the rate card in force, as a table --- */
+  const sec = () => sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate"]');
+  check(!!sec(), "the FM hub card has a rate card section");
+  const rowsOf = (q) => [...doc.querySelectorAll(q + " tbody tr")]
+    .map(r => [...r.querySelectorAll("td")].map(c => c.textContent.trim()).filter(Boolean).join(" "));
+  const table = rowsOf('[data-hub="hub-kdg"] [data-testid="hub-rate-table"]');
+  eq(table.length, 6, "a row for each of the five slabs, then the touchpoint rate");
+  eq(table[0], "Slab 1 0 – 2,500 ₹3.40 / shipment", "each slab with its orders and rate");
+  eq(table[4], "Slab 5 10,001 and above ₹3.00 / shipment", "the top slab open-ended");
+  eq(table[5], "Touchpoint rate ₹5.00 / shipment", "and the touchpoint rate last");
+  check(sec().textContent.indexOf("In force since 01 Sept 2026") >= 0, "with the day it took effect");
+  check(!exists(doc, '[data-hub="hub-aqt"] [data-testid="hub-rate"]'), "LM hubs have no rate card section");
+  check(!exists(doc, '[data-testid="bell-count"]'), "the bell has nothing new");
+  check(!/agree/i.test(sec().textContent), "and there is nothing to agree to");
+
+  /* --- its history, five to a page --- */
+  clickSel(doc, '[data-ratehist="hub-kdg"]');
+  eq(api.state.panel.section, "ratehistory", "View historic rate card updates opens the history");
+  const items = () => [...doc.querySelectorAll('[data-testid="rate-hist-item"]')];
+  eq(items().length, 5, "showing the last five rate cards");
+  eq(items().map(i => i.getAttribute("data-state")), ["current", "past", "past", "past", "past"],
+     "newest first: the one in force, then the ones before it");
+  check(items()[0].textContent.indexOf("From 01 Sept 2026 · in force today") >= 0, "with its effective date");
+  check(items()[1].textContent.indexOf("01 Aug 2026 – 31 Aug 2026") >= 0, "a past one with the dates it applied");
+  check(items()[1].textContent.indexOf("Published on 27 Jul 2026") >= 0, "and when it was published");
+  check(!!items()[0].querySelector(".rate-tbl"), "each shown as its full table");
+  const pager = () => sel(doc, '[data-testid="rate-hist-pager"]').textContent.replace(/\s+/g, " ");
+  check(pager().indexOf("Showing 1–5 of 7") >= 0 && pager().indexOf("Page 1 of 2") >= 0, "the pager counts them");
+  check($(doc, "rh-newer").disabled && !$(doc, "rh-older").disabled, "only Older is open on the first page");
+  click(doc, "rh-older");
+  eq(items().length, 2, "the next page holds the rest");
+  check(items()[1].textContent.indexOf("Agreed when the hub was onboarded") >= 0, "down to the onboarding card");
+  check(pager().indexOf("Showing 6–7 of 7") >= 0 && $(doc, "rh-older").disabled, "and it ends there");
+  click(doc, "rh-newer");
+  eq(items().length, 5, "Newer goes back");
+  click(doc, "hub-back-hubs");
+  eq(api.state.panel.section, "hubs", "and back to My Hubs");
 
   /* --- the Area Manager updates it --- */
   A.logout();
@@ -3772,120 +3823,177 @@ async function testRateUpdates() {
   login(doc);
   clickSel(doc, '[data-aprole="am"]');
   clickSel(doc, '[data-aptab="rates"]');
-  const rows = [...doc.querySelectorAll('[data-testid="ap-rate-row"]')];
-  eq(rows.length, 12, "the Area Manager sees every live FM hub under them \u2014 the captain\u2019s and eleven others");
+  eq(doc.querySelectorAll('[data-testid="ap-rate-row"]').length, 12,
+     "the Area Manager sees every live FM hub under them — the captain’s and eleven others");
   const kdgRow = () => sel(doc, '[data-testid="ap-rate-row"][data-ratehub="hub-kdg"]');
-  check(kdgRow().textContent.indexOf("Hub KDG") >= 0 && kdgRow().textContent.indexOf("Agreed 14 Feb 2026") >= 0,
-        "the captain\u2019s KDG among them, with its agreement date");
+  check(kdgRow().textContent.indexOf("v7 · in force since 01 Sept 2026") >= 0, "KDG on its seventh version");
   clickSel(doc, '[data-aprate="hub-kdg"]');
   check(exists(doc, '[data-testid="ap-rate-editor"]'), "Update rate card opens the editor");
-  eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value), ["4.50", "4.00"],
-     "starting from the agreed slab rates");
-  eq($(doc, "ap-rate-tp").value, "5.00", "and touchpoint");
-  check(!exists(doc, "#ap-rate-eff") && !exists(doc, "#ap-rate-reason") && !exists(doc, "#ap-rate-note"),
-        "with no date, reason or note to fill in \u2014 that conversation happens offline");
+  eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value)[0], "3.40", "starting from the rates in force");
+  check(!exists(doc, "input#ap-rate-tp"), "the touchpoint can’t be typed");
+  check(sel(doc, '[data-testid="ap-rate-tp"]').textContent.indexOf("₹5.00") >= 0 &&
+        sel(doc, '[data-testid="ap-rate-tp"]').textContent.indexOf("Fixed for Standalone hubs") >= 0,
+        "it shows the Standalone touchpoint, fixed");
+  eq(doc.querySelectorAll('[data-rfield="rate"]').length, 5, "one rate per slab");
+  check(!exists(doc, '[data-rfield="from"]') && !exists(doc, '[data-rfield="to"]') && !exists(doc, "#ap-rate-add"),
+        "the slabs themselves can’t be changed here");
+  eq($(doc, "ap-rate-from").value, H.addDaysIso(today, 1), "it applies from tomorrow unless changed");
+  eq($(doc, "ap-rate-from").getAttribute("min"), today, "and can’t be set before today");
+  check(!exists(doc, "#ap-rate-reason") && !exists(doc, "#ap-rate-note"), "with no reason or note — that’s offline");
+  check(sel(doc, '[data-testid="ap-rate-history"]').querySelectorAll('[data-testid="ap-rate-version"]').length === 7,
+        "the version log lists every version");
 
   click(doc, "ap-rate-send");
-  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("already agreed") >= 0,
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("rates in force today") >= 0,
         "an unchanged card is not sent");
-  const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
-  r0.value = "4.80"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
-  type(doc, "ap-rate-tp", "4.90");
-  click(doc, "ap-rate-add");
-  eq(doc.querySelectorAll('[data-rslabrow]').length, 3, "slabs can be added");
-  clickSel(doc, '[data-rslabdel="2"]');
-  eq(doc.querySelectorAll('[data-rslabrow]').length, 2, "and removed");
-  const bad = sel(doc, '[data-rslab="1"][data-rfield="rate"]');
-  bad.value = "four"; bad.dispatchEvent(new win.Event("input", { bubbles: true }));
+  setRate(0, "3.50");
+  setDate("ap-rate-from", H.addDaysIso(today, -2));
   click(doc, "ap-rate-send");
-  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Every slab needs") >= 0,
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("never backdated") >= 0,
+        "a day in the past is refused");
+  setDate("ap-rate-from", soon);
+  setRate(1, "four");
+  click(doc, "ap-rate-send");
+  check(sel(doc, '[data-testid="ap-rate-error"]').textContent.indexOf("Every slab needs a rate") >= 0,
         "an incomplete slab is caught");
-  const fix = sel(doc, '[data-rslab="1"][data-rfield="rate"]');
-  fix.value = "4.30"; fix.dispatchEvent(new win.Event("input", { bubbles: true }));
+  setRate(1, "3.30");
   click(doc, "ap-rate-send");
 
   const u = H.rateUpdateFor("hub-kdg");
   check(!!u, "a valid update is sent");
-  eq(u.status, "ch", "to the Cluster Head first \u2014 not straight to the captain");
-  eq(u.to, { slabs:[{ from:"0", to:"500", rate:"4.80" }, { from:"501", to:"", rate:"4.30" }], touchpoint:"4.90" },
-     "carrying the new card");
-  eq(u.effective, "", "with no date set \u2014 it applies once the captain agrees");
-  eq(kdg().rateCard.slabs[0].rate, "4.50", "the agreed card stays in force until the captain agrees");
-  check(api.state.admin.toast.indexOf("Sent to the Cluster Head for review") >= 0,
-        "the AM is told it went to the Cluster Head");
-  check(kdgRow().textContent.indexOf("With the Cluster Head") >= 0, "and the list says it is in review");
+  eq(u.status, "ch", "to the Cluster Head first");
+  eq(u.effectiveFrom, soon, "with the day it applies from");
+  eq([u.to.slabs[0].rate, u.to.slabs[1].rate, u.to.touchpoint], ["3.50", "3.30", "5.00"],
+     "carrying the new card, with the fixed touchpoint");
+  eq(kdg().rateCard.slabs[0].rate, "3.40", "the card in force stays until the new one applies");
+  check(api.state.admin.toast.indexOf("it applies from " + H.fmtIso(soon)) >= 0,
+        "the AM is told it went for review, and from when it applies");
+  check(kdgRow().textContent.indexOf("With the Cluster Head") >= 0, "the list says it is in review");
   clickSel(doc, '[data-aprate="hub-kdg"]');
-  check(!exists(doc, '[data-testid="ap-rate-editor"]'), "one update at a time \u2014 no second one while it is open");
-  check(txt(doc).indexOf("With the Cluster Head since") >= 0, "the AM sees where it is");
+  check(!exists(doc, '[data-testid="ap-rate-editor"]'), "one update at a time");
   A.adminRateBack();
 
   /* --- the captain hears nothing while it is in review --- */
   A.logout();
   devClick(doc, "as:existing");
   login(doc);
-  check(!exists(doc, '[data-testid="bell-count"]'), "while it is with the Cluster Head the captain\u2019s bell is quiet");
-  check(!exists(doc, '[data-hub="hub-kdg"] [data-rateopen]'), "and their hub card offers nothing to review");
+  check(!exists(doc, '[data-testid="bell-count"]'), "while it is with the Cluster Head the captain’s bell is quiet");
+  check(!exists(doc, '[data-testid="hub-rate-next"]'), "and no change is shown on the hub");
 
-  /* --- the Cluster Head approves it --- */
+  /* --- the Cluster Head approves it: published, scheduled, captain notified --- */
   A.logout();
   devClick(doc, "as:admin");
   login(doc);
   clickSel(doc, '[data-aprole="ch"]');
   const chWaiting = api.state.rateUpdates.filter(x => x.status === "ch").length;
   eq(sel(doc, '[data-aptab="rates"]').textContent, "Rate card updates (" + chWaiting + ")",
-     "the Cluster Head\u2019s Rate card updates tab counts what waits on them");
+     "the Cluster Head’s tab counts what waits on them");
   clickSel(doc, '[data-aptab="rates"]');
   clickSel(doc, '[data-apru="' + u.id + '"]');
-  check(exists(doc, '[data-testid="ap-ru-review"]'), "the Cluster Head opens it for review");
-  check(sel(doc, '[data-testid="ru-checks"]').textContent.indexOf("Within the Standalone ceilings") >= 0,
-        "seeing it sits within the hub type\u2019s ceilings");
+  const checks = sel(doc, '[data-testid="ru-checks"]').textContent;
+  check(checks.indexOf("Within the Standalone ceilings") >= 0, "within the hub type’s ceilings");
+  check(checks.indexOf("Applies from" + H.fmtIso(soon)) >= 0, "applying from the day the AM picked");
+  check($(doc, "ap-ru-approve").textContent.indexOf("publish and notify the captain") >= 0,
+        "approving publishes it and notifies the captain");
   click(doc, "ap-ru-approve");
-  eq(H.rateUpdateById(u.id).status, "captain", "approving it sends it on to the captain");
-  check(api.state.admin.toast.indexOf("Karan Verma is notified to agree") >= 0, "who is notified");
+  const pub = H.rateUpdateById(u.id);
+  eq(pub.status, "published", "approving publishes it — nothing waits on the captain");
+  eq(H.ruPhase(pub), "scheduled", "scheduled until its day");
+  eq(pub.version, 8, "as the hub’s eighth version");
+  eq(kdg().rateCard.version, 7, "the seventh stays in force until then");
+  eq(H.versionInForce(kdg(), soon).v, 8, "from that day billing reads the new card");
+  eq(H.versionInForce(kdg(), H.addDaysIso(soon, -1)).v, 7, "and the old one up to the day before");
+  check(api.state.admin.toast.indexOf("Karan Verma has been notified in the app and by SMS and email") >= 0,
+        "the Cluster Head is told the captain was notified");
+  const notice = api.state.rateNotices.filter(n => n.hubId === "hub-kdg" && !n.seen)[0];
+  check(!!notice && notice.channels["In-app"] === "Delivered" && notice.channels.SMS === "Delivered" &&
+        notice.channels.Email === "Delivered", "in the app, by SMS and by email — each delivery logged");
+  eq((pub.trail || []).map(x => x.by + ":" + x.what),
+     ["am:sent", "ch:approved", "system:published", "system:captain notified"], "every step on its trail");
 
-  /* --- the captain is notified, and can only agree --- */
+  /* --- the captain is notified — nothing to agree to --- */
   A.logout();
   devClick(doc, "as:existing");
   login(doc);
   eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "the bell shows one notification");
-  check(exists(doc, '[data-hub="hub-kdg"] [data-rateopen]'), "and the hub card offers to review it");
+  const next = sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate-next"]');
+  check(!!next && next.textContent.indexOf("New rates from " + H.fmtIso(soon)) >= 0,
+        "the hub card shows the new rates and the day they apply");
+  check(next.textContent.indexOf("₹3.50") >= 0, "in full");
+  check(sec().textContent.indexOf("₹3.40") >= 0, "with today’s rates still in force above them");
+  check(![...doc.querySelectorAll("button")].some(b => /agree/i.test(b.textContent)), "and no Agree anywhere");
   click(doc, "bell");
-  const note = sel(doc, '[data-note^="rate:"]');
-  check(!!note && note.textContent.indexOf("Rate card update · Kudlu Gate Hub (KDG)") >= 0,
-        "the notification names the hub");
-  check(note.textContent.indexOf("Review and agree") >= 0, "and leads to the agreement");
+  const note = sel(doc, '[data-note^="ratenote:"]');
+  check(!!note && note.textContent.indexOf("New rate card · Kudlu Gate Hub (KDG)") >= 0, "the notification names the hub");
+  check(note.textContent.indexOf("apply from " + H.fmtIso(soon)) >= 0, "and the day the new rates apply");
+  check(!/hub type|ceiling|benchmark|Standalone/i.test(note.textContent), "never the hub type or ceilings");
   note.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
-  eq(api.state.panel.section, "rateupdate", "clicking it opens the rate card update");
-  check(!exists(doc, '[data-testid="bell-menu"]'), "and closes the bell");
-  const page = () => sel(doc, '[data-testid="rate-update"]');
-  check(sel(doc, '[data-testid="rate-current"]').textContent.indexOf("₹4.50") >= 0 &&
-        sel(doc, '[data-testid="rate-new"]').textContent.indexOf("₹4.80") >= 0,
-        "current and updated rate cards side by side");
-  check(page().textContent.indexOf("Why it changed") === -1, "with no reason \u2014 that is discussed offline");
-  check(page().textContent.indexOf("They apply once you agree") >= 0, "applying once they agree");
-  const buttons = [...page().querySelectorAll("button")].map(b => b.textContent);
-  check(!buttons.some(b => /reject|decline|disagree/i.test(b)), "there is no reject or decline — by design");
-  check(sel(doc, '[data-testid="rate-questions"] a[href^="tel:"]').textContent.length > 0,
-        "a captain with questions is pointed to call their Area Manager");
-  check($(doc, "rate-agree").disabled, "Agree waits for the captain to confirm they read it");
-  A.rateAgree();
-  eq(kdg().rateCard.slabs[0].rate, "4.50", "and nothing changes without that confirmation");
-  setCheck(doc, "rate-agree-check", true);
-  check(!$(doc, "rate-agree").disabled, "ticking it enables Agree");
-  click(doc, "rate-agree");
-
-  eq(H.rateUpdateById(u.id).status, "agreed", "agreeing settles the update");
-  eq(kdg().rateCard.slabs.map(sl => sl.rate), ["4.80", "4.30"], "the hub’s rate card is now the updated one");
-  eq(kdg().rateCard.touchpoint, "4.90", "touchpoint included");
-  eq(kdg().rateCard.version, 2, "as the card’s second version");
-  eq(kdg().rateCard.effective, kdg().rateCard.agreedOn, "applying from the day it was agreed");
-  check(txt(doc).indexOf("Rate card updated") >= 0, "the captain sees it took effect");
+  eq([api.state.panel.section, api.state.panel.rateHub], ["ratehistory", "hub-kdg"], "it opens the hub’s rate card history");
+  eq(items()[0].getAttribute("data-state"), "upcoming", "the new card on top, marked upcoming");
+  check(items()[0].textContent.indexOf("From " + H.fmtIso(soon)) >= 0, "from its day");
   check(!exists(doc, '[data-testid="bell-count"]'), "and the bell clears");
-  click(doc, "hub-back-hubs-2");
-  check(sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate"]').textContent.indexOf("₹4.80") >= 0,
-        "My Hubs shows the new rates");
+  click(doc, "hub-back-hubs");
+
+  /* --- a second update waits until the scheduled one applies --- */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-aptab="rates"]');
+  check(kdgRow().textContent.indexOf("Scheduled") >= 0, "the AM’s list shows it scheduled");
+  clickSel(doc, '[data-aprate="hub-kdg"]');
+  check(!exists(doc, '[data-testid="ap-rate-editor"]') &&
+        sel(doc, '[data-testid="ap-rate-where"]').textContent.indexOf("applies from " + H.fmtIso(soon)) >= 0,
+        "and no second update until it applies");
+  A.adminRateBack();
+
+  /* --- approved after its day: it applies from the publish day, never backdated --- */
+  const btm = H.rateUpdateById("RCU-51130");
+  btm.effectiveFrom = H.addDaysIso(today, -4);
+  clickSel(doc, '[data-aprate="nh-btm"]');
+  devClick(doc, "ru:approve:RCU-51130");
+  A.adminRateBack();
+  eq(btm.status, "published", "a late approval still publishes");
+  eq(btm.effectiveFrom, today, "but from today, not the day asked for");
+  check(btm.trail.some(x => x.what === "effective date moved"), "with the move on its trail");
+
+  /* --- a new hub type brings its own touchpoint --- */
+  clickSel(doc, '[data-aprate="nh-bld"]');
+  const sel2 = $(doc, "ap-rate-type"); sel2.value = "lm_as_fm"; sel2.dispatchEvent(new win.Event("change", { bubbles: true }));
+  eq(api.state.admin.rateDraft.touchpoint, "6.00", "moving Standalone to LM-as-FM moves the touchpoint from 5.00 to 6.00");
+  check(sel(doc, '[data-testid="ap-rate-tp"]').textContent.indexOf("₹6.00") >= 0, "and the editor shows it");
+  A.adminRateBack();
+
+  /* --- a hub type change on its own: no notification for the captain --- */
+  clickSel(doc, '[data-aprate="nh-jpn"]');
+  const sel3 = $(doc, "ap-rate-type"); sel3.value = "lm_as_fm"; sel3.dispatchEvent(new win.Event("change", { bubbles: true }));
+  click(doc, "ap-rate-send");
+  const jpnU = H.rateUpdateFor("nh-jpn");
+  eq(jpnU.status, "ch", "a hub-type-only update goes for review too");
+  clickSel(doc, '[data-aprate="nh-jpn"]');
+  devClick(doc, "ru:approve:" + jpnU.id);
+  A.adminRateBack();
+  eq(H.ruPhase(jpnU), "scheduled", "and is published");
+  check(!api.state.rateNotices.some(n => n.ref === jpnU.id),
+        "without notifying the captain — mini-hub and LM-as-FM share the 6.00 touchpoint, so the rates are the same");
+  const jpnHub = H.allHubById("nh-jpn");
+  check(H.rateVersions(jpnHub).length > H.captainVersions(jpnHub).length, "and it stays out of the captain’s history");
+  eq(jpnHub.category, "standalone_mini", "the hub type changes on the update’s day, not before");
+  eq(H.versionInForce(jpnHub, jpnU.effectiveFrom).category, "lm_as_fm", "and from that day it’s LM-as-FM");
+
+  /* --- above the ceilings: BizFin decides --- */
+  A.adminSwitchRole();
+  asCentral(doc, "bizfin");
+  clickSel(doc, '[data-aptab="rates"]');
+  clickSel(doc, '[data-apru="RCU-51151"]');
+  click(doc, "ap-ru-approve");
+  const dml = H.rateUpdateById("RCU-51151");
+  eq([dml.status, dml.approvedBy], ["published", "central"], "BizFin approves above-ceiling updates, which publishes them");
 
   /* --- the bell also carries hub edit outcomes --- */
+  A.logout();
+  devClick(doc, "as:existing");
+  login(doc);
   clickSel(doc, '[data-hubedit="hub-aqt"]');
   type(doc, "he-area", "4600");
   click(doc, "he-submit");
@@ -3901,15 +4009,18 @@ async function testRateUpdates() {
   check(!exists(doc, '[data-testid="bell-count"]'), "dismissing it on the hub card clears the bell");
 
   /* --- the dev panel can send one too; the bell rides on onboarding's top bar --- */
+  api.state.rateUpdates.filter(x => x.hubId === "hub-kdg" && x.status === "published")
+    .forEach(x => { x.effectiveFrom = today; H.rateVersions(kdg()).filter(v => v.v === x.version)[0].effectiveFrom = today; });
+  H.syncAllRates();
+  api.render();
+  eq(kdg().rateCard.version, 8, "once its day comes, the new card is the one in force");
   check(devText(doc).indexOf("Send a rate card update for KDG") >= 0, "the dev panel offers a quick update");
   devClick(doc, "rate:send:hub-kdg");
   eq(H.rateUpdateFor("hub-kdg").status, "ch", "which goes to the Cluster Head");
-  check(devText(doc).indexOf("Cluster Head · " + H.rateUpdateFor("hub-kdg").id) >= 0,
-        "and the dev panel can stand in for the Cluster Head");
   devClick(doc, "ru:approve:" + H.rateUpdateFor("hub-kdg").id);
-  eq(H.rateUpdateFor("hub-kdg").status, "captain", "approving it there reaches the captain");
-  check(api.reload(), "a pending update is saved");
-  check(!!H.rateUpdateFor("hub-kdg"), "and survives a reload");
+  eq(H.ruPhase(H.rateUpdateFor("hub-kdg")), "scheduled", "approving it there publishes it");
+  check(api.reload(), "it is saved");
+  check(!!H.rateUpdateFor("hub-kdg") && H.rateVersions(H.hubById("hub-kdg")).length === 9, "and survives a reload");
   A.addHubOpen();
   A.addHubRole("LM");
   A.addHubChoice("none");
@@ -3917,9 +4028,9 @@ async function testRateUpdates() {
   eq(api.state.screen, "flow", "adding a hub opens onboarding");
   check(!!sel(doc, ".topbar #bell"), "whose top bar carries the bell for a captain who runs hubs");
   click(doc, "bell");
-  clickSel(doc, '[data-note^="rate:"]');
-  eq([api.state.screen, api.state.panel.section], ["panel", "rateupdate"],
-     "and a rate notification there still opens the agreement");
+  clickSel(doc, '[data-note^="ratenote:"]');
+  eq([api.state.screen, api.state.panel.section], ["panel", "ratehistory"],
+     "and a rate card notification there still opens the hub’s rate cards");
 
   api.stopTimers();
   win.close();
@@ -3946,35 +4057,27 @@ async function testTypedHubPincode() {
 
   const pin = $(doc, "hub-pin");
   check(!pin.disabled, "the Hub pincode field after the map link can be typed in");
-  eq(hint(), "Type the hub’s pincode, or pick one from the serviceable pincodes below.",
-     "and says both ways in");
+  eq(hint(), "The 6-digit pincode the hub sits in.", "and says what it wants");
 
   pin.focus();
   type(doc, "hub-pin", "5600");
   check($(doc, "hub-pin") === pin, "a part-typed pincode is left alone — nothing redraws mid-entry");
   type(doc, "hub-pin", "560076");
-  eq(H.R().hub.selected, "560076", "a complete serviceable pincode becomes the hub’s pincode");
+  eq(H.R().hub.selected, "560076", "a complete pincode becomes the hub’s pincode — no check");
   eq(doc.activeElement && doc.activeElement.id, "hub-pin", "the caret stays in the field");
   eq($(doc, "hub-pin").value, "560076", "which still shows it");
   eq($(doc, "hub-city").value, "Bengaluru, Karnataka", "the city resolves from it");
   check(exists(doc, '[data-testid="map-pin-ok"]'), "and the map pin is checked against it at once");
-  check(exists(doc, '[data-selpin="560076"].on'), "the serviceable-pincode check below shows it chosen");
-  eq(H.R().hub.pincodes, ["560076"], "having joined that list");
+  eq(H.R().hub.pincodes, [], "it doesn’t join the pincodes to service on its own");
 
-  /* refused entries */
+  /* any well-formed pincode is taken; a malformed one isn't */
   type(doc, "hub-pin", "700001");
-  check(hint().indexOf("VALMO isn’t opening hubs in 700001 yet.") >= 0, "an unserviceable pincode is refused at the field");
-  check($(doc, "hub-pin-box").classList.contains("bad"), "the field is marked");
-  eq(H.R().hub.selected, null, "nothing is chosen");
-  check(sel(doc, '[data-testid="pincode-picker"]').textContent.indexOf("700001 ✕") >= 0,
-        "and the check below marks it unavailable");
+  eq(H.R().hub.selected, "700001", "a pincode VALMO has no list for is taken as typed");
+  check(!$(doc, "hub-pin-box").classList.contains("bad"), "and isn’t marked");
   type(doc, "hub-pin", "012345");
-  eq(hint(), E.pincodeFormat, "a malformed pincode is refused too");
-
-  /* picking from the check fills the field */
-  clickSel(doc, '[data-selpin="560076"]');
-  eq($(doc, "hub-pin").value, "560076", "picking from the check below fills the field");
-  eq(hint(), "Type the hub’s pincode, or pick one from the serviceable pincodes below.", "and clears its error");
+  eq(hint(), E.pincodeFormat, "a malformed pincode is refused");
+  check($(doc, "hub-pin-box").classList.contains("bad"), "the field is marked");
+  eq(H.R().hub.selected, null, "and nothing is the hub’s pincode");
 
   /* clearing the field means there is no hub pincode */
   type(doc, "hub-pin", "");
@@ -3983,34 +4086,21 @@ async function testTypedHubPincode() {
   eq(hint(), E.pincodeSelect, "submitting without one says so at the field");
   check(!H.R().hub.submitted, "and nothing is submitted");
 
-  /* a full list, then a failed check that resumes */
-  A.addPincodes("560034, 560102, 110017");
-  eq(H.R().hub.pincodes.length, 5, "the list below is full");
+  /* the list to service is separate, and capped at five */
+  A.addPincodes("560034, 560102, 110017, 400059, 560001");
+  eq(H.R().hub.pincodes.length, 5, "the list to service is full");
+  A.addPincodes("560038");
+  eq(H.R().hub.pincodes.length, 5, "a sixth can’t join it");
   type(doc, "hub-pin", "560001");
-  check(hint().indexOf("You’ve added 5 pincodes below already") >= 0, "a sixth pincode can’t join it");
-  A.removePincode("700001");
-  A.armFail("pincode", "timeout");
-  type(doc, "hub-pin", "560001");
-  check(hint().indexOf("We couldn’t check 560001 just now") >= 0, "a failed check is explained at the field");
-  check(exists(doc, '[data-testid="api-fail"]'), "with the failure notice in the check below");
-  eq($(doc, "hub-check").textContent, "Resume check", "which resumes from there");
-  click(doc, "hub-check");
-  eq(H.R().hub.selected, "560001", "the resumed check chooses the pincode that was typed");
-  eq($(doc, "hub-pin").value, "560001", "and the field shows it");
-
-  /* adding candidates later clears the pick, but never what was typed */
-  A.removePincode("110017");               // make room in the list of five
-  A.addPincodes("400059");
-  eq(H.R().hub.selected, null, "adding more pincodes clears the pick, as before");
-  eq($(doc, "hub-pin").value, "560001", "but the typed pincode stays in the field");
-  eq(hint(), "Check availability below to confirm 560001.", "waiting on the check");
-  click(doc, "hub-check");
-  eq(H.R().hub.selected, "560001", "and is chosen again once it runs");
+  eq(H.R().hub.selected, "560001", "the hub pincode doesn’t care how full the list is");
+  A.removePincode("560034");
+  eq($(doc, "hub-pin").value, "560001", "and removing a pincode from the list leaves the field alone");
 
   /* the typed pincode is the one the hub is submitted with */
   doHubDetails(doc, { pin: null, map: mapFor(doc, "560001") });
   check(H.R().hub.submitted, "hub details submits");
   eq(H.R().hub.pincode, "560001", "with the pincode typed into the field");
+  eq(H.R().hub.pincodes, ["560102", "110017", "400059", "560001"], "and the pincodes it will service");
 
   api.stopTimers();
   win.close();
@@ -4038,11 +4128,9 @@ async function testAmPortfolio() {
   eq(net.length, 11, "eleven other captains’ hubs are seeded under the Area Manager");
   eq(new Set(net.map(h => h.captain)).size, 11, "each run by its own captain");
   check(net.every(h => H.checkMapPin(h.mapLink, h.pincode).code === "ok"), "every hub’s pin sits inside its pincode");
-  check(net.every(h => {
-    const c = C.HUB_CATEGORIES[h.category];
-    return H.slabsValid(h.rateCard.slabs) && h.rateCard.slabs.every(sl => +sl.rate <= c.ceiling) &&
-           +h.rateCard.touchpoint <= c.tpCeiling;
-  }), "and every agreed rate card is complete and within its hub type’s ceilings");
+  check(net.every(h => H.slabsValid(h.rateCard.slabs) && !H.cardAbove(h.category, h.city, h.rateCard) &&
+                       h.rateCard.touchpoint === H.fixedTp(h.category)),
+        "and every agreed rate card is complete, within its hub type’s and city’s ceilings, on its fixed touchpoint");
   check(api.state.hubEdits.filter(e => e.status === "pending")
           .every(e => H.checkMapPin(e.after.mapLink, e.after.pincode).ok),
         "every requested pin sits inside the pincode it asks for");
@@ -4112,66 +4200,71 @@ async function testAmPortfolio() {
   click(doc, "ap-rate-back");
   click(doc, "ap-hub-back");
 
-  /* --- Rate card updates: every FM hub, waiting ones first --- */
+  /* --- Rate card updates: every FM hub, open ones first --- */
   clickSel(doc, '[data-aptab="rates"]');
   rows = rowsOf("ap-rate-row");
   eq(rows.length, 11, "the tab lists every live FM hub under the Area Manager");
-  eq(rows.slice(0, 6).map(r => r.getAttribute("data-ratehub")),
-     ["nh-hsr", "nh-btm", "nh-dml", "nh-elc", "nh-mrt", "nh-whf"],
-     "sent back to the AM first, then in review, then waiting for their captains");
+  eq(rows.slice(0, 5).map(r => r.getAttribute("data-ratehub")),
+     ["nh-hsr", "nh-btm", "nh-dml", "nh-elc", "nh-mrt"],
+     "sent back to the AM first, then in review, then scheduled");
   eq(rows.slice(0, 6).map(r => r.getAttribute("data-status")),
-     ["revision", "ch", "central", "ch", "captain", "captain"], "every stage of the review is in the samples");
-  eq(tiles("ap-rate-stats"), ["11", "3", "2", "1"],
-     "the tiles count hubs, updates in review, waiting for captains and sent back");
-  check(sel(doc, '[data-ratehub="nh-jpn"]').textContent.indexOf("v2 · agreed 22 Sept 2026") >= 0,
-        "a hub whose update was agreed shows its second version");
+     ["revision", "ch", "central", "ch", "scheduled", "live"], "every stage is in the samples");
+  eq(tiles("ap-rate-stats"), ["11", "3", "1", "1"],
+     "the tiles count hubs, updates in review, scheduled and sent back");
+  check(sel(doc, '[data-ratehub="nh-jpn"]').textContent.indexOf("v2 · in force since 01 Oct 2026") >= 0,
+        "a hub whose update is in force shows its second version");
+  check(sel(doc, '[data-ratehub="nh-mrt"]').textContent.indexOf("from " + H.fmtIso(H.addDaysIso(H.todayIso(), 7))) >= 0,
+        "a scheduled one shows the day it applies");
   check(sel(doc, '[data-ratehub="nh-ind"]').textContent.indexOf("Mall hub") >= 0, "each with its hub type");
   setSelect("ap-rate-filter", "review");
   eq(rowsOf("ap-rate-row").length, 3, "the filter narrows to updates in review");
-  setSelect("ap-rate-filter", "captain");
-  eq(rowsOf("ap-rate-row").length, 2, "or waiting for their captain");
+  setSelect("ap-rate-filter", "scheduled");
+  eq(rowsOf("ap-rate-row").length, 1, "or scheduled");
   setSelect("ap-rate-filter", "revision");
   eq(rowsOf("ap-rate-row").length, 1, "or sent back");
-  setSelect("ap-rate-filter", "agreed");
-  eq(rowsOf("ap-rate-row").length, 5, "or on an agreed card with nothing open");
+  setSelect("ap-rate-filter", "live");
+  eq(rowsOf("ap-rate-row").length, 6, "or with nothing open");
   setSelect("ap-rate-filter", "all");
   type(doc, "ap-rate-search", "mall hub");
   eq(rowsOf("ap-rate-row").map(r => r.getAttribute("data-ratehub")), ["nh-mrt", "nh-ind"],
-     "search reads hub type too, the waiting one still first");
+     "search reads hub type too, the scheduled one still first");
   type(doc, "ap-rate-search", "");
 
-  /* --- updating another captain's card, through to their agreement --- */
+  /* --- updating another captain's card: published, and they are told --- */
   clickSel(doc, '[data-aprate="nh-krm"]');
   check(txt(doc).indexOf("Sunil Rao") >= 0, "the update names that hub’s own captain");
-  eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value), ["4.20", "3.80"], "starting from their card");
+  eq([...doc.querySelectorAll('[data-rfield="rate"]')].map(i => i.value), ["3.40", "3.30", "3.20", "3.10", "3.00"],
+     "starting from their card, slab by slab");
   const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
-  r0.value = "4.40"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  r0.value = "3.50"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
   click(doc, "ap-rate-send");
   check(api.state.admin.toast.indexOf("Sent to the Cluster Head for review") >= 0, "it goes to the Cluster Head");
   const krmUp = H.rateUpdateFor("nh-krm");
-  eq(krmUp && krmUp.captain, "Sunil Rao", "recorded against that hub\u2019s captain");
+  eq(krmUp && krmUp.captain, "Sunil Rao", "recorded against that hub’s captain");
   clickSel(doc, '[data-aprate="nh-krm"]');
   check(devText(doc).indexOf("Cluster Head · " + krmUp.id) >= 0, "the dev panel can stand in for the Cluster Head");
   devClick(doc, "ru:approve:" + krmUp.id);
-  eq(krmUp.status, "captain", "whose approval reaches the captain");
-  check(devText(doc).indexOf("Sunil Rao agrees to the update") >= 0, "and then for their agreement");
-  devClick(doc, "rateagree:" + krmUp.id);
+  eq(H.ruPhase(krmUp), "scheduled", "approving it publishes it for its day");
+  check(devText(doc).indexOf("nothing for them to agree to") >= 0, "with nothing for the captain to agree to");
+  check(api.state.rateNotices.some(n => n.ref === krmUp.id && n.captain === "Sunil Rao"), "Sunil Rao is notified");
   const krm = H.networkHubById("nh-krm");
-  eq([krm.rateCard.slabs[0].rate, krm.rateCard.version], ["4.40", 2], "agreeing replaces their card as version 2");
-  check(api.state.admin.toast.indexOf("Sunil Rao agreed") >= 0, "and the AM is told");
+  eq([krm.rateCard.version, H.versionInForce(krm, krmUp.effectiveFrom).slabs[0].rate], [1, "3.50"],
+     "version 2 applies from its day; version 1 stays until then");
   A.adminRateBack();
-  check(sel(doc, '[data-ratehub="nh-krm"]').textContent.indexOf("Agreed") >= 0, "the list shows it agreed");
+  check(sel(doc, '[data-ratehub="nh-krm"]').textContent.indexOf("Scheduled") >= 0, "the list shows it scheduled");
   clickSel(doc, '[data-aprate="nh-jpn"]');
   check(sel(doc, '[data-testid="ap-rate-history"]').textContent.indexOf("RCU-50988") >= 0,
-        "a hub’s earlier agreed updates show as its rate card history");
+        "a hub’s versions log the update behind each one");
+  check(sel(doc, '[data-testid="ap-rate-history"]').textContent.indexOf("In-app delivered · SMS delivered · Email delivered") >= 0,
+        "and how its captain was told");
   A.adminRateBack();
 
   /* --- the signed-in captain's bell carries only their own hubs --- */
   A.logout();
   devClick(doc, "as:existing");
   login(doc);
-  check(api.state.rateUpdates.some(u => u.status === "captain" && u.hubId.indexOf("nh-") === 0),
-        "other captains still have updates waiting");
+  check(api.state.rateNotices.some(n => !n.seen && n.hubId.indexOf("nh-") === 0),
+        "other captains have rate card notices they haven’t read");
   check(!exists(doc, '[data-testid="bell-count"]'), "but none of them reach this captain’s bell");
   eq(H.captainNotes().length, 0, "nor their notifications");
   check(devText(doc).indexOf("Area Manager · hub edit") === -1, "nor the dev panel’s hub edit actions");
@@ -4276,7 +4369,7 @@ async function testAmDirectChanges() {
           c.after.maxVehicle === "10MT_22FT"), "notifying that captain");
   click(doc, "ap-hub-back");
 
-  /* --- 3. hub type and rate changes go to the Cluster Head before the captain --- */
+  /* --- 3. hub type and rate changes go to the Cluster Head, then are published --- */
   A.adminTab("rates");
   clickSel(doc, '[data-aprate="hub-kdg"]');
   eq($(doc, "ap-rate-type").value, "standalone", "the update starts from the hub’s type");
@@ -4290,15 +4383,21 @@ async function testAmDirectChanges() {
   clickSel(doc, '[data-aprate="hub-kdg"]');
   check(devText(doc).indexOf("Cluster Head · " + typeUp.id) >= 0, "the dev panel can stand in for the Cluster Head");
   devClick(doc, "ru:approve:" + typeUp.id);
-  eq(typeUp.status, "captain", "approved, it waits for the captain");
-  eq(H.hubById("hub-kdg").category, "standalone", "the hub type still waits on their agreement");
+  eq(H.ruPhase(typeUp), "scheduled", "approved, it’s published for its day");
+  eq(H.hubById("hub-kdg").category, "standalone", "the hub type doesn’t change before that day");
+  eq(H.versionInForce(H.hubById("hub-kdg"), typeUp.effectiveFrom).category, "lm_as_fm", "and does from it");
+  check(changes().some(c => c.hubId === "hub-kdg" && c.kind === "type" && !c.notify),
+        "logged for the Area Manager, never notified");
+  eq(typeUp.to.touchpoint, "6.00", "the new type brings LM-as-FM’s 6.00 touchpoint with it");
+  check(api.state.rateNotices.some(n => n.ref === typeUp.id),
+        "so the captain is told of the new rates — the hub type itself stays internal");
   A.adminRateBack();
 
   /* the editor flags rates over a new type's ceilings, but no longer refuses them */
   clickSel(doc, '[data-aprate="nh-bom"]');
-  setSelect("ap-rate-type", "mall");
+  setSelect("ap-rate-type", "standalone_mini");
   check(exists(doc, '[data-rslabrow="0"].over') && exists(doc, '[data-testid="ap-rate-above"]'),
-        "rates over the Mall hub ceilings are flagged, with the route they will take");
+        "rates over the mini-hub ceilings are flagged, with the route they will take");
   A.adminRateBack();
 
   /* an update above its ceilings: the Cluster Head raises it, Central Admin decides */
@@ -4308,7 +4407,7 @@ async function testAmDirectChanges() {
   click(doc, "ap-rate-send");
   const bldUp = H.rateUpdateFor("nh-bld");
   check(!!bldUp && bldUp.status === "ch" && H.ruAbove(bldUp), "it still goes to the Cluster Head first");
-  check(api.state.admin.toast.indexOf("they’ll raise it to Central Admin") >= 0, "the AM is told where it goes next");
+  check(api.state.admin.toast.indexOf("they’ll raise it to BizFin") >= 0, "the AM is told where it goes next");
   A.adminSwitchRole();
   clickSel(doc, '[data-aprole="ch"]');
   clickSel(doc, '[data-aptab="rates"]');
@@ -4317,18 +4416,19 @@ async function testAmDirectChanges() {
   check(sel(doc, '[data-testid="ru-checks"]').textContent.indexOf("Above the Standalone ceilings") >= 0,
         "marked above its ceilings");
   check(!exists(doc, "#ap-ru-approve") && exists(doc, "#ap-ru-raise"), "so the Cluster Head can only raise it");
-  eq(H.rateUpdateDecide(bldUp, "ch", "approve"), "It’s above the ceilings for its hub type — raise it to Central Admin instead.",
+  eq(H.rateUpdateDecide(bldUp, "ch", "approve"), "It’s above the ceilings for its hub type — raise it to BizFin instead.",
      "and approving it is refused even by the action");
   click(doc, "ap-ru-raise");
-  eq(bldUp.status, "central", "raised, it goes to Central Admin");
+  eq(bldUp.status, "central", "raised, it goes to BizFin");
   A.adminSwitchRole();
-  clickSel(doc, '[data-aprole="central"]');
+  asCentral(doc, "bizfin");
   clickSel(doc, '[data-aptab="rates"]');
   clickSel(doc, '[data-apru="' + bldUp.id + '"]');
   click(doc, "ap-ru-approve");
-  eq(bldUp.status, "captain", "Central Admin approves it on to the captain");
-  check((bldUp.trail || []).map(x => x.by + ":" + x.what).join(",") ===
-        "am:sent,ch:raised to Central Admin,central:approved", "with its whole route on the trail");
+  eq(bldUp.status, "published", "BizFin approves it, which publishes it");
+  eq((bldUp.trail || []).map(x => x.by + ":" + x.what).join(","),
+     "am:sent,ch:raised to BizFin,central:approved,system:published,system:captain notified",
+     "with its whole route on the trail");
 
   /* sending one back to the Area Manager, who revises and resubmits */
   A.adminSwitchRole();
@@ -4337,7 +4437,7 @@ async function testAmDirectChanges() {
   clickSel(doc, '[data-apru="RCU-51130"]');
   click(doc, "ap-ru-reject");
   check(txt(doc).indexOf("Say why you’re sending it back") >= 0, "sending one back needs a reason");
-  type(doc, "ap-ru-reason", "Keep the touchpoint where it is.");
+  type(doc, "ap-ru-reason", "Keep the first slab where it is.");
   click(doc, "ap-ru-reject");
   eq(H.rateUpdateById("RCU-51130").status, "revision", "with one it goes back to the Area Manager");
   A.adminSwitchRole();
@@ -4345,31 +4445,37 @@ async function testAmDirectChanges() {
   clickSel(doc, '[data-aptab="rates"]');
   eq(sel(doc, '[data-ratehub="nh-btm"]').getAttribute("data-status"), "revision", "the AM sees it sent back");
   clickSel(doc, '[data-aprate="nh-btm"]');
-  check(sel(doc, '[data-testid="ap-rate-sentback"]').textContent.indexOf("Keep the touchpoint where it is.") >= 0,
+  check(sel(doc, '[data-testid="ap-rate-sentback"]').textContent.indexOf("Keep the first slab where it is.") >= 0,
         "with the reason");
-  eq($(doc, "ap-rate-tp").value, "5.70", "the editor starts from what was proposed");
+  const btm0 = () => sel(doc, '[data-rslab="0"][data-rfield="rate"]');
+  eq(btm0().value, "5.40", "the editor starts from what was proposed");
   eq($(doc, "ap-rate-send").textContent, "Resubmit to the Cluster Head", "and resubmits it");
-  type(doc, "ap-rate-tp", "5.60");
+  btm0().value = "5.20"; btm0().dispatchEvent(new win.Event("input", { bubbles: true }));
   click(doc, "ap-rate-send");
   eq(H.rateUpdateById("RCU-51130").status, "ch", "back with the Cluster Head");
-  eq(H.rateUpdateById("RCU-51130").to.touchpoint, "5.60", "revised");
+  eq(H.rateUpdateById("RCU-51130").to.slabs[0].rate, "5.20", "revised");
   clickSel(doc, '[data-aprate="nh-hsr"]');
   click(doc, "ap-rate-withdraw");
   eq(H.rateUpdateById("RCU-51123").status, "withdrawn", "a sent-back update can be withdrawn instead");
-  eq(H.rateUpdateFor("nh-hsr"), null, "leaving the hub on its agreed card");
+  eq(H.rateUpdateFor("nh-hsr"), null, "leaving the hub on the card in force");
 
   /* --- the captain's side --- */
   asCaptain();
   eq(sel(doc, '[data-testid="bell-count"]').textContent, "3",
-     "the captain has three notifications: the map pin, the hub details and the rate card");
+     "the captain has three notifications: the map pin, the hub details and the new rates");
   click(doc, "bell");
   const notes = () => [...doc.querySelectorAll("[data-note]")].map(n => n.textContent);
   check(notes().some(n => n.indexOf("Map pin corrected · OBD-78219") >= 0), "the map pin correction");
   check(notes().some(n => n.indexOf("Hub details updated · Koramangala Hub") >= 0), "the hub details change");
-  check(notes().some(n => n.indexOf("Rate card update · Kudlu Gate Hub (KDG)") >= 0), "the rate card update");
-  check(!notes().some(n => /hub type|mall hub|ceiling/i.test(n)), "and nothing about the hub type");
+  check(notes().some(n => n.indexOf("New rate card · Kudlu Gate Hub (KDG)") >= 0),
+        "and the new rates the type change brought");
+  check(!notes().some(n => /hub type|mall hub|lm-as-fm|ceiling/i.test(n)), "nothing about the hub type at all");
   clickSel(doc, '[data-note="amchange:' + mapChange.id + '"]');
   eq(sel(doc, '[data-testid="bell-count"]').textContent, "2", "reading the map pin note clears it");
+  click(doc, "bell");
+  clickSel(doc, '[data-note^="ratenote:"]');
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "and reading the rate card note clears that");
+  click(doc, "hub-back-hubs");
   click(doc, "bell");
   clickSel(doc, '[data-note^="amchange:"]');
   eq(api.state.panel.section, "hubs", "the hub details note leads to My Hubs");
@@ -4379,22 +4485,13 @@ async function testAmDirectChanges() {
         "where the hub card says what changed");
   check(card.textContent.indexOf("nothing for you to do") >= 0, "with nothing for the captain to do");
   clickSel(doc, '[data-amdismiss]');
-  eq(sel(doc, '[data-testid="bell-count"]').textContent, "1", "dismissing it clears it from the bell");
-  click(doc, "bell");
-  check(sel(doc, '[data-note^="rate:"]').textContent.indexOf("the rates are unchanged") >= 0,
-        "a re-issued card says its rates are unchanged");
-  clickSel(doc, '[data-note^="rate:"]');
-  const page = sel(doc, '[data-testid="rate-update"]').textContent;
-  check(page.indexOf("re-issued this hub\u2019s rate card") >= 0 && page.indexOf("The rates are the same as today") >= 0,
-        "the captain is asked to agree to the same card");
-  check(!/hub type|ceiling|lm-as-fm|standalone|reclassif/i.test(page), "never told about the hub type behind it");
-  check(page.indexOf("Why it changed") === -1, "and shown no reason, since the rates didn\u2019t change");
-  setCheck(doc, "rate-agree-check", true);
-  click(doc, "rate-agree");
-  eq(H.hubById("hub-kdg").category, "lm_as_fm", "the hub type takes effect only now, once they agree");
-  check(changes().some(c => c.hubId === "hub-kdg" && c.kind === "type" && !c.notify),
-        "logged for the Area Manager, never notified");
-  check(!exists(doc, '[data-testid="bell-count"]'), "the bell is clear");
+  check(!exists(doc, '[data-testid="bell-count"]'), "dismissing it clears the bell");
+  const kdgHub = H.hubById("hub-kdg");
+  check(!/lm-as-fm|standalone|hub type/i.test(sel(doc, '[data-hub="hub-kdg"]').textContent),
+        "the captain never sees the hub type behind the card");
+  H.rateVersions(kdgHub).filter(v => v.ref === typeUp.id)[0].effectiveFrom = H.todayIso();
+  H.syncAllRates();
+  eq(kdgHub.category, "lm_as_fm", "the hub type takes effect on the update’s day");
 
   api.stopTimers();
   win.close();
@@ -4422,10 +4519,10 @@ async function testSampleCaptains() {
   /* --- every sample captain signs in to their own hub and their own notifications --- */
   const expected = {
     "nh-krm": "Hub details updated · Koramangala FM Hub", "nh-hsr": "Hub details updated · HSR Layout FM Hub",
-    "nh-ind": "Hub details updated · Indiranagar FM Hub", "nh-whf": "Rate card update · Whitefield FM Hub (WHF)",
+    "nh-ind": "Hub details updated · Indiranagar FM Hub", "nh-whf": "New rate card · Whitefield FM Hub (WHF)",
     "nh-elc": "Hub details updated · Electronic City FM Hub", "nh-bom": "Hub edit approved · Bommasandra FM Hub",
     "nh-bld": "Hub edit not approved · Bellandur FM Hub", "nh-jpn": "Hub details updated · JP Nagar FM Hub",
-    "nh-mrt": "Rate card update · Marathahalli FM Hub (MRT)", "nh-dml": "Hub details updated · Domlur FM Hub",
+    "nh-mrt": "New rate card · Marathahalli FM Hub (MRT)", "nh-dml": "Hub details updated · Domlur FM Hub",
     "nh-btm": "Hub details updated · BTM Layout FM Hub"
   };
   C.PORTFOLIO_HUBS.forEach(ph => {
@@ -4444,21 +4541,25 @@ async function testSampleCaptains() {
   /* --- updates still in review stay out of sight --- */
   signInAs("nh-elc");
   click(doc, "bell");
-  check(!notes().some(n => n.indexOf("Rate card update") >= 0),
-        "Electronic City’s re-typing is still with the Cluster Head, so its captain hears nothing yet");
+  check(!notes().some(n => n.indexOf("New rate card") >= 0),
+        "Electronic City’s update is still with the Cluster Head, so its captain hears nothing yet");
   click(doc, "bell");
-  check(!exists(doc, '[data-hub="nh-elc"] [data-rateopen]'), "and their hub card offers nothing to review");
+  check(!exists(doc, '[data-hub="nh-elc"] [data-testid="hub-rate-next"]'), "and their hub card shows no change");
 
   /* --- a sample captain takes their side of the flow --- */
   signInAs("nh-whf");
+  check(sel(doc, '[data-hub="nh-whf"] [data-testid="hub-rate"]').textContent.indexOf("₹5.30") >= 0,
+        "Deepa Nair’s hub is already on its new card");
   click(doc, "bell");
-  clickSel(doc, '[data-note^="rate:"]');
-  eq(api.state.panel.section, "rateupdate", "Deepa Nair opens the approved rate card update");
-  check(sel(doc, '[data-testid="rate-new"]').textContent.indexOf("₹5.30") >= 0, "showing her new rates");
-  setCheck(doc, "rate-agree-check", true);
-  click(doc, "rate-agree");
-  eq(H.allHubById("nh-whf").rateCard.slabs[0].rate, "5.30", "and agrees — her hub’s card is replaced");
-  eq(H.rateUpdateById("RCU-51102").status, "agreed", "settling the update");
+  clickSel(doc, '[data-note^="ratenote:"]');
+  eq(api.state.panel.section, "ratehistory", "her notice opens the hub’s rate card history");
+  eq([...doc.querySelectorAll('[data-testid="rate-hist-item"]')].map(i => i.getAttribute("data-state")),
+     ["current", "past"], "the new card in force, the one before it past");
+  check(!exists(doc, '[data-testid="bell-count"]'), "reading it clears her bell — there is nothing to agree to");
+  signInAs("nh-mrt");
+  const mrtNext = sel(doc, '[data-hub="nh-mrt"] [data-testid="hub-rate-next"]');
+  check(!!mrtNext && mrtNext.textContent.indexOf("New rates from " + H.fmtIso(H.addDaysIso(H.todayIso(), 7))) >= 0,
+        "Arjun Menon’s hub card shows new rates scheduled for next week");
   signInAs("nh-bom");
   clickSel(doc, '[data-hedismiss]');
   check(!exists(doc, '[data-testid="bell-count"]'), "Ritu Agarwal dismisses her approved edit and her bell clears");
@@ -4479,8 +4580,9 @@ async function testSampleCaptains() {
   login(doc);
   clickSel(doc, '[data-aprole="am"]');
   clickSel(doc, '[data-aptab="rates"]');
-  eq(sel(doc, '[data-ratehub="nh-whf"]').getAttribute("data-status"), "agreed",
-     "the Area Manager sees Deepa Nair’s agreement");
+  eq(sel(doc, '[data-ratehub="nh-whf"]').getAttribute("data-status"), "live",
+     "the Area Manager sees Deepa Nair’s hub on its new card");
+  eq(sel(doc, '[data-ratehub="nh-mrt"]').getAttribute("data-status"), "scheduled", "and Arjun Menon’s scheduled");
   clickSel(doc, '[data-aptab="edits"]');
   clickSel(doc, '[data-aphub="nh-krm"]');
   check(api.state.amChanges.some(c => c.hubId === "nh-krm" && c.captain === "Sunil Rao" && c.notify),
@@ -4495,7 +4597,7 @@ async function testSampleCaptains() {
    ====================================================================== */
 
 async function testLeanAdmin() {
-  section("32. Lean admin — no notes or dates, history logged, samples in every tab");
+  section("32. Lean admin — no notes, history logged, samples in every tab");
   const { win, doc, api } = await boot();
   const H = api.helpers, A = api.actions, C = api.config;
 
@@ -4504,13 +4606,19 @@ async function testLeanAdmin() {
 
   /* --- 6. every tab of every admin panel has samples --- */
   const rowsIn = () => doc.querySelectorAll(
-    '[data-apopen], [data-testid="ap-hub-row"], [data-testid="ap-rate-row"], [data-testid="ap-ru-row"]').length;
+    '[data-apopen], [data-testid="ap-hub-row"], [data-testid="ap-rate-row"], [data-testid="ap-ru-row"], ' +
+    '[data-testid="slab-set-row"], [data-testid="ap-bulk-editor"]').length;
   C.ADMIN_ROLE_ORDER.forEach(role => {
     if (api.state.screen === "admin") A.adminSwitchRole();
     clickSel(doc, '[data-aprole="' + role + '"]');
-    C.ADMIN_TABS[role].forEach(tab => {
-      A.adminTab(tab.id);
-      check(rowsIn() > 0, C.ADMIN_ROLES[role].label + " › " + tab.label + " has sample rows");
+    const personas = role === "central" ? Object.keys(C.CENTRAL_TABS) : [null];
+    personas.forEach(p => {
+      if (p) devClick(doc, "ca:" + p);
+      (p ? C.CENTRAL_TABS[p] : C.ADMIN_TABS[role]).forEach(tab => {
+        A.adminTab(tab.id);
+        check(rowsIn() > 0, C.ADMIN_ROLES[role].label + (p ? " · " + C.CENTRAL_PERSONAS[p].label : "") +
+              " › " + tab.label + " has sample rows");
+      });
     });
   });
   check(!Object.keys(C.ADMIN_TABS).some(k => C.ADMIN_TABS[k].some(t => t.id === "users" || t.id === "zh")),
@@ -4525,11 +4633,11 @@ async function testLeanAdmin() {
   A.adminTab("rates");
   const decidedIds = () => [...doc.querySelectorAll('[data-testid="ap-ru-row"]')]
     .filter(r => !r.querySelector(".btn-primary")).map(r => r.getAttribute("data-ru"));
-  check(decidedIds().indexOf("RCU-50988") === -1,
-        "the Cluster Head’s decided list leaves out an update already agreed");
-  eq(decidedIds().sort(), ["RCU-51102", "RCU-51117", "RCU-51123", "RCU-51151"],
-     "and keeps the ones still pending — with captains, with Central Admin, or sent back");
-  check(H.rateUpdateById("RCU-50988").trail.some(x => x.by === "ch"), "the agreed one is still logged with its trail");
+  check(["RCU-50988", "RCU-51102", "RCU-51117"].every(id => decidedIds().indexOf(id) === -1),
+        "the Cluster Head’s decided list leaves out updates already published");
+  eq(decidedIds().sort(), ["RCU-51123", "RCU-51151"],
+     "and keeps the ones still pending — with BizFin, or sent back");
+  check(H.rateUpdateById("RCU-50988").trail.some(x => x.by === "ch"), "a published one is still logged with its trail");
   A.adminSwitchRole();
   clickSel(doc, '[data-aprole="am"]');
   A.adminTab("rates");
@@ -4540,17 +4648,17 @@ async function testLeanAdmin() {
   A.adminTab("rates");
   check(decidedIds().indexOf("RCU-51123") === -1, "a withdrawn update drops off as well");
 
-  /* --- 1 and 2. no reason, note or date on an update --- */
+  /* --- 1. no reason or note on an update — but the day it applies from --- */
   A.adminSwitchRole();
   clickSel(doc, '[data-aprole="am"]');
   A.adminTab("rates");
   clickSel(doc, '[data-aprate="nh-krm"]');
-  check(!exists(doc, "#ap-rate-reason") && !exists(doc, "#ap-rate-note") && !exists(doc, "#ap-rate-eff"),
-        "the AM’s update has no reason, note or Applies from");
-  check(txt(doc).indexOf("Why the rates are changing") === -1 && txt(doc).indexOf("Note for the Cluster Head") === -1 &&
-        txt(doc).indexOf("Applies from") === -1, "not even as labels");
+  check(!exists(doc, "#ap-rate-reason") && !exists(doc, "#ap-rate-note"), "the AM’s update has no reason or note");
+  check(txt(doc).indexOf("Why the rates are changing") === -1 && txt(doc).indexOf("Note for the Cluster Head") === -1,
+        "not even as labels");
+  check(exists(doc, "#ap-rate-from"), "but it does say the day it applies from — rates change prospectively");
   const r0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
-  r0.value = "4.40"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
+  r0.value = "3.50"; r0.dispatchEvent(new win.Event("input", { bubbles: true }));
   click(doc, "ap-rate-send");
   const krmUp = H.rateUpdateFor("nh-krm");
   check(!!krmUp && krmUp.status === "ch", "a changed card goes straight to the Cluster Head");
@@ -4561,22 +4669,18 @@ async function testLeanAdmin() {
   const checks = sel(doc, '[data-testid="ru-checks"]').textContent;
   check(checks.indexOf("Reason the captain sees") === -1 && checks.indexOf("Note for the desks") === -1,
         "the Cluster Head’s review shows no reason or note");
-  check(checks.indexOf("From the day the captain agrees") >= 0, "and says when it applies");
+  check(checks.indexOf("Applies from" + H.fmtIso(krmUp.effectiveFrom)) >= 0, "and says when it applies");
   click(doc, "ap-ru-approve");
   A.logout();
   $(doc, "dev-sample").value = "nh-krm";
   devClick(doc, "as:sample");
   login(doc);
   click(doc, "bell");
-  clickSel(doc, '[data-note^="rate:"]');
-  const page = sel(doc, '[data-testid="rate-update"]').textContent;
+  clickSel(doc, '[data-note^="ratenote:"]');
+  const page = sel(doc, '[data-testid="rate-history"]').textContent;
   check(page.indexOf("Why it changed") === -1, "the captain gets no reason for the change");
-  check(page.indexOf("They apply once you agree") >= 0, "and is told it applies once they agree");
-  setCheck(doc, "rate-agree-check", true);
-  click(doc, "rate-agree");
-  const krm = H.hubById("nh-krm");
-  eq([krm.rateCard.effective, H.rateUpdateById(krmUp.id).effective], [krm.rateCard.agreedOn, krm.rateCard.agreedOn],
-     "it applies from the day the captain agreed");
+  check(page.indexOf("From " + H.fmtIso(krmUp.effectiveFrom)) >= 0, "only the day it applies from");
+  check(![...doc.querySelectorAll("button")].some(b => /agree/i.test(b.textContent)), "with nothing to agree to");
 
   /* --- 1. the captain's hub edit carries no note --- */
   A.logout();
@@ -4750,6 +4854,7 @@ async function testMapPick() {
   tap(m, 12.909, 77.605);
   eq($(doc, "hub-map").value, "https://maps.google.com/?q=12.909,77.605", "and a tap replaces it with the pin");
 
+  A.addPincodes("560076");
   doHubDetails(doc, { pin: null, map: $(doc, "hub-map").value });
   check(H.R().hub.submitted, "hub details submits with the tapped pin");
   eq(H.R().hub.mapLink, "https://maps.google.com/?q=12.909,77.605", "keeping it");
@@ -4852,46 +4957,411 @@ async function testMapPick() {
   win.close();
 }
 
+/* =========================================================================
+   34. Central slabs, Central Admin's three roles, and bulk rate card updates
+   ====================================================================== */
+
+async function testCentralRates() {
+  section("34. Slab settings, Central Admin roles and bulk rate card updates");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions, C = api.config;
+  const today = H.todayIso();
+  const fire = (el, ev) => el.dispatchEvent(new win.Event(ev, { bubbles: true }));
+
+  devClick(doc, "as:existing");
+  login(doc);
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+
+  /* --- slabs: five, in steps of 2,500, for every hub type --- */
+  eq(C.DEFAULT_SLAB_BREAKS, [2500, 5000, 7500, 10000], "every hub type starts on five slabs, 2,500 orders apart");
+  check(["standalone_mini", "standalone", "lm_as_fm", "mall", "sah"].every(k => H.slabBreaks(k).join() === "2500,5000,7500,10000"),
+        "the same for all five hub types");
+
+  /* --- Central Admin asks which role is signed in --- */
+  clickSel(doc, '[data-aprole="central"]');
+  check(exists(doc, '[data-testid="ap-central-pick"]'), "Central Admin opens on a role prompt");
+  check(!exists(doc, "[data-aptab]"), "with no tabs until a role is picked");
+  devClick(doc, "ca:ops");
+  check(txt(doc).indexOf("Central Admin · FM Central Ops") >= 0, "the simulator signs in FM Central Ops");
+  check(!/Tajinder|Roopesh|Vidhi|Agrim|Adrija/.test(doc.documentElement.outerHTML),
+        "and no real person is named anywhere in the tool");
+
+  /* --- FM Central Ops proposes a slab change; BizFin approves it --- */
+  A.adminTab("slabs");
+  eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 5, "slab settings shows the five slabs");
+  const to0 = () => sel(doc, '[data-slabto="0"]');
+  to0().value = "2000"; fire(to0(), "input"); fire(to0(), "change");
+  sel(doc, '[data-slabto="1"]').value = "1500"; fire(sel(doc, '[data-slabto="1"]'), "input");
+  click(doc, "slab-submit");
+  check(sel(doc, '[data-testid="slab-error"]').textContent.indexOf("end above the one before it") >= 0,
+        "slabs have to rise");
+  click(doc, "slab-reset");
+  click(doc, "slab-submit");
+  check(sel(doc, '[data-testid="slab-error"]').textContent.indexOf("already in use") >= 0, "an unchanged structure isn’t sent");
+  click(doc, "slab-add");
+  eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 6, "＋ Add slab adds one 2,500 orders above the last");
+  eq(sel(doc, '[data-slabto="4"]').value, "12500", "ending at 12,500");
+  clickSel(doc, '[data-slabrm="0"]');
+  eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 5, "removing one folds it into the next");
+  click(doc, "slab-submit");
+  const req = api.state.slabSettings.requests[0];
+  check(!!req && req.status === "pending" && req.by === "FM Central Ops", "FM Central Ops’ change goes to BizFin");
+  eq(req.breaks, [5000, 7500, 10000, 12500], "carrying the new slabs");
+  eq(req.types, ["standalone_mini"], "for the hub type being edited");
+  eq(H.slabBreaks("standalone_mini"), [2500, 5000, 7500, 10000], "nothing changes until BizFin approves");
+  check(disabled(doc, "slab-submit"), "and FM Central Ops can’t send another while it waits");
+  devClick(doc, "ca:bizfin");
+  eq(sel(doc, '[data-aptab="slabs"]').textContent, "Slab settings (1)", "BizFin’s Slab settings tab counts it");
+  A.adminTab("slabs");
+  clickSel(doc, '[data-slabdecide="reject:' + req.id + '"]');
+  check(sel(doc, '[data-testid="slab-error"]').textContent.indexOf("Say why") >= 0, "rejecting needs a reason");
+  clickSel(doc, '[data-slabdecide="approve:' + req.id + '"]');
+  eq(req.status, "approved", "BizFin approves it");
+  eq(H.slabBreaks("standalone_mini"), [5000, 7500, 10000, 12500], "and the mini-hub slabs change");
+  eq(H.slabBreaks("standalone"), [2500, 5000, 7500, 10000], "only for that hub type");
+  eq(api.state.slabSettings.log[0].approvedBy, "BizFin", "logged with who approved it");
+
+  /* BizFin can change a structure directly, for every hub type at once */
+  clickSel(doc, '[data-slabtype="lm_as_fm"]');
+  click(doc, "slab-add");
+  $(doc, "slab-all").checked = true; fire($(doc, "slab-all"), "change");
+  click(doc, "slab-submit");
+  check(api.state.admin.toast.indexOf("Slab structure saved") >= 0, "BizFin saves it straight away");
+  check(["standalone_mini", "standalone", "lm_as_fm", "mall", "sah"].every(k => H.slabBreaks(k).join() === "2500,5000,7500,10000,12500"),
+        "applied to every hub type — six slabs now");
+  clickSel(doc, '[data-slabtype="standalone"]');
+  clickSel(doc, '[data-slabrm="4"]');
+  click(doc, "slab-submit");
+  eq([H.slabBreaks("standalone"), H.slabBreaks("mall").length], [[2500, 5000, 7500, 10000], 5],
+     "or to one hub type — Standalone back to five, the rest on six");
+  eq(api.state.slabSettings.log.length, 3, "every change is logged");
+
+  /* new cards are priced on it; cards already priced keep theirs */
+  eq(H.allHubById("nh-ind").rateCard.slabs.length, 5, "a hub’s card in force keeps its slabs");
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="am"]');
+  A.adminTab("rates");
+  clickSel(doc, '[data-aprate="nh-ind"]');
+  eq(doc.querySelectorAll('[data-rfield="rate"]').length, 6, "an update to it is priced on the new slabs");
+  eq(sel(doc, '[data-rslab="5"][data-rfield="rate"]').value, "1.80", "each starting from the rate its orders had before");
+  A.adminRateBack();
+  A.adminTab("mine");
+  A.adminOpen("OBD-78240");
+  A.amStep("rate");
+  A.amCategory("mall");
+  eq(H.apById("OBD-78240").rate.slabs.length, 6, "and so is a new onboarding rate card");
+  check(!exists(doc, '[data-field="from"]'), "with the bands fixed for the AM");
+
+  /* --- FM Central Ops acts on AM and CH steps --- */
+  A.adminSwitchRole();
+  asCentral(doc, "ops");
+  eq(C.CENTRAL_TABS.ops.map(t => t.id), ["all", "am", "ch", "rates", "bulk", "slabs"], "FM Central Ops’ tabs");
+  check(apVisible(doc).length === api.state.adminRequests.length, "the national view lists every request");
+  A.adminTab("am");
+  clickSel(doc, '[data-apopen="OBD-78222"]');
+  check(txt(doc).indexOf("AM verification · step 1 of 3") >= 0 && exists(doc, "[data-gate]"),
+        "it can work an Area Manager’s step");
+  check(!!H.apById("OBD-78222").hubCode, "picking it up assigns the hub code, as the AM would");
+  A.adminBack();
+  A.adminTab("ch");
+  clickSel(doc, '[data-apopen="OBD-78219"]');
+  check(txt(doc).indexOf("CH review · approve request") >= 0, "and a Cluster Head’s");
+  A.adminBack();
+  A.adminTab("rates");
+  clickSel(doc, '[data-apru="RCU-51144"]');
+  check(exists(doc, "#ap-ru-approve"), "it decides rate card updates with the Cluster Head");
+  click(doc, "ap-ru-approve");
+  const elc = H.rateUpdateById("RCU-51144");
+  eq([elc.status, elc.approvedBy], ["published", "ops"], "approving one as FM Central Ops publishes it");
+  check(elc.trail.some(x => x.by === "ops" && x.what === "approved"), "logged as FM Central Ops");
+
+  /* --- bulk rate card updates --- */
+  A.adminTab("bulk");
+  check(exists(doc, '[data-testid="ap-bulk"]'), "FM Central Ops has a bulk rate update");
+  const codes = $(doc, "ap-bulk-codes");
+  codes.value = "KRM, BOM, IND, YLK, DML, AQT, XYZ, KRM"; fire(codes, "input");
+  check(H.bulkPlan(api.state.admin.bulk).codes.join() === "KRM,BOM,IND,YLK,DML,AQT,XYZ", "comma separated codes, once each");
+  const plan = () => [...doc.querySelectorAll('[data-testid="bulk-row"]')].reduce((o, r) => {
+    o[r.getAttribute("data-code")] = r.getAttribute("data-result"); return o; }, {});
+  const why = (code) => sel(doc, '[data-testid="bulk-row"][data-code="' + code + '"]').textContent;
+  eq(doc.querySelectorAll('[data-bulkrate]').length, 5, "the new card is priced on the listed hubs’ slabs");
+  check(why("YLK").indexOf("Not onboarded through the tool yet") >= 0, "a hub not onboarded through the tool is left out");
+  check(why("XYZ").indexOf("No hub with this code") >= 0, "an unknown code is left out");
+  check(why("DML").indexOf("already in review") >= 0, "a hub with an update in review is left out");
+  check(why("AQT").indexOf("Not an FM hub") >= 0, "an LM hub is left out");
+  check(why("IND").indexOf("different slab structure") >= 0, "a hub type on other slabs is left out");
+  check(!exists(doc, "#ap-bulk-tp"), "there is no touchpoint to set — each hub keeps its type’s");
+  ["3.50", "3.45", "3.40", "3.35", "3.30"].forEach((v, i) => {
+    const el = sel(doc, '[data-bulkrate="' + i + '"]'); el.value = v; fire(el, "input"); });
+  eq([plan().KRM, plan().BOM], ["publish", "publish"], "within their ceilings (3.50 in Bengaluru) they publish now");
+  $(doc, "ap-bulk-from").value = H.addDaysIso(today, -1); fire($(doc, "ap-bulk-from"), "change");
+  click(doc, "ap-bulk-go");
+  check(sel(doc, '[data-testid="bulk-error"]').textContent.indexOf("never backdated") >= 0, "a past date is refused");
+  $(doc, "ap-bulk-from").value = H.addDaysIso(today, 2); fire($(doc, "ap-bulk-from"), "change");
+  eq($(doc, "ap-bulk-go").textContent, "Publish to 2 hubs", "the button says what will happen");
+  click(doc, "ap-bulk-go");
+  const bulk = api.state.bulkUpdates[api.state.bulkUpdates.length - 1];
+  eq([bulk.published, bulk.toBizFin, bulk.excluded.map(x => x.code)],
+     [["KRM", "BOM"], [], ["IND", "YLK", "DML", "AQT", "XYZ"]], "the bulk update is logged with what happened to each");
+  const krmU = api.state.rateUpdates.filter(u => u.bulkId === bulk.id && u.hubCode === "KRM")[0];
+  eq([krmU.status, H.ruPhase(krmU), krmU.effectiveFrom], ["published", "scheduled", H.addDaysIso(today, 2)],
+     "within the ceilings: published, no approval needed");
+  check(api.state.rateNotices.some(n => n.ref === krmU.id && n.captain === "Sunil Rao"), "and its captain notified");
+  eq(krmU.to.touchpoint, "5.00", "on the touchpoint fixed for Standalone");
+  check(sel(doc, '[data-testid="bulk-log"]').textContent.indexOf(bulk.id) >= 0, "listed under recent bulk updates");
+
+  /* above a hub's ceilings it goes to BizFin first */
+  $(doc, "ap-bulk-codes").value = "JPN"; fire($(doc, "ap-bulk-codes"), "input");
+  ["3.30", "3.20", "3.10", "3.00", "2.90", "2.80"].forEach((v, i) => {
+    const el = sel(doc, '[data-bulkrate="' + i + '"]'); el.value = v; fire(el, "input"); });
+  eq(plan().JPN, "bizfin", "3.30 is above the mini-hub’s ceiling, so it goes to BizFin");
+  click(doc, "ap-bulk-go");
+  const jpnU = api.state.rateUpdates.filter(u => u.source === "bulk" && u.hubCode === "JPN")[0];
+  eq(jpnU.status, "central", "waiting for BizFin");
+  check(!api.state.rateNotices.some(n => n.ref === jpnU.id), "the captain hears nothing yet");
+  devClick(doc, "ca:bizfin");
+  A.adminTab("rates");
+  clickSel(doc, '[data-apru="' + jpnU.id + '"]');
+  check(txt(doc).indexOf("Bulk update " + jpnU.bulkId + " by FM Central Ops") >= 0, "BizFin sees it came in bulk");
+  click(doc, "ap-ru-reject");
+  type(doc, "ap-ru-reason", "Too high for JP Nagar’s volumes.");
+  click(doc, "ap-ru-reject");
+  eq(jpnU.status, "rejected", "BizFin can decline a bulk update — there is no Area Manager to send it back to");
+  eq(H.rateUpdateFor("nh-jpn"), null, "and the hub stays on its card in force");
+
+  /* --- an older save, from when captains agreed to updates --- */
+  const KEY = "valmo.captain.onboarding.v1";
+  const saved = JSON.parse(win.localStorage.getItem(KEY));
+  const old = saved.rateUpdates.filter(u => u.hubId === "nh-btm")[0];
+  old.status = "captain"; old.approvedOn = "10 Oct 2026"; delete old.version; delete old.effectiveFrom;
+  saved.slabSettings = undefined; saved.rateNotices = undefined;
+  win.localStorage.setItem(KEY, JSON.stringify(saved));
+  check(api.reload(), "an older save still loads");
+  const migrated = H.rateUpdateById(old.id);
+  eq([migrated.status, migrated.effectiveFrom], ["published", "2026-10-10"],
+     "an update waiting on its captain is published from the day it was approved");
+  check(H.rateVersions(H.allHubById("nh-btm")).some(v => v.ref === old.id), "as the hub’s next version");
+  eq(H.slabBreaks("standalone"), [2500, 5000, 7500, 10000], "and the slab settings start from the default");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
+   35. FM without GST — a deliberate choice the Area Manager approves
+   ====================================================================== */
+
+/* Onboarding up to the GST card, the FM way. */
+function kycToGst(doc) {
+  type(doc, "kyc-aadhaar", "123412341234");
+  click(doc, "kyc-aadhaar-go");
+  type(doc, "kyc-aadhaar-otp", "000000");
+  click(doc, "kyc-aadhaar-confirm");
+  click(doc, "kyc-ack-aadhaar");
+  type(doc, "kyc-pan", "ABCDE1234F");
+  type(doc, "kyc-pan-father", "Suresh Verma");
+  click(doc, "kyc-pan-go");
+  click(doc, "kyc-ack-pan");
+  type(doc, "kyc-acc", "123456789012");
+  type(doc, "kyc-ifsc", "HDFC0001234");
+  click(doc, "kyc-bank-go");
+  click(doc, "kyc-ack-bank");
+}
+/* "Don't have GST?", a reason, the confirmation. */
+function declareNoGst(doc, win, reason, confirm) {
+  click(doc, "kyc-nogst-open");
+  const r = $(doc, "kyc-nogst-reason");
+  r.value = reason; r.dispatchEvent(new win.Event("change", { bubbles: true }));
+  $(doc, "kyc-nogst-confirm").checked = !!confirm;
+  click(doc, "kyc-nogst-go");
+}
+
+async function testNoGst() {
+  section("35. FM without GST — a deliberate choice the Area Manager approves");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions, C = api.config;
+  const reason = C.NO_GST_REASONS[0];
+
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  kycToGst(doc);
+  eq(H.kycStep(H.R()), "gst", "at the GST card");
+  check(!exists(doc, "[data-gstchoice]") && txt(doc).indexOf("Non-GST") === -1, "no Non-GST option is shown");
+
+  /* the deliberate path */
+  click(doc, "kyc-nogst-open");
+  check(exists(doc, '[data-testid="kyc-nogst"]'), "Don’t have GST? opens a declaration");
+  check(!exists(doc, "#kyc-gstin"), "in place of the GSTIN field");
+  check(txt(doc).indexOf("Your Area Manager has to approve this") >= 0 &&
+        txt(doc).indexOf("only goes live once your Area Manager approves it") >= 0,
+        "saying the Area Manager has to approve it");
+  check(devText(doc).indexOf("GST portal") === -1 && devText(doc).indexOf("GSTIN check") === -1,
+        "and the simulator offers no GSTIN check — none is made");
+  eq([...$(doc, "kyc-nogst-reason").options].map(o => o.value).slice(1), C.NO_GST_REASONS, "with the reasons to pick from");
+  click(doc, "kyc-nogst-go");
+  check(txt(doc).indexOf("Pick why you don’t have GST.") >= 0, "a reason is required");
+  check(txt(doc).indexOf("Tick the box to confirm you don’t have GST.") >= 0, "and the confirmation");
+  check(!H.R().kyc.gst.done, "so nothing is recorded yet");
+  click(doc, "kyc-nogst-cancel");
+  check(exists(doc, "#kyc-gstin") && !exists(doc, '[data-testid="kyc-nogst"]'), "I have a GSTIN goes back");
+  declareNoGst(doc, win, reason, false);
+  eq($(doc, "kyc-nogst-reason").value, reason, "a picked reason survives a failed attempt");
+  check(txt(doc).indexOf("Tick the box") >= 0, "the confirmation alone still holds it up");
+  $(doc, "kyc-nogst-confirm").checked = true;
+  click(doc, "kyc-nogst-go");
+
+  const g = () => H.R().kyc.gst;
+  eq([g().registered, g().done, g().noGst.reason, g().noGst.decision], [false, true, reason, null],
+     "recorded as no GST, with the reason, waiting on the Area Manager");
+  eq(H.kycStep(H.R()), "complete", "KYC completes");
+  check(sel(doc, '[data-testid="kyc-gst-row"]').textContent.indexOf("No GST · Awaiting Area Manager approval") >= 0,
+        "the summary says where it stands");
+  check(!disabled(doc, "kyc-continue"), "and the captain carries on");
+  click(doc, "kyc-continue");
+  eq(H.phaseId(), "hub", "to hub details");
+  doHubDetails(doc, { address: "Plot 7, Bommasandra" });
+  click(doc, "hub-continue");
+  A.bgvSet("passed");
+  click(doc, "bgv-continue");
+  eq(H.phaseId(), "ch", "and on to the review");
+
+  /* the Area Manager's call comes first */
+  check(txt(doc).indexOf("Area Manager: reviewing your request to continue without GST") >= 0,
+        "the captain sees the Area Manager reviewing it");
+  check(devText(doc).indexOf("Area Manager · no-GST declaration") >= 0, "the simulator offers the AM’s call");
+  check(devText(doc).indexOf("pick hub type") === -1, "before the hub type");
+  A.chSetCategory("standalone");
+  eq(H.R().ch.category, null, "and no hub type can be set until it’s decided");
+  devClick(doc, "nogst:approve");
+  eq(g().noGst.decision, "approved", "approved");
+  check(txt(doc).indexOf("Continuing without GST approved") >= 0, "the captain sees it approved");
+  check(devText(doc).indexOf("pick hub type") >= 0, "and the review carries on to the hub type");
+  A.chSetCategory("standalone");
+  A.amSubmitRate(false);
+  A.chApprove();
+  click(doc, "ch-continue");
+  doAgreements(doc, api);
+  await waitFor(win, () => H.R().act.status === "active", "FM activation without GST");
+  const hub = api.state.hubs[api.state.hubs.length - 1];
+  eq([hub.gst.registered, hub.gst.noGst && hub.gst.noGst.decision], [false, "approved"],
+     "the hub goes live without GST, the approval on record");
+  api.stopTimers();
+  win.close();
+
+  /* --- declined: a GSTIN on the review screen, then on --- */
+  const b = await boot();
+  login(b.doc);
+  pickRole(b.doc, "FM");
+  doPersonalDetails(b.doc);
+  kycToGst(b.doc);
+  declareNoGst(b.doc, b.win, C.NO_GST_REASONS[1], true);
+  click(b.doc, "kyc-continue");
+  doHubDetails(b.doc, { address: "Plot 7, Bommasandra" });
+  click(b.doc, "hub-continue");
+  b.api.actions.bgvSet("passed");
+  click(b.doc, "bgv-continue");
+  devClick(b.doc, "nogst:decline");
+  check(exists(b.doc, '[data-testid="nogst-declined"]'), "a decline asks the captain for a GSTIN");
+  check(txt(b.doc).indexOf("Your Area Manager needs a GSTIN for this hub") >= 0, "saying why");
+  check(devText(b.doc).indexOf("waiting for the captain to add a GSTIN") >= 0, "the simulator waits on the captain");
+  type(b.doc, "ch-gstin", "29AAJFS4321M1ZQ");
+  click(b.doc, "ch-gstin-go");
+  check(txt(b.doc).indexOf(b.api.errors.gstName) >= 0, "the GSTIN is checked as on KYC — someone else’s is refused");
+  type(b.doc, "ch-gstin", "29ABCDE1234F1Z5");
+  click(b.doc, "ch-gstin-go");
+  const bg = b.api.helpers.R().kyc.gst;
+  eq([bg.registered, bg.gstin, bg.noGst], [true, "29ABCDE1234F1Z5", undefined], "a verified GSTIN settles it");
+  check(exists(b.doc, '[data-testid="waiting-category"]'), "and the review carries on");
+  check(devText(b.doc).indexOf("pick hub type") >= 0, "to the hub type");
+  b.api.stopTimers();
+  b.win.close();
+
+  /* --- a GSTIN found later, from the KYC summary, replaces the declaration --- */
+  const c = await boot();
+  login(c.doc);
+  pickRole(c.doc, "FM");
+  doPersonalDetails(c.doc);
+  kycToGst(c.doc);
+  declareNoGst(c.doc, c.win, reason, true);
+  c.api.actions.kycReopen("gst");
+  check(exists(c.doc, "#kyc-gstin"), "reopening GST shows the GSTIN field");
+  type(c.doc, "kyc-gstin", "29ABCDE1234F1Z5");
+  click(c.doc, "kyc-gst-go");
+  eq([c.api.helpers.R().kyc.gst.registered, c.api.helpers.R().kyc.gst.noGst], [true, undefined],
+     "verifying one drops the no-GST declaration");
+  c.api.stopTimers();
+  c.win.close();
+
+  /* --- the Area Manager's review in the admin panel --- */
+  const d = await boot();
+  devClick(d.doc, "as:admin");
+  login(d.doc);
+  clickSel(d.doc, '[data-aprole="am"]');
+  clickSel(d.doc, '[data-apopen="OBD-78231"]');
+  const req = () => d.api.helpers.apById("OBD-78231");
+  check(sel(d.doc, '[data-testid="ap-gst-row"]').textContent.indexOf("No GST · Awaiting Area Manager approval") >= 0,
+        "the context card says the captain has no GST");
+  check(exists(d.doc, '[data-testid="am-nogst"]'), "the infra check carries a Continuing without GST row");
+  check(sel(d.doc, '[data-testid="am-nogst"]').textContent.indexOf("My turnover is below the GST threshold") >= 0,
+        "with the captain’s reason");
+  d.api.config.AM_GATES.forEach(x => d.api.actions.amGate(x.id, "yes"));
+  clickSel(d.doc, '[data-vehreview="yes"]');
+  check(disabled(d.doc, "am-to-design"), "every gate passed, it still waits on the GST call");
+  clickSel(d.doc, '[data-nogst="no"]');
+  eq(req().noGst.decision, "declined", "declining is recorded");
+  check(sel(d.doc, '[data-testid="am-nogst"]').textContent.indexOf("the captain is asked to add a GSTIN") >= 0,
+        "and says the captain is asked for a GSTIN");
+  check(disabled(d.doc, "am-to-design"), "the request waits");
+  check(!exists(d.doc, "#ap-reject"), "a decline isn’t a failed hard gate — nothing to reject");
+  check(devText(d.doc).indexOf("Captain adds a GSTIN") >= 0, "the simulator can stand in for the captain");
+  clickSel(d.doc, '[data-nogst="yes"]');
+  eq(req().noGst.decision, "approved", "the AM can change their mind and approve");
+  check(!disabled(d.doc, "am-to-design"), "which opens the next step");
+  clickSel(d.doc, '[data-nogst="no"]');
+  devClick(d.doc, "nogst:gstin");
+  eq(req().noGst, null, "once the captain adds a GSTIN the declaration is gone");
+  check(sel(d.doc, '[data-testid="ap-gst-row"]').textContent.indexOf("GSTIN verified") >= 0, "the context card follows");
+  check(!exists(d.doc, '[data-testid="am-nogst"]') && !disabled(d.doc, "am-to-design"), "and the AM carries on");
+  d.api.stopTimers();
+  d.win.close();
+
+  /* --- an existing captain adding an FM hub without GST --- */
+  const e = await boot();
+  e.api.state.loginAs = "existing";
+  e.api.helpers.seedExistingCaptain();
+  login(e.doc);
+  e.api.actions.openPanel("hubs", "hubs");
+  e.api.actions.addHubOpen();
+  e.api.actions.addHubRole("FM");
+  click(e.doc, "addhub-nogst");
+  const er = $(e.doc, "addhub-nogst-reason");
+  er.value = C.NO_GST_REASONS[2]; er.dispatchEvent(new e.win.Event("change", { bubbles: true }));
+  $(e.doc, "addhub-nogst-confirm").checked = true;
+  click(e.doc, "addhub-go");
+  eq(e.api.helpers.phaseId(), "hub", "with a reason and the confirmation it goes on to hub details");
+  const eg = e.api.helpers.R().kyc.gst;
+  eq([eg.registered, eg.noGst.reason, eg.noGst.decision], [false, "Other", null],
+     "carrying the declaration for the Area Manager to review");
+  e.api.stopTimers();
+  e.win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
   const t0 = Date.now();
-  try {
-    await testLM();
-    await testFMCombined();
-    await testFMAboveCeiling();
-    await testRoleIndependence();
-    await testValidation();
-    await testOtpFocusSurvivesCountdown();
-    await testAmTwoStrike();
-    await testCeilings();
-    await testDevPanel();
-    await testBulkPincodes();
-    await testHubFacilityInputs();
-    await testPhaseOrder();
-    await testBackAndPhoto();
-    await testCaptainHub();
-    await testAdminPanel();
-    await testCeilingEscalation();
-    await testCartingDesign();
-    await testFMCaptainCopy();
-    await testFMNoSplit();
-    await testCopyConsistency();
-    await testPincodesOnHub();
-    await testMapPin();
-    await testApiFailures();
-    await testGstVerification();
-    await testAmMapEdit();
-    await testHubEdits();
-    await testRateUpdates();
-    await testTypedHubPincode();
-    await testAmPortfolio();
-    await testAmDirectChanges();
-    await testSampleCaptains();
-    await testLeanAdmin();
-    await testMapPick();
-  } catch (e) {
-    bad("harness error", e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
+  /* each group runs on its own — a harness error in one is reported and the
+     rest still run */
+  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst];
+  for (const g of groups) {
+    try {
+      await g();
+    } catch (e) {
+      bad("harness error in " + g.name, e && e.stack ? e.stack.split("\n").slice(0, 4).join("\n      ") : String(e));
+    }
   }
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
