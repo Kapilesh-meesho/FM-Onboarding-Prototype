@@ -2163,7 +2163,59 @@ function seedExistingCaptain() {
   S.hubEdits = S.hubEdits.filter(function (e) { return isNetworkHubId(e.hubId); });
   S.rateUpdates = S.rateUpdates.filter(function (u) { return isNetworkHubId(u.hubId); });
   S.amChanges = (S.amChanges || []).filter(function (c) { return !c.hubId || isNetworkHubId(c.hubId); });
+  seedExistingNotes();
   S.seededExisting = true;
+}
+
+/* One of every notification the bell carries, so the existing captain's bell
+   shows each scenario: a rate card update to agree to, hub details the Area
+   Manager changed, a map pin they corrected on the onboarding request, and a
+   hub edit approved and one not. */
+var EXISTING_NOTE_IDS = ["RCU-50961", "AMC-30090", "AMC-30094", "HE-40150", "HE-40162"];
+function seedExistingNotes() {
+  var kdg = hubById("hub-kdg"), aqt = hubById("hub-aqt");
+  var t = function (at, by, what, note) { return { at:at, by:by, what:what, note:note || "" }; };
+  var me = { captain:S.profile.name, phone:"+91 70043 01290" };
+  if (kdg && kdg.rateCard) {
+    var u = { id:"RCU-50961", hubId:kdg.id, hubCode:kdg.code, hubName:kdg.name, captain:me.captain, phone:me.phone,
+      from:{ slabs:JSON.parse(JSON.stringify(kdg.rateCard.slabs)), touchpoint:kdg.rateCard.touchpoint },
+      fromVersion:kdg.rateCard.version || 1, fromEffective:kdg.rateCard.effectiveFrom || "",
+      fromCategory:kdg.category, toCategory:kdg.category, source:"update", rejectedBy:"", rejectReason:"",
+      to:{ slabs:seedSlabs("3.50", "3.10"), touchpoint:kdg.rateCard.touchpoint },
+      effectiveFrom:addDaysIso(todayIso(), 10), status:"captain", sentOn:"07 Oct 2026",
+      approvedBy:"ch", approvedOn:"09 Oct 2026", sentToCaptainOn:"09 Oct 2026",
+      by:ADMIN_ROLES.am.person.name, byPhone:"+91 98450 11223",
+      trail:[t("07 Oct 2026", "am", "sent"), t("09 Oct 2026", "ch", "approved"),
+             t("09 Oct 2026", "system", "sent to the captain", "In-app, SMS and email — to review and agree")] };
+    u.notice = askCaptain(kdg, u.id, u.effectiveFrom, u.sentToCaptainOn);
+    S.rateUpdates.push(u);
+    /* the Area Manager corrected Kudlu Gate's max vehicle size after a visit */
+    logAmChange({ id:"AMC-30090", hubId:kdg.id, hubCode:kdg.code, hubName:kdg.name, captain:me.captain,
+                  phone:me.phone, fields:["maxVehicle"], before:{ maxVehicle:"5MT_17FT" },
+                  after:{ maxVehicle:kdg.maxVehicle }, at:"08 Oct 2026" });
+  }
+  /* and moved the pin on the captain's own onboarding request */
+  logAmChange({ id:"AMC-30094", kind:"map", requestId:"OBD-78219", hubName:"HUB-APP-90218", captain:me.captain,
+                phone:me.phone, fields:["mapLink"], before:{ mapLink:"https://maps.google.com/?q=12.9086,77.6046" },
+                after:{ mapLink:"https://maps.google.com/?q=12.9083,77.6041" }, at:"10 Oct 2026" });
+  var edit = function (id, h, o) {
+    var before = hubDetailsOf(h);
+    return Object.assign({ id:id, hubId:h.id, hubCode:h.code, hubName:h.name, role:h.role, captain:me.captain,
+      phone:me.phone, before:before, after:Object.assign({}, before, o.after), note:"", submittedOn:"",
+      decidedOn:"", reason:"", seen:false }, o, { after:Object.assign({}, before, o.after) });
+  };
+  if (kdg) {
+    /* an edit the Area Manager approved — already live on the hub */
+    var ok = edit("HE-40150", kdg, { status:"approved", submittedOn:"02 Oct 2026", decidedOn:"04 Oct 2026",
+                                     after:{ areaSqft:"6400" } });
+    kdg.areaSqft = ok.after.areaSqft;
+    S.hubEdits.push(ok);
+  }
+  if (aqt) {
+    S.hubEdits.push(edit("HE-40162", aqt, { status:"rejected", submittedOn:"05 Oct 2026", decidedOn:"06 Oct 2026",
+      after:{ address:"No. 3, 1st Cross, Koramangala 6th Block, Bengaluru" },
+      reason:"The new unit hasn’t passed the Area Manager’s site check yet." }));
+  }
 }
 
 /* Kudlu Gate has been repriced six times since it went live, each revision
@@ -3795,10 +3847,11 @@ var AM_MAP_HINT = "Tap the map to move the pin, or paste a Google Maps link. Sav
    check first, so seeded downstream requests carry that work as done. Without
    it a send-back would land the AM on an empty checklist instead of the rate
    card they are being asked to revise. */
-function apAmReviewed(r) {
+function apAmReviewed(r, am) {
   AM_GATES.forEach(function (x) { r.am.gates[x.id] = true; });
   r.am.vehicleReview = true;
   r.am.done = true;
+  if (am) Object.assign(r.am, am);           // anything else the AM did on the visit
   return r;
 }
 
@@ -3831,7 +3884,9 @@ function seedAdminRequests() {
     apAmReviewed(apReq({ id:"OBD-78219", hubCategory:"standalone", rate:{ payoutType:"Combined", slabs:seedSlabs("3.40", "3.00"), touchpoint:"5.00" }, captain:"Karan Verma", phone:"+91 70043 01290", hubAppId:"HUB-APP-90218",
             address:"Plot 14, 16th Main, BTM Layout, Bengaluru", pincode:"560076",
             mapLink:"https://maps.google.com/?q=12.9086,77.6046",
-            stage:"ch", status:"pending", sla:"6h left", slaTone:"warn" })),
+            stage:"ch", status:"pending", sla:"6h left", slaTone:"warn" }), {
+            // the AM moved the captain's pin on the visit — the captain was told
+            mapLink:"https://maps.google.com/?q=12.9083,77.6041", mapOn:"10 Oct 2026" }),
     apAmReviewed(apReq({ id:"OBD-78255", hubCategory:"mall", captain:"Rajesh Gupta", phone:"+91 88617 55092", hubAppId:"HUB-APP-90255",
             address:"Shed 2, Bommasandra, Bengaluru", pincode:"560099",
             mapLink:"https://maps.google.com/?q=12.8160,77.6990",
@@ -10611,6 +10666,7 @@ if (typeof window !== "undefined") {
     config: { PHASES: PHASES, HUB_CATEGORIES: HUB_CATEGORIES, FANOUT: FANOUT,
               SLAB_CEILINGS: SLAB_CEILINGS, CEILING_COLS: CEILING_COLS, NO_GST_REASONS: NO_GST_REASONS,
               AREA_MANAGERS: AREA_MANAGERS, CLUSTER_HEADS: CLUSTER_HEADS, ZONAL_HEADS: ZONAL_HEADS, MY_DESK: MY_DESK,
+              EXISTING_NOTE_IDS: EXISTING_NOTE_IDS,
               ADMIN_ROLES: ADMIN_ROLES, ADMIN_TABS: ADMIN_TABS, ADMIN_ROLE_ORDER: ADMIN_ROLE_ORDER,
               AM_GATES: AM_GATES, AP_STATUS: AP_STATUS,
               KNOWN_HUB_CODES: KNOWN_HUB_CODES, ONBOARDING_TYPES: ONBOARDING_TYPES,

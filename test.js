@@ -1694,6 +1694,16 @@ function devClick(doc, action) {
 }
 const devText = (doc) => $(doc, "dev").textContent.replace(/\s+/g, " ");
 /* Central Admin is three roles; the backend simulator picks which is signed in. */
+/* The existing captain starts with one of every notification. A group that
+   drives its own flow from a quiet bell clears them first. */
+function quietBell(api) {
+  const ids = api.config.EXISTING_NOTE_IDS;
+  api.state.rateUpdates = api.state.rateUpdates.filter(u => ids.indexOf(u.id) < 0);
+  api.state.amChanges = api.state.amChanges.filter(c => ids.indexOf(c.id) < 0);
+  api.state.hubEdits = api.state.hubEdits.filter(e => ids.indexOf(e.id) < 0);
+  api.render();
+}
+
 function asCentral(doc, persona) {
   clickSel(doc, '[data-aprole="central"]');
   devClick(doc, "ca:" + persona);
@@ -3621,6 +3631,7 @@ async function testHubEdits() {
 
   devClick(doc, "as:existing");
   login(doc);
+  quietBell(api);
   eq(api.state.screen, "panel", "the existing captain is on My Hubs");
   check(exists(doc, '[data-hubedit="hub-aqt"]') && exists(doc, '[data-hubedit="hub-beu"]'),
         "every active hub offers Edit hub details");
@@ -3779,6 +3790,7 @@ async function testRateUpdates() {
 
   devClick(doc, "as:existing");
   login(doc);
+  quietBell(api);
 
   /* --- the rate card in force, as a table --- */
   const sec = () => sel(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate"]');
@@ -4307,8 +4319,8 @@ async function testAmPortfolio() {
   login(doc);
   check(api.state.rateUpdates.some(u => u.status === "captain" && u.hubId.indexOf("nh-") === 0),
         "other captains have rate card updates to agree to");
-  check(!exists(doc, '[data-testid="bell-count"]'), "but none of them reach this captain’s bell");
-  eq(H.captainNotes().length, 0, "nor their notifications");
+  check(H.captainNotes().every(n => C.EXISTING_NOTE_IDS.indexOf(n.id) >= 0),
+        "but none of them reach this captain’s bell — only their own");
   check(devText(doc).indexOf("Area Manager · hub edit") === -1, "nor the dev panel’s hub edit actions");
 
   /* --- once the captain is loaded, their hubs join the Area Manager's lists --- */
@@ -4344,6 +4356,7 @@ async function testAmDirectChanges() {
 
   devClick(doc, "as:existing");
   login(doc);
+  quietBell(api);
   asAdmin();
 
   /* --- 1. a map pin corrected on an onboarding request notifies its captain --- */
@@ -4633,7 +4646,8 @@ async function testSampleCaptains() {
   eq(api.state.sampleCaptain, null, "the existing captain is back");
   eq(api.state.hubs.map(h => h.code).join(","), "AQT,BEU,JYP,KDG", "with their own four hubs");
   eq(api.state.networkHubs.length, 14, "and every sample hub back with its captain, three more on other patches");
-  check(!exists(doc, '[data-testid="bell-count"]'), "the sample captains’ notifications never reach them");
+  check(api.helpers.captainNotes().every(n => C.EXISTING_NOTE_IDS.indexOf(n.id) >= 0),
+        "the sample captains’ notifications never reach them — only their own");
   A.logout();
   devClick(doc, "as:admin");
   login(doc);
@@ -5522,13 +5536,72 @@ async function testHierarchy() {
   win.close();
 }
 
+/* =========================================================================
+   37. Sample notifications — one of every kind on the existing captain's bell
+   ====================================================================== */
+
+async function testSampleNotes() {
+  section("37. Sample notifications — every scenario on the existing captain’s bell");
+  const { win, doc, api } = await boot();
+  const H = api.helpers, A = api.actions;
+  const notes = () => [...doc.querySelectorAll("[data-note]")];
+  const note = (id) => sel(doc, '[data-note$=":' + id + '"]');
+
+  devClick(doc, "as:existing");
+  login(doc);
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "5", "the existing captain’s bell has five notifications");
+  click(doc, "bell");
+  eq(notes().map(n => n.getAttribute("data-note").split(":")[0]),
+     ["rateagree", "amchange", "amchange", "edit", "edit"], "one of every kind");
+  check(note("RCU-50961").textContent.indexOf("Rate card update to agree · Kudlu Gate Hub (KDG)") >= 0 &&
+        note("RCU-50961").classList.contains("act"), "a rate card update to agree to, marked as needing action");
+  check(note("AMC-30090").textContent.indexOf("Hub details updated · Kudlu Gate Hub") >= 0 &&
+        note("AMC-30090").textContent.indexOf("max vehicle size") >= 0, "hub details the Area Manager changed");
+  check(note("AMC-30094").textContent.indexOf("Map pin corrected · OBD-78219") >= 0,
+        "a map pin corrected on their onboarding request");
+  check(note("HE-40150").textContent.indexOf("Hub edit approved · Kudlu Gate Hub") >= 0, "a hub edit approved");
+  check(note("HE-40162").textContent.indexOf("Hub edit not approved · Koramangala Hub") >= 0 &&
+        note("HE-40162").textContent.indexOf("site check") >= 0, "and one not approved, with the reason");
+  check(!notes().some(n => /hub type|ceiling|benchmark|Standalone/i.test(n.textContent)), "none naming the hub type");
+
+  /* each leads where it should */
+  note("AMC-30094").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "4", "reading the map pin note clears it");
+  check(exists(doc, '[data-hub="hub-kdg"] [data-testid="hub-am-updated"]'), "the hub card says what the AM changed");
+  check(exists(doc, '[data-hub="hub-kdg"] [data-testid="hub-rate-ask"]'), "and asks to agree to the new rates");
+  click(doc, "bell");
+  note("RCU-50961").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  eq(api.state.panel.section, "rateagree", "the rate card update opens to agree");
+  setCheck(doc, "rate-agree-check", true);
+  click(doc, "rate-agree");
+  eq(H.rateUpdateById("RCU-50961").status, "published", "agreeing publishes it");
+  eq(sel(doc, '[data-testid="bell-count"]').textContent, "3", "and takes it off the bell");
+  click(doc, "hub-back-hubs");
+  clickSel(doc, '[data-amdismiss]');
+  [...doc.querySelectorAll("[data-hedismiss]")].forEach(b => b.dispatchEvent(new win.MouseEvent("click", { bubbles: true })));
+  check(!exists(doc, '[data-testid="bell-count"]'), "dismissing the rest on the hub cards clears the bell");
+
+  /* the map pin correction is on the Area Manager’s side too */
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  clickSel(doc, '[data-aprole="am"]');
+  clickSel(doc, '[data-aptab="mine"]');
+  eq(H.apMapLink(H.apById("OBD-78219")), "https://maps.google.com/?q=12.9083,77.6041",
+     "the Area Manager’s side carries the same pin correction the captain was told about");
+  check(H.checkMapPin(H.apMapLink(H.apById("OBD-78219")), "560076").code === "ok", "inside its pincode");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
   const t0 = Date.now();
   /* each group runs on its own — a harness error in one is reported and the
      rest still run */
-  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy];
+  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes];
   for (const g of groups) {
     try {
       await g();

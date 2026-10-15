@@ -591,7 +591,14 @@ Area Manager, one approved and waiting for its captain to agree (Indiranagar), o
 scheduled for next week (Marathahalli), and two agreed and in force (Whitefield and JP Nagar,
 each now on its second version).
 
-**Most sample captains have notifications** — an Area Manager change to their hub, a decided
+**The existing captain's bell has one of every notification** — five in all: a rate card
+update to agree to on Kudlu Gate, Kudlu Gate's max vehicle size changed by the Area Manager, a
+map pin the Area Manager corrected on their onboarding request (`OBD-78219`, which carries the
+same correction on the admin side), a hub edit approved (Kudlu Gate's area) and one not approved
+(Koramangala's address, with the reason). Each opens where it should: the update to agree, or
+My Hubs, where the hub card says what changed until it is dismissed.
+
+**Most sample captains have notifications too** — an Area Manager change to their hub, a decided
 hub edit, or a rate card update to agree to (Whitefield and Marathahalli have already agreed
 to theirs) — and the login switch can **sign in as any of
 them**: their hub moves into the Captain Hub with their own profile, GSTIN and bell, and they
@@ -876,7 +883,7 @@ build from.
 npm install && npm test
 ```
 
-**2011 assertions across 36 groups:**
+**2027 assertions across 37 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -1089,8 +1096,13 @@ npm install && npm test
    opening the AM, CH and ZH with phones and the waiting desk marked, a CH filter, and the
    hierarchy card on the update's page; BizFin's view of a raised update; and each desk —
    CH, ZH, AM — seeing only its own patch
+37. **Sample notifications** — the existing captain's bell holding one of every kind, five in
+   all, the rate card update marked as needing action and none naming the hub type; the map
+   pin note clearing when read, the hub card showing the AM's change and the update to agree;
+   agreeing to the update publishing it; dismissing the rest clearing the bell; and the
+   onboarding request carrying the same pin correction on the Area Manager's side
 
-Five notes on how the tests drive the app:
+Six notes on how the tests drive the app:
 
 - `markAgreementRead()` stands in for scroll-to-end, because jsdom has no layout and
   therefore no real `scrollHeight`. The test separately asserts the checkbox is disabled
@@ -1102,6 +1114,8 @@ Five notes on how the tests drive the app:
 - The harness awaits the app's own `DOMContentLoaded` boot before driving anything. jsdom
   fires that after the constructor returns, so without the wait the app's boot lands
   mid-test and re-renders the DOM out from under whatever is being driven.
+- The existing captain starts with one of every notification. Groups that drive their own
+  flow from a quiet bell call `quietBell()` first; group 37 checks the samples themselves.
 - Each group runs on its own: a harness error in one is reported against that group and the
   rest still run, so one broken helper doesn't hide every failure after it.
 
