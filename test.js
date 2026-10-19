@@ -2264,13 +2264,13 @@ async function testAdminPanel() {
   api.actions.adminSwitchRole();
   clickSel(doc, '[data-aprole="zh"]');
   check(txt(doc).indexOf("Priya Nair") >= 0, "signed in as the Zonal Head");
-  eq(api.config.ADMIN_TABS.zh.map(t => t.id), ["am","ch"],
-     "the Zonal Head sees AM and CH pendency, and nothing of their own");
-  eq(api.config.ADMIN_TABS.zh.map(t => t.label), ["AM pendency","CH pendency"],
-     "framed as pendency rather than a queue");
-  check(api.config.ADMIN_ROLES.zh.desc.indexOf("Monitor") >= 0,
-        "and described as monitoring");
-  check(api.config.ADMIN_ROLES.zh.desc.indexOf("Approve") === -1, "not approving");
+  eq(api.config.ADMIN_TABS.zh.map(t => t.id), ["am","ch","rates"],
+     "the Zonal Head sees AM and CH pendency, and rate card updates to approve");
+  eq(api.config.ADMIN_TABS.zh.map(t => t.label), ["AM pendency","CH pendency","Rate card updates"],
+     "onboarding framed as pendency rather than a queue");
+  check(api.config.ADMIN_ROLES.zh.desc.indexOf("monitor") >= 0 &&
+        api.config.ADMIN_ROLES.zh.desc.indexOf("Approve rate card updates") >= 0,
+        "described as approving rate card updates and monitoring the rest");
 
   const zhRows = [...doc.querySelectorAll("[data-apopen]")].map(b => b.getAttribute("data-apopen"));
   check(zhRows.length >= 1, "AM pendency lists what is with Area Managers");
@@ -3436,7 +3436,7 @@ async function testGstVerification() {
   /* a similar name is accepted, labelled so, and still has to be saved */
   check(txt(doc).indexOf("GSTIN verified") >= 0, "the verified record is shown");
   eq(sel(doc, '[data-testid="gst-check"]').getAttribute("data-level"), "similar", "as a similar name");
-  check(txt(doc).indexOf("Similar to your bank account name — accepted · 80%") >= 0,
+  check(txt(doc).indexOf("Similar to your bank account name: accepted · 80%") >= 0,
         "with its score");
   eq(H.hubById("hub-aqt").gst.gstin, "29ABCDE1234F1Z5", "nothing is saved until the captain saves it");
   click(doc, "gst-again");
@@ -3879,7 +3879,7 @@ async function testRateUpdates() {
   eq([u.to.slabs[0].rate, u.to.slabs[1].rate, u.to.touchpoint], ["3.50", "3.30", "5.00"],
      "carrying the new card, with the fixed touchpoint");
   eq(kdg().rateCard.slabs[0].rate, "3.40", "the card in force stays until the new one applies");
-  check(api.state.admin.toast.indexOf("it applies from " + H.fmtIso(soon)) >= 0,
+  check(api.state.admin.toast.indexOf("It applies from " + H.fmtIso(soon)) >= 0,
         "the AM is told it went for review, and from when it applies");
   check(kdgRow().textContent.indexOf("With the Cluster Head") >= 0, "the list says it is in review");
   clickSel(doc, '[data-aprate="hub-kdg"]');
@@ -3906,19 +3906,35 @@ async function testRateUpdates() {
   const checks = sel(doc, '[data-testid="ru-checks"]').textContent;
   check(checks.indexOf("Within the Standalone ceilings") >= 0, "within the hub type’s ceilings");
   check(checks.indexOf("Applies from" + H.fmtIso(soon)) >= 0, "applying from the day the AM picked");
-  check(checks.indexOf("the captain agrees before it applies") >= 0, "once the captain agrees");
-  check($(doc, "ap-ru-approve").textContent.indexOf("send to the captain to agree") >= 0,
-        "approving sends it to the captain");
+  check(checks.indexOf("The captain agrees before it applies") >= 0, "once the captain agrees");
+  check($(doc, "ap-ru-approve").textContent.indexOf("send to the Zonal Head") >= 0,
+        "the Cluster Head’s approval sends it to the Zonal Head");
   click(doc, "ap-ru-approve");
   const pub = H.rateUpdateById(u.id);
+  eq(pub.status, "zh", "approved by the CH, it waits for the ZH");
+  check(api.state.admin.toast.indexOf("sent to the Zonal Head, Priya Nair") >= 0, "the Cluster Head is told so");
+  check(!api.state.rateNotices.some(n => n.ref === u.id), "and the captain hears nothing yet");
+  check(sel(doc, '[data-testid="ap-ru-row"][data-ru="' + u.id + '"] [data-testid="ru-waiting-on"]').textContent
+          .indexOf("With ZHPriya Nair") >= 0, "the CH’s list says it’s with the ZH");
+
+  /* --- the Zonal Head approves it: it goes to the captain to agree --- */
+  A.adminSwitchRole();
+  clickSel(doc, '[data-aprole="zh"]');
+  check(sel(doc, '[data-aptab="rates"]').textContent.indexOf("Rate card updates (") === 0,
+        "the Zonal Head has a Rate card updates tab with a count");
+  clickSel(doc, '[data-aptab="rates"]');
+  clickSel(doc, '[data-apru="' + u.id + '"]');
+  check($(doc, "ap-ru-approve").textContent.indexOf("send to the captain to agree") >= 0,
+        "within the ceilings, the ZH’s approval sends it to the captain");
+  click(doc, "ap-ru-approve");
   eq(pub.status, "captain", "approved, it waits for the captain to agree");
   eq(kdg().rateCards.length, 7, "nothing is published yet");
-  check(api.state.admin.toast.indexOf("sent to Karan Verma to agree") >= 0, "the Cluster Head is told so");
+  check(api.state.admin.toast.indexOf("sent to Karan Verma to agree") >= 0, "the Zonal Head is told so");
   const notice = api.state.rateNotices.filter(n => n.ref === u.id)[0];
   check(!!notice && notice.channels["In-app"] === "Delivered" && notice.channels.SMS === "Delivered" &&
         notice.channels.Email === "Delivered", "the captain is asked in the app, by SMS and by email — each delivery logged");
-  eq((pub.trail || []).map(x => x.by + ":" + x.what), ["am:sent", "ch:approved", "system:sent to the captain"],
-     "every step so far on its trail");
+  eq((pub.trail || []).map(x => x.by + ":" + x.what),
+     ["am:sent", "ch:approved", "zh:approved", "system:sent to the captain"], "every step so far on its trail");
   check(sel(doc, '[data-testid="ap-ru-row"][data-ru="' + u.id + '"] [data-testid="ru-waiting-on"]').textContent
           .indexOf("With captainKaran Verma") >= 0, "the desk’s list says it’s with the captain");
 
@@ -3941,7 +3957,7 @@ async function testRateUpdates() {
   eq([api.state.panel.section, api.state.panel.rateUpdateId], ["rateagree", u.id], "it opens the update to agree");
   check(sel(doc, '[data-testid="rate-current"]').textContent.indexOf("₹3.40") >= 0 &&
         sel(doc, '[data-testid="rate-new"]').textContent.indexOf("₹3.50") >= 0, "the current card beside the updated one");
-  check(txt(doc).indexOf("or from the day you agree, if that’s later") >= 0, "prospective only, said plainly");
+  check(txt(doc).indexOf("or from the day you agree if that’s later") >= 0, "prospective only, said plainly");
   check(sel(doc, '[data-testid="rate-questions"]').textContent.indexOf("Priya Sharma") >= 0,
         "questions go to the Area Manager");
   check(disabled(doc, "rate-agree"), "Agree waits for the tick");
@@ -3957,7 +3973,7 @@ async function testRateUpdates() {
   eq(H.versionInForce(kdg(), soon).v, 8, "from that day billing reads the new card");
   eq(H.versionInForce(kdg(), H.addDaysIso(soon, -1)).v, 7, "and the old one up to the day before");
   eq((pub.trail || []).map(x => x.by + ":" + x.what),
-     ["am:sent", "ch:approved", "system:sent to the captain", "captain:agreed", "system:published"],
+     ["am:sent", "ch:approved", "zh:approved", "system:sent to the captain", "captain:agreed", "system:published"],
      "every step on its trail");
   check(txt(doc).indexOf("Updated rate card agreed") >= 0, "the captain sees it agreed");
   check(!exists(doc, '[data-testid="bell-count"]'), "and the bell clears");
@@ -3992,6 +4008,9 @@ async function testRateUpdates() {
   btm.effectiveFrom = H.addDaysIso(today, -4);
   clickSel(doc, '[data-aprate="nh-btm"]');
   devClick(doc, "ru:approve:RCU-51130");
+  eq(btm.status, "zh", "the simulator stands in for the Cluster Head, then");
+  check(devText(doc).indexOf("Zonal Head · RCU-51130") >= 0, "the Zonal Head");
+  devClick(doc, "ru:approve:RCU-51130");
   eq(btm.status, "captain", "a late approval goes to the captain all the same");
   check(sel(doc, '[data-testid="ap-rate-where"]').textContent.indexOf("Waiting for Naveen Reddy to agree") >= 0,
         "the AM sees who it’s waiting on");
@@ -4018,8 +4037,9 @@ async function testRateUpdates() {
   eq(jpnU.status, "ch", "a hub-type-only update goes for review too");
   clickSel(doc, '[data-aprate="nh-jpn"]');
   devClick(doc, "ru:approve:" + jpnU.id);
+  devClick(doc, "ru:approve:" + jpnU.id);
   A.adminRateBack();
-  eq(H.ruPhase(jpnU), "scheduled", "and is published once approved");
+  eq(H.ruPhase(jpnU), "scheduled", "and is published once the CH and ZH approve");
   check(!api.state.rateNotices.some(n => n.ref === jpnU.id),
         "without asking the captain — mini-hub and LM-as-FM share the 6.00 touchpoint, so the rates are the same");
   const jpnHub = H.allHubById("nh-jpn");
@@ -4066,7 +4086,8 @@ async function testRateUpdates() {
   devClick(doc, "rate:send:hub-kdg");
   eq(H.rateUpdateFor("hub-kdg").status, "ch", "which goes to the Cluster Head");
   devClick(doc, "ru:approve:" + H.rateUpdateFor("hub-kdg").id);
-  eq(H.ruPhase(H.rateUpdateFor("hub-kdg")), "captain", "approving it there sends it to the captain");
+  devClick(doc, "ru:approve:" + H.rateUpdateFor("hub-kdg").id);
+  eq(H.ruPhase(H.rateUpdateFor("hub-kdg")), "captain", "approving it there, as the CH and then the ZH, sends it to the captain");
   check(api.reload(), "it is saved");
   check(!!H.rateUpdateFor("hub-kdg") && H.rateUpdateFor("hub-kdg").status === "captain" &&
         H.rateVersions(H.hubById("hub-kdg")).length === 8, "and survives a reload, still waiting on the captain");
@@ -4295,7 +4316,10 @@ async function testAmPortfolio() {
   clickSel(doc, '[data-aprate="nh-krm"]');
   check(devText(doc).indexOf("Cluster Head · " + krmUp.id) >= 0, "the dev panel can stand in for the Cluster Head");
   devClick(doc, "ru:approve:" + krmUp.id);
-  eq(H.ruPhase(krmUp), "captain", "approving it sends it to the captain");
+  eq(H.ruPhase(krmUp), "zh", "the Cluster Head’s approval sends it to the Zonal Head");
+  check(devText(doc).indexOf("Zonal Head · " + krmUp.id) >= 0, "who the dev panel can stand in for too");
+  devClick(doc, "ru:approve:" + krmUp.id);
+  eq(H.ruPhase(krmUp), "captain", "whose approval sends it to the captain");
   check(api.state.rateNotices.some(n => n.ref === krmUp.id && n.captain === "Sunil Rao"), "Sunil Rao is asked to agree");
   check(devText(doc).indexOf("Sunil Rao agrees to " + krmUp.id) >= 0, "the dev panel can stand in for him");
   devClick(doc, "ru:agree:" + krmUp.id);
@@ -4438,6 +4462,7 @@ async function testAmDirectChanges() {
   clickSel(doc, '[data-aprate="hub-kdg"]');
   check(devText(doc).indexOf("Cluster Head · " + typeUp.id) >= 0, "the dev panel can stand in for the Cluster Head");
   devClick(doc, "ru:approve:" + typeUp.id);
+  devClick(doc, "ru:approve:" + typeUp.id);
   eq(typeUp.to.touchpoint, "6.00", "the new type brings LM-as-FM’s 6.00 touchpoint with it");
   eq(H.ruPhase(typeUp), "captain", "so, approved, it goes to the captain to agree to the new rates");
   check(api.state.rateNotices.some(n => n.ref === typeUp.id), "who is asked — the hub type itself stays internal");
@@ -4451,14 +4476,15 @@ async function testAmDirectChanges() {
         "rates over the mini-hub ceilings are flagged, with the route they will take");
   A.adminRateBack();
 
-  /* an update above its ceilings: the Cluster Head raises it, Central Admin decides */
+  /* an update above its ceilings: the CH approves, the ZH (or FM Central Ops for them), then BizFin */
   clickSel(doc, '[data-aprate="nh-bld"]');
   const b0 = sel(doc, '[data-rslab="0"][data-rfield="rate"]');
   b0.value = "5.40"; b0.dispatchEvent(new win.Event("input", { bubbles: true }));
   click(doc, "ap-rate-send");
   const bldUp = H.rateUpdateFor("nh-bld");
   check(!!bldUp && bldUp.status === "ch" && H.ruAbove(bldUp), "it still goes to the Cluster Head first");
-  check(api.state.admin.toast.indexOf("they’ll raise it to BizFin") >= 0, "the AM is told where it goes next");
+  check(api.state.admin.toast.indexOf("then the Zonal Head") >= 0 &&
+        api.state.admin.toast.indexOf("BizFin approves it after them") >= 0, "the AM is told where it goes next");
   A.adminSwitchRole();
   clickSel(doc, '[data-aprole="ch"]');
   clickSel(doc, '[data-aptab="rates"]');
@@ -4466,11 +4492,18 @@ async function testAmDirectChanges() {
   clickSel(doc, '[data-apru="' + bldUp.id + '"]');
   check(sel(doc, '[data-testid="ru-checks"]').textContent.indexOf("Above the Standalone ceilings") >= 0,
         "marked above its ceilings");
-  check(!exists(doc, "#ap-ru-approve") && exists(doc, "#ap-ru-raise"), "so the Cluster Head can only raise it");
-  eq(H.rateUpdateDecide(bldUp, "ch", "approve"), "It’s above the ceilings for its hub type — raise it to BizFin instead.",
-     "and approving it is refused even by the action");
-  click(doc, "ap-ru-raise");
-  eq(bldUp.status, "central", "raised, it goes to BizFin");
+  check($(doc, "ap-ru-approve").textContent.indexOf("send to the Zonal Head") >= 0 && !exists(doc, "#ap-ru-raise"),
+        "the Cluster Head approves it on to the Zonal Head — there is no separate raise");
+  click(doc, "ap-ru-approve");
+  eq(bldUp.status, "zh", "so it goes to the Zonal Head");
+  A.adminSwitchRole();
+  asCentral(doc, "ops");
+  clickSel(doc, '[data-aptab="rates"]');
+  check(exists(doc, '[data-ru="' + bldUp.id + '"] .btn-primary'), "FM Central Ops can stand in for the Zonal Head");
+  clickSel(doc, '[data-apru="' + bldUp.id + '"]');
+  check($(doc, "ap-ru-approve").textContent.indexOf("send to BizFin") >= 0, "above the ceilings, that approval goes to BizFin");
+  click(doc, "ap-ru-approve");
+  eq(bldUp.status, "central", "and it’s with BizFin");
   A.adminSwitchRole();
   asCentral(doc, "bizfin");
   clickSel(doc, '[data-aptab="rates"]');
@@ -4478,7 +4511,7 @@ async function testAmDirectChanges() {
   click(doc, "ap-ru-approve");
   eq(bldUp.status, "captain", "BizFin approves it, which sends it to the captain");
   eq((bldUp.trail || []).map(x => x.by + ":" + x.what).join(","),
-     "am:sent,ch:raised to BizFin,central:approved,system:sent to the captain",
+     "am:sent,ch:approved,ops:approved,system:sent to BizFin,central:approved,system:sent to the captain",
      "with its whole route on the trail");
 
   /* sending one back to the Area Manager, who revises and resubmits */
@@ -4744,6 +4777,7 @@ async function testLeanAdmin() {
         "the Cluster Head’s review shows no reason or note");
   check(checks.indexOf("Applies from" + H.fmtIso(krmUp.effectiveFrom)) >= 0, "and says when it applies");
   click(doc, "ap-ru-approve");
+  eq(H.rateUpdateDecide(krmUp, "zh", "approve"), "", "the Zonal Head approves it after");
   A.logout();
   $(doc, "dev-sample").value = "nh-krm";
   devClick(doc, "as:sample");
@@ -5147,7 +5181,11 @@ async function testCentralRates() {
   check(exists(doc, "#ap-ru-approve"), "it decides rate card updates with the Cluster Head");
   click(doc, "ap-ru-approve");
   const elc = H.rateUpdateById("RCU-51144");
-  eq([elc.status, elc.approvedBy], ["captain", "ops"], "approving one as FM Central Ops sends it to the captain");
+  eq(elc.status, "zh", "approving one at the CH step sends it to the ZH");
+  clickSel(doc, '[data-apru="RCU-51144"]');
+  check(exists(doc, "#ap-ru-approve"), "where FM Central Ops can decide it too");
+  click(doc, "ap-ru-approve");
+  eq([elc.status, elc.approvedBy], ["captain", "ops"], "approving it there sends it to the captain");
   check(elc.trail.some(x => x.by === "ops" && x.what === "approved"), "logged as FM Central Ops");
 
   /* --- bulk rate card updates --- */
@@ -5344,7 +5382,7 @@ async function testNoGst() {
   devClick(b.doc, "nogst:decline");
   check(exists(b.doc, '[data-testid="nogst-declined"]'), "a decline asks the captain for a GSTIN");
   check(txt(b.doc).indexOf("Your Area Manager needs a GSTIN for this hub") >= 0, "saying why");
-  check(devText(b.doc).indexOf("waiting for the captain to add a GSTIN") >= 0, "the simulator waits on the captain");
+  check(devText(b.doc).indexOf("Waiting for the captain to add a GSTIN") >= 0, "the simulator waits on the captain");
   type(b.doc, "ch-gstin", "29AAJFS4321M1ZQ");
   click(b.doc, "ch-gstin-go");
   check(txt(b.doc).indexOf(b.api.errors.gstName) >= 0, "the GSTIN is checked as on KYC — someone else’s is refused");
@@ -5390,7 +5428,7 @@ async function testNoGst() {
   check(disabled(d.doc, "am-to-design"), "every gate passed, it still waits on the GST call");
   clickSel(d.doc, '[data-nogst="no"]');
   eq(req().noGst.decision, "declined", "declining is recorded");
-  check(sel(d.doc, '[data-testid="am-nogst"]').textContent.indexOf("the captain is asked to add a GSTIN") >= 0,
+  check(sel(d.doc, '[data-testid="am-nogst"]').textContent.indexOf("The captain is asked to add a GSTIN") >= 0,
         "and says the captain is asked for a GSTIN");
   check(disabled(d.doc, "am-to-design"), "the request waits");
   check(!exists(d.doc, "#ap-reject"), "a decline isn’t a failed hard gate — nothing to reject");
@@ -5483,14 +5521,14 @@ async function testHierarchy() {
         exists(doc, "#ap-ru-zh"), "filters by AM, CH and ZH above the list");
   check(!sel(doc, ".ap-table thead").textContent.match(/Area Manager|Cluster Head|Zonal Head/),
         "and no column for any of them");
-  check(row("RCU-51160").querySelector('[data-testid="ru-waiting-on"]').textContent.indexOf("With CHAnita Rao") >= 0,
+  check(row("RCU-51160").querySelector('[data-testid="ru-waiting-on"]').textContent.indexOf("With ZHPriya Nair") >= 0,
         "the status names the one person it waits on");
   check(!exists(doc, '[data-testid="ap-ru-expanded"]'), "the chain is closed by default");
   clickSel(doc, '[data-ruexp="RCU-51160"]');
   const exp = sel(doc, '[data-testid="ap-ru-expanded"][data-ru="RCU-51160"]');
   check(!!exp && exp.textContent.indexOf("Meena Iyer") >= 0 && exp.textContent.indexOf("Anita Rao") >= 0 &&
         exp.textContent.indexOf("Priya Nair") >= 0, "the chevron opens the AM, CH and ZH");
-  eq(exp.querySelector(".hier-cell.on").getAttribute("data-desk"), "ch", "with the desk it waits on marked");
+  eq(exp.querySelector(".hier-cell.on").getAttribute("data-desk"), "zh", "with the desk it waits on marked");
   check(exp.textContent.indexOf("+91 99860 22451") >= 0, "and their phone numbers");
   clickSel(doc, '[data-ruexp="RCU-51160"]');
   check(!exists(doc, '[data-testid="ap-ru-expanded"]'), "a second click closes it");
@@ -5499,7 +5537,7 @@ async function testHierarchy() {
   setSelect("ap-ru-ch", "all");
   clickSel(doc, '[data-apru="RCU-51160"]');
   check(exists(doc, '[data-testid="ru-review-hierarchy"]') &&
-        sel(doc, '[data-testid="ru-review-hierarchy"] .hier-cell.on').getAttribute("data-desk") === "ch",
+        sel(doc, '[data-testid="ru-review-hierarchy"] .hier-cell.on').getAttribute("data-desk") === "zh",
         "the update’s own page carries the hierarchy card");
   A.adminRuBack();
 
@@ -5526,6 +5564,18 @@ async function testHierarchy() {
   check(ids().indexOf("OBD-78274") >= 0 && ids().indexOf("OBD-78288") === -1,
         "the Zonal Head sees their zone, not another");
   check(pendingWith("OBD-78274").indexOf("Meena Iyer · AM") >= 0, "with who each one waits on");
+  A.adminTab("rates");
+  check(!!row("RCU-51160") && !!row("RCU-51160").querySelector(".btn-primary"),
+        "the Zonal Head reviews rate card updates their Cluster Heads approved");
+  check(!row("RCU-51168"), "only in their own zone");
+  clickSel(doc, '[data-apru="RCU-51160"]');
+  click(doc, "ap-ru-reject");
+  check(txt(doc).indexOf("Say why you’re sending it back") >= 0, "sending one back needs a reason");
+  type(doc, "ap-ru-reason", "Hold the MG Road rates until the mall’s lease renews.");
+  click(doc, "ap-ru-reject");
+  const mgr = H.rateUpdateById("RCU-51160");
+  eq([mgr.status, mgr.rejectedBy], ["revision", "zh"], "the Zonal Head sends it back to the Area Manager");
+  A.adminTab("am");
   A.adminSwitchRole();
   clickSel(doc, '[data-aprole="am"]');
   check(ids().indexOf("OBD-78270") === -1, "the Area Manager sees only their own requests");
@@ -5595,13 +5645,83 @@ async function testSampleNotes() {
   win.close();
 }
 
+/* =========================================================================
+   38. No em dashes in any text on screen
+   ====================================================================== */
+
+async function testNoEmDashes() {
+  section("38. No em dashes in any text on screen");
+  const { win, doc, api } = await boot();
+  const A = api.actions, H = api.helpers;
+  const seen = [];
+  const sweep = (where) => {
+    const body = doc.body.cloneNode(true);
+    body.querySelectorAll("script, style").forEach(e => e.remove());
+    const text = body.textContent + [...doc.querySelectorAll("[placeholder], [aria-label], [title]")]
+      .map(e => [e.getAttribute("placeholder"), e.getAttribute("aria-label"), e.getAttribute("title")].join(" ")).join(" ") +
+      [...doc.querySelectorAll("input, textarea")].map(e => e.value).join(" ");
+    if (text.indexOf("—") >= 0) {
+      const i = text.indexOf("—");
+      seen.push(where + ": …" + text.slice(Math.max(0, i - 40), i + 20).replace(/\s+/g, " ") + "…");
+    }
+  };
+
+  sweep("login");
+  ["LM", "FM"].forEach(role => {
+    A.resetAll();
+    login(doc);
+    sweep("roles");
+    pickRole(doc, role);
+    api.config.PHASES[role].forEach(p => { H.goPhase(p.id); sweep(role + " " + p.id); });
+  });
+
+  A.resetAll();
+  devClick(doc, "as:existing");
+  login(doc);
+  sweep("Captain Hub");
+  click(doc, "bell"); sweep("bell"); click(doc, "bell");
+  A.openRateAgree("RCU-50961"); sweep("rate card update to agree");
+  A.openRateHistory("hub-kdg"); sweep("rate card history");
+  A.openPanel("hubs", "hubs");
+  clickSel(doc, '[data-hubedit="hub-beu"]'); sweep("hub edit form");
+  A.addHubOpen(); A.addHubRole("FM"); sweep("add hub"); click(doc, "addhub-nogst"); sweep("add hub without GST");
+
+  A.logout();
+  devClick(doc, "as:admin");
+  login(doc);
+  sweep("admin role picker");
+  ["am", "ch", "zh"].forEach(role => {
+    A.adminSwitchRole();
+    clickSel(doc, '[data-aprole="' + role + '"]');
+    api.config.ADMIN_TABS[role].forEach(t => {
+      A.adminTab(t.id); sweep(role + " " + t.id);
+      const open = sel(doc, "[data-apopen], [data-apru], [data-aprate], [data-apedit]");
+      if (open) { open.dispatchEvent(new win.MouseEvent("click", { bubbles: true })); sweep(role + " " + t.id + " detail"); }
+    });
+  });
+  ["bizfin", "design", "ops"].forEach(p => {
+    A.adminSwitchRole();
+    asCentral(doc, p);
+    api.config.CENTRAL_TABS[p].forEach(t => {
+      A.adminTab(t.id); sweep(p + " " + t.id);
+      const open = sel(doc, "[data-apopen], [data-apru]");
+      if (open) { open.dispatchEvent(new win.MouseEvent("click", { bubbles: true })); sweep(p + " " + t.id + " detail"); }
+    });
+  });
+
+  eq(seen, [], "no em dash on any screen swept");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
   const t0 = Date.now();
   /* each group runs on its own — a harness error in one is reported and the
      rest still run */
-  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes];
+  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes, testNoEmDashes];
   for (const g of groups) {
     try {
       await g();

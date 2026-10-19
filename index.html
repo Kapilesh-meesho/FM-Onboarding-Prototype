@@ -1187,7 +1187,7 @@ function fixedTp(type) {
 /* "₹3.50" when every column is the same, "₹3.20 → ₹2.20" when they step down. */
 function ceilingText(type, city) {
   var row = ceilingRow(type, city);
-  if (!row) return HUB_CATEGORIES[type] ? "no ceilings for " + (cityKey(city) || "this city") : "—";
+  if (!row) return HUB_CATEGORIES[type] ? "no ceilings for " + (cityKey(city) || "this city") : "-";
   var lo = Math.min.apply(null, row), hi = Math.max.apply(null, row);
   return lo === hi ? "₹" + hi.toFixed(2) : "₹" + row[0].toFixed(2) + " → ₹" + row[row.length - 1].toFixed(2);
 }
@@ -1278,7 +1278,7 @@ var API_FAIL = {
 };
 var FAIL_CODE = { timeout:"504", down:"503" };
 var FAIL_KIND = { timeout:"times out", down:"service down" };
-var FAIL_SAVED = "Your details are saved — nothing you entered is lost. Resume when you’re " +
+var FAIL_SAVED = "Your details are saved, and nothing you entered is lost. Resume when you’re " +
                  "ready, or save and exit: your application opens at this step next time.";
 
 function fmtStamp(d) {
@@ -1357,7 +1357,7 @@ function gstLookup(gstin, own) {
   var rec = own && own.pan && own.name && pan === String(own.pan).toUpperCase()
     ? { legal:String(own.name).toUpperCase(), trade:"", type:"Proprietorship", status:"Active" }
     : GST_REGISTRY[pan];
-  return rec ? Object.assign({ gstin:gstin, state:GST_STATES[gstin.slice(0, 2)] || "—" }, rec) : null;
+  return rec ? Object.assign({ gstin:gstin, state:GST_STATES[gstin.slice(0, 2)] || "-" }, rec) : null;
 }
 
 /* Fuzzy name match. Names are compared word by word in any order ("VERMA
@@ -1458,7 +1458,7 @@ function verifyGstin(holder, gstin, bankName, own) {
 }
 
 var GST_VERDICT = { match:"Matches your bank account name",
-                    similar:"Similar to your bank account name — accepted",
+                    similar:"Similar to your bank account name: accepted",
                     mismatch:"Doesn’t match your bank account name" };
 var GST_TONE = { match:"ok", similar:"warn", mismatch:"bad" };
 
@@ -1476,7 +1476,7 @@ function gstCheckHtml(res) {
     (rec.trade ? row("Trade name", rec.trade) : "") +
     row("Registered in", rec.state + " · " + rec.type) +
     row("Status", rec.status, rec.status === "Active" ? "ok" : "bad") +
-    (m ? row("Bank account name", m.bankName || "—") +
+    (m ? row("Bank account name", m.bankName || "-") +
          row("Name check", GST_VERDICT[m.level] + " · " + m.pct + "%", GST_TONE[m.level])
        : "") +
   '</div>';
@@ -2183,10 +2183,10 @@ function seedExistingNotes() {
       fromCategory:kdg.category, toCategory:kdg.category, source:"update", rejectedBy:"", rejectReason:"",
       to:{ slabs:seedSlabs("3.50", "3.10"), touchpoint:kdg.rateCard.touchpoint },
       effectiveFrom:addDaysIso(todayIso(), 10), status:"captain", sentOn:"07 Oct 2026",
-      approvedBy:"ch", approvedOn:"09 Oct 2026", sentToCaptainOn:"09 Oct 2026",
+      approvedBy:"zh", approvedOn:"09 Oct 2026", sentToCaptainOn:"09 Oct 2026",
       by:ADMIN_ROLES.am.person.name, byPhone:"+91 98450 11223",
-      trail:[t("07 Oct 2026", "am", "sent"), t("09 Oct 2026", "ch", "approved"),
-             t("09 Oct 2026", "system", "sent to the captain", "In-app, SMS and email — to review and agree")] };
+      trail:[t("07 Oct 2026", "am", "sent"), t("09 Oct 2026", "ch", "approved"), t("09 Oct 2026", "zh", "approved"),
+             t("09 Oct 2026", "system", "sent to the captain", "In-app, SMS and email, to review and agree")] };
     u.notice = askCaptain(kdg, u.id, u.effectiveFrom, u.sentToCaptainOn);
     S.rateUpdates.push(u);
     /* the Area Manager corrected Kudlu Gate's max vehicle size after a visit */
@@ -2228,7 +2228,7 @@ function seedKdgHistory(h) {
    ["2026-08-01", "2026-07-27", "3.35", "2.95", "5.00"], ["2026-09-01", "2026-08-26", "3.40", "3.00", "5.00"]]
   .forEach(function (x, i) {
     var ver = addVersion(h, { slabs:seedSlabs(x[2], x[3]), touchpoint:x[4], effectiveFrom:x[0], publishedOn:x[1],
-      source:"update", ref:"RCU-4" + (1001 + i), approvedBy:"ch" });
+      source:"update", ref:"RCU-4" + (1001 + i), approvedBy:"zh" });
     ver.notified = askCaptain(h, ver.ref, ver.effectiveFrom, fmtIso(x[1]));
     ver.agreedOn = fmtIso(x[1]);
   });
@@ -2262,12 +2262,12 @@ function hubDetailsOf(h) {
 function hubEditChanged(e) {
   return HUB_EDIT_FIELDS.filter(function (f) { return e.before[f.id] !== e.after[f.id]; });
 }
-function fmtArea(v) { return v ? Number(v).toLocaleString("en-IN") + " sq ft" : "—"; }
+function fmtArea(v) { return v ? Number(v).toLocaleString("en-IN") + " sq ft" : "-"; }
 function fmtPin(link) {
   var c = parseMapLink(link);
   if (c) return c.lat.toFixed(4) + ", " + c.lng.toFixed(4);
   if (isShortMapLink(link)) return "Google Maps share link";
-  return link ? "No pin in the link" : "—";
+  return link ? "No pin in the link" : "-";
 }
 function fmtPhone(p) {
   p = String(p || "").replace(/\D/g, "").slice(-10);
@@ -2363,7 +2363,7 @@ function isoFromDay(v) {
   if (!m || MONTH_NO[m[2].toLowerCase()] == null) return "";
   return isoOf(new Date(+m[3], MONTH_NO[m[2].toLowerCase()], +m[1]));
 }
-function fmtIso(iso) { return isIso(iso) ? fmtDay(new Date(iso + "T00:00:00")) : "—"; }
+function fmtIso(iso) { return isIso(iso) ? fmtDay(new Date(iso + "T00:00:00")) : "-"; }
 
 /* Rate card versions -----------------------------------------------------------
    Every rate card a hub has had, numbered, each with the day it took effect.
@@ -2593,13 +2593,15 @@ function otherAmRates() {
       source:"update", rejectedBy:"", rejectReason:"", by:am.name, byPhone:am.phone, trail:[] }, o);
   };
   return [
-    /* with Bengaluru Urban West's Cluster Head */
-    up("RCU-51160", "nh-mgr", { status:"ch", sentOn:"04 Oct 2026", effectiveFrom:addDaysIso(today, 9),
-      to:{ slabs:seedSlabs("1.95", "1.85"), touchpoint:"2.00" }, trail:[t("04 Oct 2026", "am", "sent")] }),
-    /* over Mumbai's Standalone ceiling — raised to BizFin by Mumbai's Cluster Head */
+    /* approved by Bengaluru Urban West's Cluster Head — now with the Zonal Head */
+    up("RCU-51160", "nh-mgr", { status:"zh", sentOn:"04 Oct 2026", chApprovedOn:"06 Oct 2026",
+      effectiveFrom:addDaysIso(today, 9), to:{ slabs:seedSlabs("1.95", "1.85"), touchpoint:"2.00" },
+      trail:[t("04 Oct 2026", "am", "sent"), t("06 Oct 2026", "ch", "approved")] }),
+    /* over Mumbai's Standalone ceiling — approved by Mumbai's CH and the West ZH, now with BizFin */
     up("RCU-51168", "nh-adh", { status:"central", sentOn:"29 Sept 2026", raisedOn:"01 Oct 2026",
       effectiveFrom:addDaysIso(today, 12), to:{ slabs:seedSlabs("4.10", "3.60"), touchpoint:"5.00" },
-      trail:[t("29 Sept 2026", "am", "sent"), t("01 Oct 2026", "ch", "raised to BizFin")] }),
+      chApprovedOn:"30 Sept 2026", trail:[t("29 Sept 2026", "am", "sent"), t("30 Sept 2026", "ch", "approved"),
+             t("01 Oct 2026", "zh", "approved"), t("01 Oct 2026", "system", "sent to BizFin", "Above the Standalone ceilings")] }),
     /* sent back to Bengaluru North's Area Manager */
     up("RCU-51174", "nh-pny", { status:"revision", sentOn:"30 Sept 2026", rejectedBy:"ch", rejectedOn:"03 Oct 2026",
       rejectReason:"Peenya volumes don’t support a higher first slab yet.", effectiveFrom:addDaysIso(today, 6),
@@ -2625,33 +2627,33 @@ function portfolioRates() {
   };
   return [
     /* agreed and in force: JP Nagar and Whitefield are on their second version */
-    up("RCU-50988", "nh-jpn", { status:"published", sentOn:"15 Sept 2026", approvedBy:"ch", approvedOn:"17 Sept 2026",
+    up("RCU-50988", "nh-jpn", { status:"published", sentOn:"15 Sept 2026", approvedBy:"zh", approvedOn:"17 Sept 2026",
       sentToCaptainOn:"17 Sept 2026", agreedOn:"19 Sept 2026", publishedOn:"19 Sept 2026", effectiveFrom:"2026-10-01",
       version:2, to:rates("3.00", "2.20", "6.00"),
-      trail:[t("15 Sept 2026", "am", "sent"), t("17 Sept 2026", "ch", "approved"),
-             t("17 Sept 2026", "system", "sent to the captain", "In-app, SMS and email — to review and agree"),
+      trail:[t("15 Sept 2026", "am", "sent"), t("17 Sept 2026", "ch", "approved"), t("17 Sept 2026", "zh", "approved"),
+             t("17 Sept 2026", "system", "sent to the captain", "In-app, SMS and email, to review and agree"),
              t("19 Sept 2026", "captain", "agreed"),
              t("19 Sept 2026", "system", "published", "v2, effective 01 Oct 2026")] }),
-    up("RCU-51102", "nh-whf", { status:"published", sentOn:"27 Sept 2026", approvedBy:"ch", approvedOn:"29 Sept 2026",
+    up("RCU-51102", "nh-whf", { status:"published", sentOn:"27 Sept 2026", approvedBy:"zh", approvedOn:"29 Sept 2026",
       sentToCaptainOn:"29 Sept 2026", agreedOn:"30 Sept 2026", publishedOn:"30 Sept 2026", effectiveFrom:"2026-10-01",
       version:2, to:rates("5.30", "4.80", "6.00"),
-      trail:[t("27 Sept 2026", "am", "sent"), t("29 Sept 2026", "ch", "approved"),
-             t("29 Sept 2026", "system", "sent to the captain", "In-app, SMS and email — to review and agree"),
+      trail:[t("27 Sept 2026", "am", "sent"), t("29 Sept 2026", "ch", "approved"), t("29 Sept 2026", "zh", "approved"),
+             t("29 Sept 2026", "system", "sent to the captain", "In-app, SMS and email, to review and agree"),
              t("30 Sept 2026", "captain", "agreed"),
              t("30 Sept 2026", "system", "published", "v2, effective 01 Oct 2026")] }),
     /* agreed, and scheduled for next week */
-    up("RCU-51117", "nh-mrt", { status:"published", sentOn:"30 Sept 2026", approvedBy:"ch", approvedOn:"01 Oct 2026",
+    up("RCU-51117", "nh-mrt", { status:"published", sentOn:"30 Sept 2026", approvedBy:"zh", approvedOn:"01 Oct 2026",
       sentToCaptainOn:"01 Oct 2026", agreedOn:"03 Oct 2026", publishedOn:"03 Oct 2026",
       effectiveFrom:addDaysIso(today, 7), version:2, to:rates("1.90", "1.80", "2.00"),
-      trail:[t("30 Sept 2026", "am", "sent"), t("01 Oct 2026", "ch", "approved"),
-             t("01 Oct 2026", "system", "sent to the captain", "In-app, SMS and email — to review and agree"),
+      trail:[t("30 Sept 2026", "am", "sent"), t("01 Oct 2026", "ch", "approved"), t("01 Oct 2026", "zh", "approved"),
+             t("01 Oct 2026", "system", "sent to the captain", "In-app, SMS and email, to review and agree"),
              t("03 Oct 2026", "captain", "agreed"),
              t("03 Oct 2026", "system", "published", "v2, effective " + fmtIso(addDaysIso(today, 7)))] }),
     /* approved, and waiting for its captain to agree */
-    up("RCU-51138", "nh-ind", { status:"captain", sentOn:"05 Oct 2026", approvedBy:"ch", approvedOn:"07 Oct 2026",
+    up("RCU-51138", "nh-ind", { status:"captain", sentOn:"05 Oct 2026", approvedBy:"zh", approvedOn:"07 Oct 2026",
       sentToCaptainOn:"07 Oct 2026", effectiveFrom:addDaysIso(today, 10), to:rates("2.00", "1.85", "2.00"),
-      trail:[t("05 Oct 2026", "am", "sent"), t("07 Oct 2026", "ch", "approved"),
-             t("07 Oct 2026", "system", "sent to the captain", "In-app, SMS and email — to review and agree")] }),
+      trail:[t("05 Oct 2026", "am", "sent"), t("07 Oct 2026", "ch", "approved"), t("07 Oct 2026", "zh", "approved"),
+             t("07 Oct 2026", "system", "sent to the captain", "In-app, SMS and email, to review and agree")] }),
     /* sent back to the Area Manager */
     up("RCU-51123", "nh-hsr", { status:"revision", sentOn:"28 Sept 2026", rejectedBy:"ch", rejectedOn:"30 Sept 2026",
       rejectReason:"The first slab can’t rise while HSR volumes are flat.", effectiveFrom:addDaysIso(today, 5),
@@ -2668,7 +2670,8 @@ function portfolioRates() {
     /* above its ceilings — raised to BizFin */
     up("RCU-51151", "nh-dml", { status:"central", sentOn:"28 Sept 2026", raisedOn:"30 Sept 2026",
       effectiveFrom:addDaysIso(today, 10), to:rates("3.90", "3.40", "5.00"),
-      trail:[t("28 Sept 2026", "am", "sent"), t("30 Sept 2026", "ch", "raised to BizFin")] })
+      chApprovedOn:"29 Sept 2026", trail:[t("28 Sept 2026", "am", "sent"), t("29 Sept 2026", "ch", "approved"),
+             t("30 Sept 2026", "zh", "approved"), t("30 Sept 2026", "system", "sent to BizFin", "Above the Standalone ceilings")] })
   ];
 }
 /* A seeded update with the captain: the ask they were sent. One they already
@@ -2831,7 +2834,7 @@ function amChangeById(id) {
   return null;
 }
 function amChangeValue(k, v) {
-  return k === "mapLink" ? fmtPin(v) : k === "category" ? ((HUB_CATEGORIES[v] || {}).label || "—") : (v || "—");
+  return k === "mapLink" ? fmtPin(v) : k === "category" ? ((HUB_CATEGORIES[v] || {}).label || "-") : (v || "-");
 }
 function amChangeSummary(c) {
   return c.fields.filter(function (k) { return k !== "category"; }).map(function (k) {
@@ -2855,6 +2858,7 @@ function rateUpdateById(id) {
    published: scheduled until its day, then in force, then superseded. */
 var RU_STATUS = {
   ch:        { label:"With the Cluster Head", tone:"blue",  open:true },
+  zh:        { label:"With the Zonal Head",   tone:"blue",  open:true },
   central:   { label:"With BizFin",           tone:"blue",  open:true },
   captain:   { label:"Waiting for the captain", tone:"amber", open:true },
   revision:  { label:"Sent back to you",      tone:"red",   open:true },
@@ -2864,7 +2868,7 @@ var RU_STATUS = {
   withdrawn: { label:"Withdrawn",             tone:"grey",  open:false },
   rejected:  { label:"Not approved",          tone:"grey",  open:false }
 };
-var DESK = { am:"Area Manager", ch:"Cluster Head", central:"BizFin", ops:"FM Central Ops",
+var DESK = { am:"Area Manager", ch:"Cluster Head", zh:"Zonal Head", central:"BizFin", ops:"FM Central Ops",
              system:"System", captain:"Captain" };
 function ruOpen(u) { return !!(u && RU_STATUS[u.status] && RU_STATUS[u.status].open); }
 /* Where a published update stands today. */
@@ -2897,30 +2901,33 @@ function ruTrail(u, by, what, note) {
   u.trail.push({ at:fmtDay(new Date()), by:by, what:what, note:note || "" });
 }
 /* A desk's decision on an update. Returns an error to show, or "" when done.
-   `actor` is who decided: the desk itself, or FM Central Ops acting on the
-   Cluster Head's desk. */
+   `actor` is who decided: the desk itself, or FM Central Ops standing in for
+   the Cluster Head or the Zonal Head. Every change goes CH → ZH; above the
+   ceilings, BizFin after that; then the captain agrees. */
 function rateUpdateDecide(u, desk, decision, reason, actor) {
   if (!u || u.status !== desk) return "This update isn’t with you.";
   actor = actor || desk;
   var above = ruAbove(u), bulk = u.source === "bulk";
   if (decision === "reject") {
     if (!String(reason || "").trim()) {
-      return "Say why you’re sending it back — " + (bulk ? "FM Central Ops" : "the Area Manager") + " sees this.";
+      return "Say why you’re sending it back, as " + (bulk ? "FM Central Ops" : "the Area Manager") + " sees this.";
     }
     u.status = bulk ? "rejected" : "revision"; u.rejectedBy = actor;
     u.rejectReason = String(reason).trim(); u.rejectedOn = fmtDay(new Date());
     ruTrail(u, actor, bulk ? "not approved" : "sent back", u.rejectReason);
     return "";
   }
-  if (decision === "raise") {
-    if (desk !== "ch" || !above) return "Only a card above its hub type’s ceilings is raised to BizFin.";
-    u.status = "central"; u.raisedOn = fmtDay(new Date());
-    ruTrail(u, actor, "raised to BizFin");
-    return "";
-  }
   if (decision === "approve") {
-    if (desk === "ch" && above) return "It’s above the ceilings for its hub type — raise it to BizFin instead.";
     ruTrail(u, actor, "approved");
+    var today = fmtDay(new Date());
+    if (desk === "ch") { u.status = "zh"; u.chApprovedOn = today; return ""; }        // on to the Zonal Head
+    if (desk === "zh" && above) {                                                    // above the ceilings: BizFin
+      u.status = "central"; u.zhApprovedOn = today; u.raisedOn = today;
+      ruTrail(u, "system", "sent to BizFin", "Above the " + ((HUB_CATEGORIES[u.toCategory] || {}).label || "") +
+              " ceilings");
+      return "";
+    }
+    if (desk === "zh") u.zhApprovedOn = today;
     sendToCaptain(u, actor);
     return "";
   }
@@ -2936,7 +2943,7 @@ function sendToCaptain(u, by) {
   if (!h) return null;
   u.status = "captain"; u.sentToCaptainOn = u.approvedOn;
   u.notice = askCaptain(h, u.id, u.effectiveFrom);
-  ruTrail(u, "system", "sent to the captain", "In-app, SMS and email — to review and agree");
+  ruTrail(u, "system", "sent to the captain", "In-app, SMS and email, to review and agree");
   return null;
 }
 /* The captain agrees: the update is published as the hub's next version. */
@@ -2957,7 +2964,7 @@ function publishRateUpdate(u, by) {
   if (asked < today) {
     ruTrail(u, "system", "effective date moved",
       (u.agreedOn ? "Agreed" : "Published") + " after " + fmtIso(asked) + ", so it applies from " + fmtIso(eff) +
-      " — never backdated");
+      ", never backdated");
   }
   u.effectiveFrom = eff;
   var typeOnly = sameRateCard(u.from, u.to);
@@ -2974,14 +2981,14 @@ function publishRateUpdate(u, by) {
                   notify:false, seen:true });
   }
   ruTrail(u, "system", "published", "v" + ver.v + ", effective " + fmtIso(eff));
-  if (typeOnly) ruTrail(u, "system", "captain not asked", "Only the hub type changed — the rates are the same");
+  if (typeOnly) ruTrail(u, "system", "captain not asked", "Only the hub type changed; the rates are the same");
   return ver;
 }
 function rateHubs() {                    // live FM hubs with a rate card the AM can change
   return amHubs().filter(function (h) { return h.status === "active" && h.role === "FM" && h.rateCard; });
 }
 function rateSummary(rc) {
-  if (!rc) return "—";
+  if (!rc) return "-";
   return (rc.slabs || []).map(function (sl) { return "₹" + sl.rate + " (" + slabLabel(sl) + ")"; })
     .join(" · ") + (rc.touchpoint ? " · touchpoint ₹" + rc.touchpoint : "");
 }
@@ -2992,7 +2999,7 @@ function rateCardRowsHtml(rc, testid) {
              '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
     }).join("") +
     '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
-      esc(rc.touchpoint || "—") + ' / shipment</span></div></div>';
+      esc(rc.touchpoint || "-") + ' / shipment</span></div></div>';
 }
 function sameRateCard(a, b) {
   var norm = function (rc) {
@@ -3038,7 +3045,7 @@ function captainNotes() {
       ? { kind:"amchange", id:c.id, act:false, title:"Hub details updated · " + c.hubName,
           sub:"Your Area Manager changed the " +
               joinAnd(c.fields.map(function (k) { return AM_CHANGE_FIELDS[k].toLowerCase(); })) +
-              ". It’s already live — nothing for you to do.",
+              ". It’s already live, so there’s nothing for you to do.",
           cta:"View hub →" }
       : { kind:"amchange", id:c.id, act:false, title:"Map pin corrected · " + c.requestId,
           sub:"Your Area Manager moved the pin for " + c.hubName + " to " + fmtPin(c.after.mapLink) +
@@ -3303,10 +3310,10 @@ function progressPct() {
    and carries on; the Area Manager approves or declines it in their review.
    Declined, the captain adds a GSTIN before the review goes any further. */
 var NO_GST_REASONS = ["My turnover is below the GST threshold",
-                      "I’ve applied for GST — the GSTIN isn’t issued yet",
+                      "I’ve applied for GST, but the GSTIN isn’t issued yet",
                       "Other"];
 var NO_GST_LABEL = { pending:"Awaiting Area Manager approval", approved:"Approved by the Area Manager",
-                     declined:"Declined — a GSTIN is needed" };
+                     declined:"Declined: a GSTIN is needed" };
 function noGstState(g) {
   return g && g.registered === false && g.noGst ? (g.noGst.decision || "pending") : null;
 }
@@ -3439,7 +3446,7 @@ function defaultHubName(r) {
   return ((r.hub && (r.hub.selected || r.hub.pincode)) || "New") + " Hub";
 }
 function money(n) {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return "₹" + (Math.round(n * 100) / 100).toFixed(2);
 }
 function maskPhone(p) {
@@ -3630,15 +3637,15 @@ var ADMIN_ROLES = {
     id:"zh", label:"Zonal Head", short:"ZH", icon:"₹",
     // the LM design describes adjusting a security deposit; FM has none, and the
     // Zonal Head does not approve — they watch what is pending with AMs and CHs
-    desc:"Monitor pendencies sitting with Area Managers and Cluster Heads across the zone.",
+    desc:"Approve rate card updates after the Cluster Head, and monitor what is pending with AMs and CHs.",
     cta:"Continue as ZH →",
     person:{ name:"Priya Nair", email:"priya.nair@meesho.com", scope:"Zone: South" },
     title:"FM Onboarding",
-    lede:"What is pending with Area Managers and Cluster Heads across South zone."
+    lede:"Rate card updates to approve, and what is pending with Area Managers and Cluster Heads across South zone."
   },
   central: {
     id:"central", label:"FM Central Admin", short:"CA", icon:"🛡",
-    desc:"BizFin, the Design team or FM Central Ops — pick which in the backend simulator once you’re in.",
+    desc:"BizFin, the Design team or FM Central Ops. Pick which in the backend simulator once you’re in.",
     cta:"Continue as Central Admin →",
     person:{ name:"Central Admin", email:"fm.central@meesho.com", scope:"National" },
     title:"FM Onboarding",
@@ -3741,7 +3748,8 @@ var ADMIN_TABS = {
             { id:"am",   label:"AM requests" },
             { id:"rates",label:"Rate card updates" }],
   zh:      [{ id:"am",   label:"AM pendency" },
-            { id:"ch",   label:"CH pendency" }],
+            { id:"ch",   label:"CH pendency" },
+            { id:"rates",label:"Rate card updates" }],
   central: []                          // per persona — see CENTRAL_TABS
 };
 var CENTRAL_TABS = {
@@ -3766,12 +3774,17 @@ function actsAs(desk) {
   if (S.admin.role === desk) return true;
   return S.admin.role === "central" && S.admin.central === "ops" && (desk === "am" || desk === "ch");
 }
-/* The rate card update queue this admin works: the Cluster Head's (FM Central
-   Ops decides there too) or BizFin's, above the ceilings. */
-function rateDesk() {
-  if (actsAs("ch")) return "ch";
-  return S.admin.role === "central" && S.admin.central === "bizfin" ? "central" : null;
+/* The rate card update desks this admin works: the Cluster Head's, the Zonal
+   Head's — FM Central Ops stands in at both — or BizFin's, above the ceilings. */
+function rateDesks() {
+  var a = S.admin;
+  if (a.role === "ch") return ["ch"];
+  if (a.role === "zh") return ["zh"];
+  if (a.role === "central" && a.central === "ops") return ["ch", "zh"];
+  if (a.role === "central" && a.central === "bizfin") return ["central"];
+  return [];
 }
+function rateDesk() { return rateDesks()[0] || null; }
 function rateActor() {
   return S.admin.role === "central" && S.admin.central === "ops" ? "ops" : rateDesk();
 }
@@ -3841,7 +3854,7 @@ function apReq(o) {
    they made one, otherwise what the captain submitted. */
 function apMapLink(r) { return (r.am && r.am.mapLink) || r.mapLink || ""; }
 var AM_MAP_HINT = "Tap the map to move the pin, or paste a Google Maps link. Saved straight to this " +
-                  "request — the captain is not asked to verify it again, just told it changed.";
+                  "request. The captain is not asked to verify it again, just told it changed.";
 
 /* A request only reaches the Cluster Head by passing the Area Manager's infra
    check first, so seeded downstream requests carry that work as done. Without
@@ -4135,7 +4148,7 @@ function hubSidebar() {
         '<span class="av"></span>' +
         '<span class="who">' +
           '<b>' + esc(S.profile.name || "Captain") + '</b>' +
-          '<span class="hbadge"><b>' + esc(h ? h.code : "—") + '</b><i>▾</i></span>' +
+          '<span class="hbadge"><b>' + esc(h ? h.code : "-") + '</b><i>▾</i></span>' +
         '</span>' +
         '<span class="chev">›</span>' +
       '</button>' +
@@ -4174,9 +4187,9 @@ function panelTabs(tab) {
 
 function panelPersonal() {
   var pr = S.profile, b = pr.bank, bk = S.panel.bank;
-  var maskedAadhaar = pr.aadhaar ? "XXXX XXXX " + pr.aadhaar.slice(-4) : "—";
-  var maskedPan = pr.pan ? pr.pan.slice(0, 5) + "••••" + pr.pan.slice(-1) : "—";
-  var maskedAcc = b.acc ? b.bankName + " •••• " + b.acc.slice(-4) : "—";
+  var maskedAadhaar = pr.aadhaar ? "XXXX XXXX " + pr.aadhaar.slice(-4) : "-";
+  var maskedPan = pr.pan ? pr.pan.slice(0, 5) + "••••" + pr.pan.slice(-1) : "-";
+  var maskedAcc = b.acc ? b.bankName + " •••• " + b.acc.slice(-4) : "-";
 
   return '<div class="crumbs">My Profile<span class="sep">›</span><b>Personal Details</b></div>' +
     '<h2 class="hub-h1"><button id="hub-back">‹</button>My Profile</h2>' +
@@ -4197,7 +4210,7 @@ function panelPersonal() {
       '<div class="ph"><b>Bank account</b><span>Used for all your payouts</span></div>' +
       '<div class="prow"><div class="pl"><span class="k">Bank account</span>' +
         '<span class="v">' + esc(maskedAcc) + '</span>' +
-        '<span class="s">IFSC ' + esc(b.ifsc || "—") + ' · ' + esc(b.holder || "—") + '</span></div>' +
+        '<span class="s">IFSC ' + esc(b.ifsc || "-") + ' · ' + esc(b.holder || "-") + '</span></div>' +
         '<div class="pr">' +
           (b.verified ? '<span class="pill-ok">✓ Verified</span>' : '<span class="pill-mute">Unverified</span>') +
           '<button class="btn btn-ghost" id="bank-edit">Edit</button>' +
@@ -4303,7 +4316,7 @@ function hubCard(h) {
       PHASES[h.role].length + '</span>' +
       (paused
         ? '<span class="s" data-testid="hub-paused" style="font-size:11px;color:var(--err);' +
-          'font-weight:600">' + esc(paused.what) + ' didn’t go through — ' + esc(paused.reason) + '</span>'
+          'font-weight:600">' + esc(paused.what) + ' didn’t go through: ' + esc(paused.reason) + '</span>'
         : '') + '</div>' +
       '<div class="pr"><button class="btn btn-primary" data-resume="' + esc(h.id) + '">' +
       'Resume onboarding</button></div></div>';
@@ -4313,7 +4326,7 @@ function hubCard(h) {
       '<div class="pr">' +
         (inactive
           ? '<span class="s" style="font-size:11px;color:var(--muted)">Deactivated on ' +
-            esc(h.deactivatedOn || "—") + '</span>'
+            esc(h.deactivatedOn || "-") + '</span>'
           : '<button class="btn btn-ghost" data-gst="' + esc(h.id) + '">' +
             (h.gst.registered ? "Manage GSTIN" : "Add GSTIN") + '</button>') +
       '</div></div>';
@@ -4338,7 +4351,7 @@ function hubCard(h) {
         '<span class="v">Edit sent to your Area Manager · ' + esc(he.submittedOn) + '</span>' +
         '<span class="s" style="font-size:11px;color:var(--muted)">' +
           esc(hubEditChanged(he).map(function (f) { return f.label; }).join(", ")) +
-          ' — your hub runs on its current details until it is approved.</span></div>' +
+          '. Your hub runs on its current details until it is approved.</span></div>' +
         '<div class="pr"><span class="pill-mute">Awaiting approval</span></div></div>';
     } else if (!editingDetails) {
       detailsRow = '<div class="prow"><div class="pl"><span class="k">Hub details</span>' +
@@ -4351,7 +4364,7 @@ function hubCard(h) {
     if (amc && !editingDetails) {
       detailsRow += '<div style="padding:0 20px 16px"><div class="notice info" data-testid="hub-am-updated" ' +
         'style="margin:0"><b>Your Area Manager updated this hub on ' + esc(amc.at) + '</b>' +
-        esc(amChangeSummary(amc)) + '. Already live — nothing for you to do.' +
+        esc(amChangeSummary(amc)) + '. Already live, so there’s nothing for you to do.' +
         '<div style="margin-top:10px"><button class="btn btn-ghost" data-amdismiss="' + esc(amc.id) + '">' +
         'Dismiss</button></div></div></div>';
     }
@@ -4359,7 +4372,7 @@ function hubCard(h) {
       detailsRow += he.status === "approved"
         ? '<div style="padding:0 20px 16px"><div class="notice ok" data-testid="hub-edit-approved" style="margin:0">' +
           '<b>Hub details updated</b>Your Area Manager approved the edit on ' + esc(he.decidedOn) +
-          ' — the new ' + esc(hubEditChanged(he).map(function (f) { return f.label.toLowerCase(); }).join(", ")) +
+          '. The new ' + esc(hubEditChanged(he).map(function (f) { return f.label.toLowerCase(); }).join(", ")) +
           ' ' + (hubEditChanged(he).length > 1 ? "are" : "is") + ' live.' +
           '<div style="margin-top:10px"><button class="btn btn-ghost" data-hedismiss="' + esc(he.id) + '">Dismiss</button></div>' +
           '</div></div>'
@@ -4373,7 +4386,7 @@ function hubCard(h) {
 
   return '<div class="hub-card' + (inactive ? " off" : "") + '" data-hub="' + esc(h.id) + '">' +
     '<div class="hh">' +
-      '<span class="hcode">Hub ' + esc(h.code || "—") + '</span>' +
+      '<span class="hcode">Hub ' + esc(h.code || "-") + '</span>' +
       '<span class="ht"><b>' + esc(name) + '</b>' +
         '<span>' + esc(address) + (pin ? " · " + esc(pin) : "") + '</span>' +
         '<span class="hrole">' + esc(h.role) + ' Captain</span></span>' +
@@ -4401,7 +4414,7 @@ function rateTableHtml(card, testid) {
         (to ? ' – ' + esc(fmtOrders(to)) : ' and above') + '</td>' +
         '<td class="num">₹' + esc(sl.rate) + ' / shipment</td></tr>';
     }).join("") +
-    '<tr class="tp"><td colspan="2">Touchpoint rate</td><td class="num">₹' + esc(card.touchpoint || "—") +
+    '<tr class="tp"><td colspan="2">Touchpoint rate</td><td class="num">₹' + esc(card.touchpoint || "-") +
       ' / shipment</td></tr>' +
   '</tbody></table>';
 }
@@ -4456,7 +4469,7 @@ function panelRateAgree() {
         '<button class="btn btn-primary" id="hub-back-hubs-2">Back to My Hubs</button></div>'
     : '<div class="notice info" style="margin-bottom:16px"><b>Your Area Manager has updated this hub’s rates</b>' +
         esc(u.by) + ' changed the rates for ' + esc(u.hubName) + ' (' + esc(u.hubCode) + '). They apply from ' +
-        esc(fmtIso(u.effectiveFrom)) + ' once you agree — or from the day you agree, if that’s later. ' +
+        esc(fmtIso(u.effectiveFrom)) + ' once you agree, or from the day you agree if that’s later. ' +
         'Until then your current rates apply.</div>' +
       '<div class="rate-cmp">' +
         '<div><span class="cap">Current</span>' + rateTableHtml(cur, "rate-current") + '</div>' +
@@ -4698,7 +4711,7 @@ function panelAddHub() {
         'How is this hub registered for GST?</b>' +
       '<p style="margin:0 0 18px;font-size:13px;font-weight:500;color:var(--muted);line-height:19px">' +
         'Your KYC and bank details carry over automatically. Choose the GST setup for this new hub ' +
-        '— you can change it later.</p>' +
+        '(you can change it later).</p>' +
 
       (fmNoGst
         ? noGstForm("addhub", a.noGstDraft, a.noGstErrors) +
@@ -4730,7 +4743,7 @@ function panelAddHub() {
            : fmNoGst ? "Continue without GST →" : "Continue to hub details →") +
         '</button>' +
         '<div style="margin-top:10px;font-size:11px;color:var(--muted)">' +
-          'Personal details, KYC and background verification carry over — you start at ' +
+          'Personal details, KYC and background verification carry over, so you start at ' +
           'hub details.</div>' +
       '</div>' +
     '</div></div>';
@@ -4822,7 +4835,8 @@ function apTabs() {
       ? S.hubEdits.filter(function (e) { return e.status === "pending"; }).length
       : t.id === "rates"
       ? S.rateUpdates.filter(function (u) {
-          return u.status === (a.role === "am" ? "revision" : rateDesk()) && onMyPatch(ruChain(u).amId);
+          return (a.role === "am" ? u.status === "revision" : rateDesks().indexOf(u.status) >= 0) &&
+                 onMyPatch(ruChain(u).amId);
         }).length
       : t.id === "slabs" && a.central === "bizfin"
       ? S.slabSettings.requests.filter(function (x) { return x.status === "pending"; }).length
@@ -4939,7 +4953,7 @@ function apContext(r) {
             ? 'No GST · ' + esc(NO_GST_LABEL[r.noGst.decision || "pending"]) : 'GSTIN verified') + '</span></div>' +
         apMapRow(r) +
         '<div class="row"><span class="k">Max vehicle size</span><span class="v">' +
-          esc(amEffectiveVehicle(r) || "—") +
+          esc(amEffectiveVehicle(r) || "-") +
           (r.am.maxVehicle ? ' <span class="st amber">AM updated</span>' : '') + '</span></div>' +
       '</div>' +
       (actsAs("am") && r.am.mapEditing ? apMapEditor(r) : '') +
@@ -5059,8 +5073,8 @@ function apAmInfraPage(r) {
 
   var reviewSub = a.vehicleReview === false
     ? (a.maxVehicle ? "Corrected to " + a.maxVehicle
-                    : "Marked incorrect — set the size the location can actually take")
-    : "Captain declared: " + (a.declaredVehicle || "—");
+                    : "Marked incorrect: set the size the location can actually take")
+    : "Captain declared: " + (a.declaredVehicle || "-");
 
   var vehicleRow =
     '<div class="ap-gate" data-testid="am-vehicle-review" style="align-items:flex-start;' +
@@ -5093,10 +5107,10 @@ function apAmInfraPage(r) {
         '</div>' +
       '</div>' +
       (ng.decision === "declined"
-        ? '<span class="hint err" style="padding:0">Declined — the captain is asked to add a GSTIN. This ' +
+        ? '<span class="hint err" style="padding:0">Declined. The captain is asked to add a GSTIN. This ' +
           'request waits here until they do.</span>'
         : ng.decision === "approved"
-        ? '<span class="hint" style="padding:0">Approved — the hub goes live without GST. The captain can add a ' +
+        ? '<span class="hint" style="padding:0">Approved. The hub goes live without GST. The captain can add a ' +
           'GSTIN later from My Hubs.</span>'
         : '<span class="hint" style="padding:0">Approve it to carry on, or decline it to ask the captain for a ' +
           'GSTIN.</span>') +
@@ -5105,7 +5119,7 @@ function apAmInfraPage(r) {
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div>' +
       '<span class="hubcode" data-testid="am-hubcode">Hub code ' +
-        esc(r.hubCode || "—") + '</span>' +
+        esc(r.hubCode || "-") + '</span>' +
       '<b>Area Manager infra check</b>' +
       '<span>Any failed hard gate requires rejection. Floor area is AM-entered value.</span></div>' +
       (gateFailed ? '<span class="st red">Hard gate failed</span>'
@@ -5170,7 +5184,7 @@ function apAmDesignPage(r) {
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div>' +
-      '<span class="hubcode">Hub code ' + esc(r.hubCode || "—") + '</span>' +
+      '<span class="hubcode">Hub code ' + esc(r.hubCode || "-") + '</span>' +
       '<b>FM Carting Design Input</b>' +
       '<span>Map this hub onto its sorting centre and cross-docks.</span></div>' +
       status + '</div>' +
@@ -5205,9 +5219,9 @@ function apAmDesignPage(r) {
         '</select></div></div>' +
       '<div class="kv" style="margin-top:16px" data-testid="am-design-summary">' +
         '<div class="row"><span class="k">Assigned hub code</span>' +
-          '<span class="v">' + esc(r.hubCode || "—") + '</span></div>' +
+          '<span class="v">' + esc(r.hubCode || "-") + '</span></div>' +
         '<div class="row"><span class="k">Carts to</span>' +
-          '<span class="v">' + esc(parseCodes(d.fmsc)[0] || "—") + '</span></div>' +
+          '<span class="v">' + esc(parseCodes(d.fmsc)[0] || "-") + '</span></div>' +
         '<div class="row"><span class="k">Cross-docks</span>' +
           '<span class="v">' + (fmcds.length ? esc(fmcds.join(", ")) : "None") + '</span></div>' +
       '</div>' +
@@ -5291,7 +5305,7 @@ function slabEditor(r) {
           'value="' + esc(sl.rate) + '"></div>' +
       '<div class="sf ceil"><span class="sl">Ceiling</span>' +
         '<span class="cv' + (over ? ' over' : '') + '">' +
-          (cat ? ceilingCell(r.hubCategory, r.city, sl) : "—") +
+          (cat ? ceilingCell(r.hubCategory, r.city, sl) : "-") +
           (over ? ' · over' : '') + '</span></div>' +
     '</div>';
   }).join("");
@@ -5307,7 +5321,7 @@ function slabEditor(r) {
         'id="am-rate-status">' +
         (!complete ? "Incomplete" : (over ? "Above ceiling" : "Within ceiling")) + '</span></div>' +
     (!cat
-      ? '<div class="hint err" style="padding-bottom:8px">Select a hub type first — it sets ' +
+      ? '<div class="hint err" style="padding-bottom:8px">Select a hub type first. It sets ' +
         'the slab ceilings and the touchpoint rate.</div>'
       : '') +
     rows +
@@ -5315,9 +5329,9 @@ function slabEditor(r) {
       '<div class="sf" style="max-width:230px">' +
         '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
         '<span class="bv" id="am-touchpoint" data-testid="am-tp-fixed">' +
-          (cat ? "₹" + esc(fixedTp(r.hubCategory)) : "—") + '</span></div>' +
+          (cat ? "₹" + esc(fixedTp(r.hubCategory)) : "-") + '</span></div>' +
       '<span class="tph">Paid per touchpoint, on top of the slab rate. Fixed for ' +
-        (cat ? esc(cat.label) + ' hubs' : 'each hub type') + ' — it isn’t priced per hub.</span></div>' +
+        (cat ? esc(cat.label) + ' hubs' : 'each hub type') + ', and isn’t priced per hub.</span></div>' +
     '<div class="hint err" style="padding-top:8px" id="am-rate-incomplete"' +
       (complete ? ' hidden' : '') + '>' +
       'Every slab needs a rate.</div>' +
@@ -5342,11 +5356,11 @@ function apRateCardRows(r) {
       '</span></div>';
   }).join("") +
   '<div class="row"><span class="k">Touchpoint rate</span>' +
-    '<span class="v' + (r.rate.touchpoint ? ' ok' : '') + '">₹' + esc(r.rate.touchpoint || "—") + ' / shipment' +
+    '<span class="v' + (r.rate.touchpoint ? ' ok' : '') + '">₹' + esc(r.rate.touchpoint || "-") + ' / shipment' +
     (cat ? ' <span class="mute">· fixed for ' + esc(cat.label) + '</span>' : '') + '</span></div>' +
-  '<div class="row"><span class="k">Slab ceilings (' + esc(cat ? cat.label : "—") + ', ' +
-    esc(cityKey(r.city) || "—") + ')</span>' +
-    '<span class="v">' + esc(cat ? ceilingText(r.hubCategory, r.city) : "—") + '</span></div>';
+  '<div class="row"><span class="k">Slab ceilings (' + esc(cat ? cat.label : "-") + ', ' +
+    esc(cityKey(r.city) || "-") + ')</span>' +
+    '<span class="v">' + esc(cat ? ceilingText(r.hubCategory, r.city) : "-") + '</span></div>';
 }
 
 function apChDetail(r) {
@@ -5394,7 +5408,7 @@ function apChDetail(r) {
       (r.rateEscalated
         ? '<div class="notice warn" data-testid="ch-rate-escalated">' +
           '<b>Raised by the Area Manager</b>' + esc(apOverageText(r)) +
-          ' It cannot be settled here — raise it to BizFin, or reject it so the ' +
+          ' It cannot be settled here: raise it to BizFin, or reject it so the ' +
           'Area Manager can revise it.</div>'
         : '') +
       '<div class="fl"><label>Interview notes</label>' +
@@ -5433,7 +5447,7 @@ function apZhDetail(r, role) {
   var stageLabel = { am:"Area Manager", ch:"Cluster Head", central:"BizFin" }[r.stage] || "no one";
   var zh = role === "zh";
   var sit = settled
-    ? 'This request is closed — it was ' + esc(r.settled) + '. There is nothing to action here.'
+    ? 'This request is closed: it was ' + esc(r.settled) + '. There is nothing to action here.'
     : 'This request is pending with the ' + esc(stageLabel) + '. There is nothing to action here.';
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>Request status</b>' +
@@ -5450,7 +5464,7 @@ function apZhDetail(r, role) {
         '<div class="row"><span class="k">Hub type</span><span class="v">' +
           esc((HUB_CATEGORIES[r.hubCategory] || {}).label || "Not set") + '</span></div>' +
         '<div class="row"><span class="k">Cluster Head rating</span><span class="v">' +
-          esc(r.ch.rating || "—") + '</span></div>' +
+          esc(r.ch.rating || "-") + '</span></div>' +
       '</div>' +
       '<div class="kv">' + apRateCardRows(r) + '</div>' +
     '</div>' +
@@ -5460,8 +5474,8 @@ function apZhDetail(r, role) {
 
   return '<h2>Request status</h2>' +
     '<p class="lede">' + (zh
-      ? 'Monitoring view — no action is taken from the Zonal Head panel.'
-      : 'Read-only — this request is not on your desk right now.') + '</p>' +
+      ? 'Monitoring view. No action is taken from the Zonal Head panel.'
+      : 'Read-only. This request is not on your desk right now.') + '</p>' +
     '<div class="ap-detail"><div class="dl">' + left + '</div>' +
     '<div class="dr">' + apContext(r) + apSla(r, "SLA", "Tracked against the current desk") + '</div></div>';
 }
@@ -5479,15 +5493,15 @@ function apCentralDesignDetail(r) {
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div>' +
-      '<span class="hubcode">Hub code ' + esc(r.hubCode || "—") + '</span>' +
+      '<span class="hubcode">Hub code ' + esc(r.hubCode || "-") + '</span>' +
       '<b>Design alignment</b>' +
       '<span>Approve the carting design, or correct the FM → FMSC mapping first.</span></div>' +
       (d.approved ? '<span class="st green">Approved</span>'
                   : '<span class="st amber">Awaiting alignment</span>') + '</div>' +
     '<div class="ap-form">' +
       '<div class="kv" style="margin-bottom:18px" data-testid="central-design-inputs">' +
-        row("City", esc(r.city || "—")) +
-        row("Hub code", esc(r.hubCode || "—")) +
+        row("City", esc(r.city || "-")) +
+        row("Hub code", esc(r.hubCode || "-")) +
         row("Lat-Long / Map link", (function () {
           var link = apMapLink(r), c = parseMapLink(link);
           var tag = r.am.mapLink ? ' <span class="st amber">AM updated</span>' : '';
@@ -5500,17 +5514,17 @@ function apCentralDesignDetail(r) {
             return 'Google Maps share link · <a href="' + esc(link) + '" target="_blank" rel="noopener" ' +
                    'style="color:var(--cyan-ink);text-decoration:none">Open map ↗</a>' + tag;
           }
-          return "—";
+          return "-";
         })()) +
-        row("Pincodes serving", esc((r.pincodesServing || []).join(", ") || "—")) +
-        row("Max vehicle size", esc(amEffectiveVehicle(r) || "—")) +
-        row("Hub type", cat ? esc(cat) : '<span class="mute">Not set yet — AM sets it on the rate card</span>') +
-        row("Hub address", esc(r.address || "—")) +
-        row("Hub pincode", esc(r.pincode || "—")) +
-        row("State", esc(r.state || "—")) +
+        row("Pincodes serving", esc((r.pincodesServing || []).join(", ") || "-")) +
+        row("Max vehicle size", esc(amEffectiveVehicle(r) || "-")) +
+        row("Hub type", cat ? esc(cat) : '<span class="mute">Not set yet (the AM sets it on the rate card)</span>') +
+        row("Hub address", esc(r.address || "-")) +
+        row("Hub pincode", esc(r.pincode || "-")) +
+        row("State", esc(r.state || "-")) +
         row("Split from / New expansion",
             d.onboarding === "split" ? "Split from existing"
-          : d.onboarding === "expansion" ? "New expansion" : "—") +
+          : d.onboarding === "expansion" ? "New expansion" : "-") +
         row("Multitouch", d.onboarding === "multitouch" ? "Yes" : "No") +
       '</div>' +
       '<div style="margin:4px 0 10px"><span style="display:block;font-size:11px;font-weight:700;' +
@@ -5555,11 +5569,11 @@ function lcFirst(t) { return t ? t.charAt(0).toLowerCase() + t.slice(1) : t; }
 
 function apCentralDetail(r) {
   var c = r.ch;
-  var catLabel = (HUB_CATEGORIES[r.hubCategory] || {}).label || "—";
+  var catLabel = (HUB_CATEGORIES[r.hubCategory] || {}).label || "-";
 
   var left = '<div class="ap-panel">' +
     '<div class="ph"><div><b>BizFin approval</b>' +
-      '<span>Rate cards above a benchmark ceiling for their hub category — slab or ' +
+      '<span>Rate cards above a benchmark ceiling for their hub category, slab or ' +
         'touchpoint.</span></div>' +
       '<span class="st amber">Above threshold</span></div>' +
     '<div class="ap-form">' +
@@ -5612,7 +5626,7 @@ function viewAdmin() {
   if (a.role === "central" && !centralPersona()) return apShell(apCentralPick());
   var body = '<h2>' + esc(m.title) + '</h2><p class="lede">' + esc(m.lede) + '</p>' +
              apTabs() + (a.tab === "edits" ? apEditList()
-                       : a.tab === "rates" ? (a.role === "am" ? apRateList() : apRateQueue(rateDesk()))
+                       : a.tab === "rates" ? (a.role === "am" ? apRateList() : apRateQueue(rateDesks()))
                        : a.tab === "slabs" ? apSlabSettings()
                        : a.tab === "bulk" ? apBulkUpdate()
                        : apList());
@@ -5637,15 +5651,15 @@ function ruCompareHtml(u) {
       rateCardRowsHtml(u.to, "ru-proposed") + '</div></div>' +
     '<div class="kv" style="margin-bottom:16px" data-testid="ru-checks">' +
       row("Hub type", u.toCategory !== u.fromCategory
-        ? esc(fromCm ? fromCm.label : "—") + ' → <b>' + esc(cm ? cm.label : "—") + '</b>' +
+        ? esc(fromCm ? fromCm.label : "-") + ' → <b>' + esc(cm ? cm.label : "-") + '</b>' +
           ' <span class="mute">· takes effect on ' + esc(fmtIso(u.effectiveFrom)) + '</span>'
-        : esc(cm ? cm.label : "—") + ' <span class="mute">· unchanged</span>') +
+        : esc(cm ? cm.label : "-") + ' <span class="mute">· unchanged</span>') +
       row("Ceilings", cm ? (above ? 'Above the ' + esc(cm.label) + ' ceilings' : 'Within the ' + esc(cm.label) +
           ' ceilings') + ' <span class="mute">· slabs ' + esc(ceilingText(u.toCategory, hubCity(h))) +
-          ' in ' + esc(cityKey(hubCity(h)) || "—") + ', touchpoint fixed at ₹' + esc(fixedTp(u.toCategory)) +
-          '</span>' : '—', above ? 'bad' : 'ok') +
-      row("Rates", typeOnly ? 'Unchanged — only the hub type moves, so the captain isn’t asked to agree'
-                            : 'Changed — the captain agrees before it applies') +
+          ' in ' + esc(cityKey(hubCity(h)) || "-") + ', touchpoint fixed at ₹' + esc(fixedTp(u.toCategory)) +
+          '</span>' : '-', above ? 'bad' : 'ok') +
+      row("Rates", typeOnly ? 'Unchanged. Only the hub type moves, so the captain isn’t asked to agree'
+                            : 'Changed. The captain agrees before it applies') +
       row("Applies from", esc(fmtIso(u.effectiveFrom)) +
         (phase === "scheduled" ? ' <span class="mute">· scheduled</span>'
          : phase === "live" ? ' <span class="mute">· in force</span>'
@@ -5657,7 +5671,7 @@ function ruCompareHtml(u) {
               ' · not agreed yet</span>')
         : ver && ver.agreedOn
         ? row("Captain agreed", esc(ver.agreedOn) + (ver.notified ? ' <span class="mute">· asked ' +
-              esc(ver.notified.at) + ' — ' + esc(noticeText(ver.notified)) + '</span>' : ''), 'ok')
+              esc(ver.notified.at) + ': ' + esc(noticeText(ver.notified)) + '</span>' : ''), 'ok')
         : '') +
     '</div>';
 }
@@ -5668,7 +5682,7 @@ function ruTrailHtml(u) {
       'Trail</span><table class="ap-table" data-testid="ru-trail"><tbody>' +
     t.map(function (x) {
       return '<tr><td style="width:110px">' + esc(x.at) + '</td><td style="font-weight:600">' + esc(DESK[x.by] || x.by) +
-        '</td><td>' + esc(x.what) + (x.note ? ' — ' + esc(x.note) : '') + '</td></tr>';
+        '</td><td>' + esc(x.what) + (x.note ? ': ' + esc(x.note) : '') + '</td></tr>';
     }).join("") + '</tbody></table>';
 }
 function ruStatusCell(u) {
@@ -5701,10 +5715,10 @@ function rateVersionLog(h) {
         '<td style="white-space:normal;max-width:260px">' + esc(rateSummary(v)) +
           (v.category && HUB_CATEGORIES[v.category] ? apSub(esc(HUB_CATEGORIES[v.category].label)) : '') + '</td>' +
         '<td>' + (v.source === "onboarding" ? 'At onboarding'
-                  : esc(DESK[v.approvedBy] || v.approvedBy || "—")) + apSub(esc(v.ref || "")) + '</td>' +
+                  : esc(DESK[v.approvedBy] || v.approvedBy || "-")) + apSub(esc(v.ref || "")) + '</td>' +
         '<td>' + (v.source === "onboarding" ? 'At onboarding'
                  : v.agreedOn ? esc(v.agreedOn) + (v.notified ? apSub('asked ' + esc(v.notified.at)) : '')
-                 : v.typeOnly ? '<span class="mute">Not asked — hub type only</span>' : '<span class="mute">—</span>') +
+                 : v.typeOnly ? '<span class="mute">Not asked (hub type only)</span>' : '<span class="mute">-</span>') +
         '</td></tr>';
     }).join("") + '</tbody></table>';
 }
@@ -5758,7 +5772,7 @@ function apSlabSettings() {
             esc(a.slabReason) + '" placeholder="e.g. Keep the first slab at 2,500"></div></div>' +
           '<div style="display:flex;gap:10px;justify-content:flex-end">' +
             '<button class="btn btn-ghost" data-slabdecide="reject:' + esc(x.id) + '" style="color:var(--err)">Reject</button>' +
-            '<button class="btn btn-primary" data-slabdecide="approve:' + esc(x.id) + '">Approve — apply it</button></div>'
+            '<button class="btn btn-primary" data-slabdecide="approve:' + esc(x.id) + '">Approve and apply it</button></div>'
         : '<div style="margin-top:6px">Waiting for BizFin to approve it. You can propose another once it’s decided.</div>') +
     '</div>';
   };
@@ -5793,7 +5807,7 @@ function apSlabSettings() {
         return '<tr><td class="id">' + esc(x.id) + apSub(esc(x.at) + ' · ' + esc(x.by)) + '</td><td style="white-space:normal">' +
           esc(x.types.map(function (k) { return HUB_CATEGORIES[k].label; }).join(", ")) + '</td>' +
           '<td style="white-space:normal">' + esc(breaksText(x.breaks)) + '</td><td>' + esc(x.approvedBy) + '</td></tr>';
-      }).join("") : '<tr><td class="empty" colspan="4">No changes yet — every hub type is on 2,500-order steps.</td></tr>') +
+      }).join("") : '<tr><td class="empty" colspan="4">No changes yet. Every hub type is on 2,500-order steps.</td></tr>') +
     '</tbody></table></div>';
 }
 
@@ -5811,7 +5825,7 @@ function bulkPlan(b) {
   var hubs = amHubs(true), bands = null;
   var rows = codes.map(function (code) {
     var h = hubs.filter(function (x) { return x.code === code; })[0], why = "", open;
-    if (!h) why = LEGACY_FM_HUBS[code] ? "Not onboarded through the tool yet — its onboarding agreement isn’t signed"
+    if (!h) why = LEGACY_FM_HUBS[code] ? "Not onboarded through the tool yet, so its onboarding agreement isn’t signed"
                                        : "No hub with this code";
     else if (h.role !== "FM") why = "Not an FM hub";
     else if (h.status !== "active") why = "The hub isn’t active";
@@ -5855,9 +5869,9 @@ function apBulkUpdate() {
     var cm = row.h && HUB_CATEGORIES[row.h.category];
     return '<tr data-testid="bulk-row" data-code="' + esc(row.code) + '" data-result="' +
         (row.why ? "out" : row.above ? "bizfin" : "publish") + '">' +
-      '<td class="id">' + esc(row.code) + apSub(esc(row.name || "—")) + '</td>' +
-      '<td>' + esc(cm ? cm.label : "—") + '</td>' +
-      '<td style="white-space:normal">' + (row.h && row.h.rateCard ? esc(rateSummary(row.h.rateCard)) : '—') + '</td>' +
+      '<td class="id">' + esc(row.code) + apSub(esc(row.name || "-")) + '</td>' +
+      '<td>' + esc(cm ? cm.label : "-") + '</td>' +
+      '<td style="white-space:normal">' + (row.h && row.h.rateCard ? esc(rateSummary(row.h.rateCard)) : '-') + '</td>' +
       '<td style="white-space:normal">' + (row.why ? '<span class="st grey">Left out</span>' + apSub(esc(row.why))
         : row.above ? '<span class="st amber">Goes to BizFin</span>' + apSub('Above the ' + esc(cm.label) + ' ceilings')
         : '<span class="st green">Goes to the captain</span>' + apSub('Within the ' + esc(cm.label) + ' ceilings')) + '</td></tr>';
@@ -5886,7 +5900,7 @@ function apBulkUpdate() {
           '</div>' +
         '<div class="fl" style="max-width:260px;margin-top:12px"><label>Applies from</label><div class="box">' +
           '<input type="date" id="ap-bulk-from" min="' + todayIso() + '" value="' + esc(b.effectiveFrom) + '"></div>' +
-          '<div class="hint">Today or later — never backdated.</div></div>' +
+          '<div class="hint">Today or later, never backdated.</div></div>' +
         (plan.rows.length
           ? '<table class="ap-table" data-testid="bulk-plan" style="margin:8px 0 12px"><thead><tr><th>Hub</th>' +
             '<th>Hub type</th><th>Rate card in force</th><th>What happens</th></tr></thead><tbody>' +
@@ -5903,8 +5917,8 @@ function apBulkUpdate() {
         '<th>Sent to captains</th><th>Sent to BizFin</th><th>Left out</th></tr></thead><tbody>' +
       (log.length ? log.map(function (x) {
         return '<tr><td class="id">' + esc(x.id) + apSub(esc(x.at)) + '</td><td>' + esc(fmtIso(x.effectiveFrom)) + '</td>' +
-          '<td>' + esc(x.published.join(", ") || "—") + '</td><td>' + esc(x.toBizFin.join(", ") || "—") + '</td>' +
-          '<td style="white-space:normal">' + esc(x.excluded.map(function (e) { return e.code; }).join(", ") || "—") + '</td></tr>';
+          '<td>' + esc(x.published.join(", ") || "-") + '</td><td>' + esc(x.toBizFin.join(", ") || "-") + '</td>' +
+          '<td style="white-space:normal">' + esc(x.excluded.map(function (e) { return e.code; }).join(", ") || "-") + '</td></tr>';
       }).join("") : '<tr><td class="empty" colspan="5">No bulk updates yet.</td></tr>') +
     '</tbody></table></div>';
 }
@@ -5916,11 +5930,11 @@ function apRateList() {
   var all = rateHubs().map(function (h) { return { h:h, u:rateUpdateFor(h.id), o:hubOwner(h) }; });
   var st = function (x) { return x.u ? ruPhase(x.u) : "live"; };
   var cnt = function (list) { return all.filter(function (x) { return list.indexOf(st(x)) >= 0; }).length; };
-  var rank = { revision:0, ch:1, central:1, captain:2, scheduled:3, live:4 };
+  var rank = { revision:0, ch:1, zh:1, central:1, captain:2, scheduled:3, live:4 };
   var shown = all.filter(function (x) {
     var s0 = st(x);
     if (f === "revision" && s0 !== "revision") return false;
-    if (f === "review" && s0 !== "ch" && s0 !== "central") return false;
+    if (f === "review" && s0 !== "ch" && s0 !== "zh" && s0 !== "central") return false;
     if (f === "captain" && s0 !== "captain") return false;
     if (f === "scheduled" && s0 !== "scheduled") return false;
     if (f === "live" && s0 !== "live") return false;
@@ -5934,7 +5948,7 @@ function apRateList() {
         return '<tr data-testid="ap-rate-row" data-ratehub="' + esc(h.id) + '" data-status="' + st(x) + '">' +
           '<td class="id">Hub ' + esc(h.code) + apSub(esc(h.name)) + '</td>' +
           '<td>' + esc(x.o.name) + apSub(esc(x.o.phone)) + '</td>' +
-          '<td>' + esc(cat ? cat.label : "—") + '</td>' +
+          '<td>' + esc(cat ? cat.label : "-") + '</td>' +
           '<td style="max-width:260px;white-space:normal">' + esc(rateSummary(h.rateCard)) +
             apSub('v' + (h.rateCard.version || 1) + ' · in force since ' + esc(fmtIso(h.rateCard.effectiveFrom))) + '</td>' +
           '<td>' + (u ? ruStatusCell(u) : '<span class="st green">In force</span>') + '</td>' +
@@ -5950,7 +5964,7 @@ function apRateList() {
   };
   return '<div class="ap-stats" data-testid="ap-rate-stats">' +
       apStatTile("blue", "FM hubs under you", all.length, "Each with a rate card in force") +
-      apStatTile("blue", "In review", cnt(["ch", "central"]), "With the Cluster Head or BizFin") +
+      apStatTile("blue", "In review", cnt(["ch", "zh", "central"]), "With the CH, the ZH or BizFin") +
       apStatTile("amber", "With captains", cnt(["captain"]), "Approved, waiting for them to agree") +
       apStatTile("amber", "Scheduled", cnt(["scheduled"]), "Agreed, applying from a later day") +
       apStatTile("red", "Sent back to you", cnt(["revision"]), cnt(["revision"]) ? "Revise or withdraw" : "Nothing to revise") +
@@ -5958,7 +5972,7 @@ function apRateList() {
     '<div class="ap-panel">' +
       '<div class="ph"><div><b>Rate card updates</b>' +
         '<span>Change a hub’s rates, or its hub type, from a day you pick. Every update goes to the Cluster Head ' +
-        '(and on to BizFin above the ceilings). Once approved it goes to the captain, in the app and by SMS and ' +
+        'and the Zonal Head (and on to BizFin above the ceilings). Once approved it goes to the captain, in the app and by SMS and ' +
         'email; when they agree it’s published, and it applies from that day.</span></div>' +
         '<div class="ap-filters">' +
           '<input id="ap-rate-search" placeholder="Search hub, captain, phone, hub type" value="' +
@@ -5981,6 +5995,7 @@ function apRateList() {
 function ruWaitingOn(u) {
   var c = ruChain(u), p = ruPhase(u);
   return p === "ch" ? { desk:"ch", label:"With CH", tone:"blue", name:c.ch.name, since:u.sentOn }
+       : p === "zh" ? { desk:"zh", label:"With ZH", tone:"blue", name:c.zh.name, since:u.chApprovedOn || u.sentOn }
        : p === "central" ? { desk:"bizfin", label:"With BizFin", tone:"amber", name:"BizFin", since:u.raisedOn || u.sentOn }
        : p === "revision" ? { desk:"am", label:"With AM", tone:"red", name:c.am.name, since:u.rejectedOn }
        : p === "captain" ? { desk:"captain", label:"With captain", tone:"amber", name:u.captain,
@@ -6001,23 +6016,23 @@ function ruWaitingCell(u) {
   return '<span class="st ' + w.tone + '">' + w.label + '</span>' +
     apSub(esc(w.name) + (age ? ' · ' + esc(age) : ''));
 }
-function apRateQueue(desk) {
-  var a = S.admin, ops = a.role === "central" && a.central === "ops";
+function apRateQueue(desks) {
+  var a = S.admin, ops = a.role === "central" && a.central === "ops", biz = desks.indexOf("central") >= 0;
   var f = { am:a.ruAm, ch:a.ruCh, zh:a.ruZh };
   var shown = function (u) { var c = ruChain(u); return onMyPatch(c.amId) && chainMatches(c, f); };
-  var waiting = S.rateUpdates.filter(function (u) { return u.status === desk && shown(u); });
+  var waiting = S.rateUpdates.filter(function (u) { return desks.indexOf(u.status) >= 0 && shown(u); });
   var actor = rateActor();
   /* decided here and still pending further along; published, withdrawn and
      declined ones drop off (they stay in the data, with their trail) */
   var decided = S.rateUpdates.filter(function (u) {
-    return u.status !== desk && ruOpen(u) && shown(u) &&
+    return desks.indexOf(u.status) < 0 && ruOpen(u) && shown(u) &&
            (u.trail || []).some(function (t) { return t.by === actor; });
   }).slice().reverse();
   var change = function (u) {
     var bits = [];
     if (!sameRateCard(u.from, u.to)) bits.push("Rates");
     if (u.toCategory !== u.fromCategory) bits.push("Hub type → " + ((HUB_CATEGORIES[u.toCategory] || {}).label || ""));
-    return (bits.join(" · ") || "—") + (u.source === "bulk" ? " · bulk " + (u.bulkId || "") : "");
+    return (bits.join(" · ") || "-") + (u.source === "bulk" ? " · bulk " + (u.bulkId || "") : "");
   };
   /* Design D: a chevron opens the row onto its AM, CH and ZH */
   var line = function (u, act) {
@@ -6047,27 +6062,32 @@ function apRateQueue(desk) {
   return (filters ? '<div class="ap-filters" data-testid="ap-ru-filters" style="margin:0 0 14px">' + filters + '</div>' : '') +
     '<div class="ap-stats" data-testid="ap-ru-stats">' +
       apStatTile("amber", "Waiting for you", waiting.length, waiting.length ? "Rate card updates to review" : "All caught up") +
-      (desk === "ch"
-        ? apStatTile("red", "Above ceiling", above, above ? "Raise these to BizFin" : "None to raise")
-        : apStatTile("red", "Raised to you", waiting.length, "Above their hub type’s ceilings")) +
+      (biz
+        ? apStatTile("red", "Raised to you", waiting.length, "Above their hub type’s ceilings")
+        : apStatTile("red", "Above ceiling", above, above ? "BizFin approves these after the ZH" : "None above")) +
       apStatTile("green", "Decided by you", decided.length, "Still pending further along") +
     '</div>' +
     table("Waiting for your review",
-      desk === "ch"
-        ? (ops ? "Updates with the Cluster Head. As FM Central Ops you can decide them too: approve within the " +
-                 "ceilings, raise above them to BizFin, or send them back."
-               : "Area Managers’ changes to rate cards and hub types. Within the ceilings you approve; above them you raise to BizFin.") +
-          " Approving sends it to the captain to agree."
-        : "Updates above their hub type’s ceilings, raised by the Cluster Head or sent by FM Central Ops in bulk. " +
-          "Approving sends it to the captain to agree.",
+      biz
+        ? "Updates above their hub type’s ceilings, approved by the Cluster Head and the Zonal Head, or sent by " +
+          "FM Central Ops in bulk. Approving sends it to the captain to agree."
+        : ops
+        ? "Updates with the Cluster Head or the Zonal Head. As FM Central Ops you can decide them at either step. " +
+          "Every change goes from the CH to the ZH; above the ceilings it goes on to BizFin; then the captain agrees."
+        : a.role === "zh"
+        ? "Rate card changes your Cluster Heads have approved. Within the ceilings, approving sends it to the captain " +
+          "to agree; above them, it goes on to BizFin first."
+        : "Area Managers’ changes to rate cards and hub types. Approving sends it to the Zonal Head; above the " +
+          "ceilings it then goes on to BizFin, and the captain agrees last.",
       waiting.map(function (u) { return line(u, true); }).join(""), "Nothing waiting for you.") +
-    table("Decided by you", "Still pending further along, the captain included — once agreed, it drops off here.",
+    table("Decided by you", "Still pending further along, the captain included. Once agreed, it drops off here.",
       decided.map(function (u) { return line(u, false); }).join(""), "Nothing still pending.");
 }
 
 /* A desk's review of one update. */
 function apRateReview(u) {
-  var desk = rateDesk(), mine = !!desk && u.status === desk, above = ruAbove(u), m = ruMeta(u), p = ruPhase(u);
+  var mine = rateDesks().indexOf(u.status) >= 0, desk = mine ? u.status : null;
+  var above = ruAbove(u), m = ruMeta(u), p = ruPhase(u);
   var typeOnly = sameRateCard(u.from, u.to), bulk = u.source === "bulk";
   var actions = "";
   if (mine) {
@@ -6080,10 +6100,10 @@ function apRateReview(u) {
       '<div style="display:flex;gap:10px;justify-content:flex-end">' +
         '<button class="btn btn-ghost" id="ap-ru-reject" style="color:var(--err)">' +
           (bulk ? 'Don’t approve' : 'Send back to the Area Manager') + '</button>' +
-        (desk === "ch" && above
-          ? '<button class="btn btn-primary" id="ap-ru-raise">Raise to BizFin</button>'
-          : '<button class="btn btn-primary" id="ap-ru-approve">' +
-            (typeOnly ? 'Approve — publish the hub type' : 'Approve — send to the captain to agree') + '</button>') +
+        '<button class="btn btn-primary" id="ap-ru-approve">' +
+          (desk === "ch" ? 'Approve and send to the Zonal Head'
+           : desk === "zh" && above ? 'Approve and send to BizFin'
+           : typeOnly ? 'Approve and publish the hub type' : 'Approve and send to the captain to agree') + '</button>' +
       '</div>';
   } else {
     var ver = u.version && rateVersions(allHubById(u.hubId)).filter(function (x) { return x.v === u.version; })[0];
@@ -6098,9 +6118,10 @@ function apRateReview(u) {
        : p === "rejected" ? 'BizFin didn’t approve it: ' + esc(u.rejectReason)
        : p === "central" ? 'Raised to BizFin on ' + esc(u.raisedOn || u.sentOn) + '.'
        : p === "captain" ? 'Approved by the ' + esc(DESK[u.approvedBy] || "") + ' on ' + esc(u.approvedOn) +
-         ' — waiting for ' + esc(u.captain) + ' to agree. Asked ' + esc((u.notice || {}).at || u.sentToCaptainOn || "") +
+         '. Waiting for ' + esc(u.captain) + ' to agree. Asked ' + esc((u.notice || {}).at || u.sentToCaptainOn || "") +
          ' in the app, by SMS and email.'
        : p === "withdrawn" ? 'The Area Manager withdrew it.'
+       : p === "zh" ? 'Approved by the Cluster Head on ' + esc(u.chApprovedOn || "") + '. It’s with the Zonal Head.'
        : 'With the Cluster Head.') + '</div>';
   }
   return '<div class="ap-detail" data-testid="ap-ru-review">' +
@@ -6138,17 +6159,21 @@ function apRateDetail(h) {
     var cm = HUB_CATEGORIES[u.toCategory];
     var where = u.status === "ch"
       ? '<b>With the Cluster Head since ' + esc(u.sentOn) + '</b>' + esc(hubChain(h).ch.name) +
-        ' reviews it. Within the ' + esc(cm ? cm.label : "") + ' ceilings they approve it; above them they raise it ' +
-        'to BizFin. The captain hears nothing until it is approved.'
+        ' reviews it, then the Zonal Head' + (ruAbove(u) ? ', then BizFin, as it’s above the ' + esc(cm ? cm.label : "") +
+        ' ceilings' : '') + '. The captain hears nothing until it is approved.'
+      : u.status === "zh"
+      ? '<b>With the Zonal Head since ' + esc(u.chApprovedOn || u.sentOn) + '</b>The Cluster Head approved it; ' +
+        esc(hubChain(h).zh.name) + ' reviews it now' + (ruAbove(u) ? ', and BizFin after that' : '') +
+        '. The captain hears nothing until it is approved.'
       : u.status === "central"
       ? '<b>With BizFin since ' + esc(u.raisedOn || u.sentOn) + '</b>It is above the ' +
         esc(cm ? cm.label : "") + ' ceilings. The captain hears nothing until it is approved.'
       : u.status === "captain"
       ? '<b>Waiting for ' + esc(u.captain) + ' to agree</b>Approved by the ' + esc(DESK[u.approvedBy] || "") + ' on ' +
         esc(u.approvedOn) + ' and sent to the captain in the app, by SMS and by email. It applies from ' +
-        esc(fmtIso(u.effectiveFrom)) + ' once they agree — or from the day they agree, if that’s later. Until then ' +
+        esc(fmtIso(u.effectiveFrom)) + ' once they agree, or from the day they agree if that’s later. Until then ' +
         'the card in force stays.'
-      : '<b>Agreed' + (u.agreedOn ? ' on ' + esc(u.agreedOn) : '') + ' — applies from ' +
+      : '<b>Agreed' + (u.agreedOn ? ' on ' + esc(u.agreedOn) : '') + ', applies from ' +
         esc(fmtIso(u.effectiveFrom)) + '</b>' +
         (sameRateCard(u.from, u.to) ? 'Only the hub type changes, so the captain wasn’t asked. ' : '') +
         'Until then the card in force stays. The next update can be sent once this one applies.';
@@ -6175,7 +6200,7 @@ function apRateDetail(h) {
   }).join("");
   return '<div class="ap-detail" data-testid="ap-rate-detail">' + head +
     (u ? '<div class="notice bad" data-testid="ap-rate-sentback"><b>Sent back by the ' + esc(DESK[u.rejectedBy] || "") +
-         ' on ' + esc(u.rejectedOn) + '</b>' + esc(u.rejectReason) + ' Revise it and resubmit, or withdraw it — the ' +
+         ' on ' + esc(u.rejectedOn) + '</b>' + esc(u.rejectReason) + ' Revise it and resubmit, or withdraw it. The ' +
          'hub stays on the card in force either way.</div>' : '') +
     '<span style="display:block;font-size:11px;font-weight:700;color:var(--cyan-label);margin-bottom:8px">' +
       'Rate card in force</span>' + rateCardRowsHtml(h.rateCard) +
@@ -6188,28 +6213,28 @@ function apRateDetail(h) {
             ' · touchpoint ₹' + fixedTp(k) + '</option>';
         }).join("") + '</select></div>' +
         '<div class="hint">' + (d.category !== h.category
-          ? 'Changing from ' + esc((HUB_CATEGORIES[h.category] || {}).label || "—") + ' — it takes effect on the ' +
+          ? 'Changing from ' + esc((HUB_CATEGORIES[h.category] || {}).label || "-") + '. It takes effect on the ' +
             'day the update applies. '
-          : '') + 'Internal to VALMO — the captain sees only the rates, never the hub type.</div></div>' +
+          : '') + 'Internal to VALMO. The captain sees only the rates, never the hub type.</div></div>' +
       '<div class="fl" data-testid="ap-rate-from"><label>Applies from</label><div class="box">' +
         '<input type="date" id="ap-rate-from" min="' + todayIso() + '" value="' + esc(d.effectiveFrom || "") + '"></div>' +
-        '<div class="hint">Today or later — rate cards are never backdated. If the captain agrees after this day, ' +
+        '<div class="hint">Today or later, as rate cards are never backdated. If the captain agrees after this day, ' +
           'it applies from the day they agree.</div></div>' +
     '</div>' +
     '<div class="slabs" style="margin-top:6px" data-testid="ap-rate-editor">' +
       '<div class="sh"><div><b>Updated rate card</b><span>Price each slab' +
-        (cm2 ? ' — the ' + esc(cm2.label) + ' ceilings for ' + esc(cityKey(city) || "this city") +
+        (cm2 ? '. The ' + esc(cm2.label) + ' ceilings for ' + esc(cityKey(city) || "this city") +
                ' are shown on each' : '') + '. The slabs are set centrally for the hub type.</span></div></div>' +
       rows +
       '<div class="slab-tp" data-testid="ap-rate-tp"><div class="sf" style="max-width:230px">' +
         '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
         '<span class="bv" id="ap-rate-tp">₹' + esc(fixedTp(dcat)) + '</span></div>' +
-        '<span class="tph">Fixed for ' + esc(cm2 ? cm2.label : "the hub type") + ' hubs — it changes only with ' +
+        '<span class="tph">Fixed for ' + esc(cm2 ? cm2.label : "the hub type") + ' hubs, and changes only with ' +
           'the hub type.</span></div>' +
     '</div>' +
     (draftAbove
       ? '<div class="notice warn" data-testid="ap-rate-above" style="margin-top:12px"><b>Above the ' + esc(cm2.label) +
-        ' ceilings</b>You can still send it — the Cluster Head raises it to BizFin for approval.</div>'
+        ' ceilings</b>You can still send it. After the Cluster Head and the Zonal Head, BizFin approves it.</div>'
       : '') +
     (S.admin.rateError ? '<div class="notice bad" data-testid="ap-rate-error">' + esc(S.admin.rateError) + '</div>' : '') +
     '<div style="display:flex;gap:10px;justify-content:flex-end">' +
@@ -6274,7 +6299,7 @@ function apEditList() {
         return '<tr data-testid="ap-hub-row" data-hubrow="' + esc(h.id) + '" data-status="' + x.st + '">' +
           '<td class="id">Hub ' + esc(h.code) + apSub(esc(h.name) + ' · ' + esc(h.role)) + '</td>' +
           '<td>' + esc(x.o.name) + apSub(esc(x.o.phone)) + '</td>' +
-          '<td>' + esc(h.pincode || "—") + apSub(esc(area ? area.name : (h.city || ""))) + '</td>' +
+          '<td>' + esc(h.pincode || "-") + apSub(esc(area ? area.name : (h.city || ""))) + '</td>' +
           '<td>' + status + '</td>' +
           '<td style="text-align:right">' + act + '</td></tr>';
       }).join("")
@@ -6292,7 +6317,7 @@ function apEditList() {
     '<div class="ap-panel">' +
       '<div class="ph"><div><b>Hub edits</b>' +
         '<span>Every hub under you. A captain asking to change a live hub\u2019s address, pincode, map ' +
-        'pin or area waits here — approving applies it, rejecting keeps the hub as it is.</span></div>' +
+        'pin or area waits here. Approving applies it; rejecting keeps the hub as it is.</span></div>' +
         '<div class="ap-filters">' +
           '<input id="ap-hub-search" placeholder="Search hub, captain, phone, pincode" value="' +
             esc(a.hubSearch || "") + '">' +
@@ -6310,7 +6335,7 @@ function apEditList() {
 /* One hub under the Area Manager: what it runs on now, and every edit asked of it. */
 /* Coordinates typed straight in ("12.9346, 77.6262") or a Google Maps link. */
 var AH_MAP_HINT = "Tap the map to move the pin, or enter coordinates (12.9346, 77.6262) or a Google " +
-                  "Maps link. Saved straight to the hub — the captain is notified, with nothing to verify.";
+                  "Maps link. Saved straight to the hub, and the captain is notified, with nothing to verify.";
 var AH_COORDS_ERR = "Enter coordinates like 12.9346, 77.6262, or a Google Maps link.";
 function parseCoords(t) {
   var m = String(t || "").trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
@@ -6351,13 +6376,13 @@ function apHubView(h) {
     : isShortMapLink(h.mapLink)
       ? '<a href="' + esc(h.mapLink) + '" target="_blank" rel="noopener" style="color:var(--cyan-ink);' +
         'text-decoration:none">Google Maps share link ↗</a>'
-      : '—';
+      : '-';
 
   var editor = "";
   if (editing) {
     var d = S.admin.hubDraft;
     editor = '<div class="slabs" data-testid="ap-hub-editor" style="margin-bottom:16px">' +
-      '<div class="sh"><div><b>Edit hub details</b><span>Applied straight away — ' + esc(o.name) +
+      '<div class="sh"><div><b>Edit hub details</b><span>Applied straight away: ' + esc(o.name) +
         ' is notified, with nothing to approve or verify.</span></div></div>' +
       '<div class="fl"><label>Hub address</label><div class="box">' +
         '<input id="ah-address" value="' + esc(d.address) + '"></div></div>' +
@@ -6372,7 +6397,7 @@ function apHubView(h) {
         VEHICLE_TYPES.map(function (v) {
           return '<option value="' + esc(v) + '"' + (d.maxVehicle === v ? ' selected' : '') + '>' + esc(v) + '</option>';
         }).join("") + '</select></div>' +
-        '<div class="hint">The largest vehicle the hub can take — everything smaller fits.</div></div>' +
+        '<div class="hint">The largest vehicle the hub can take. Everything smaller fits.</div></div>' +
       (S.admin.hubError ? '<div class="notice bad" data-testid="ap-hub-error">' + esc(S.admin.hubError) + '</div>' : '') +
       '<div style="display:flex;gap:10px;justify-content:flex-end">' +
         '<button class="btn btn-ghost" id="ah-cancel">Cancel</button>' +
@@ -6394,7 +6419,7 @@ function apHubView(h) {
       '<span class="hubcode">Hub ' + esc(h.code) + '</span>' +
       '<b>' + esc(h.name) + '</b>' +
       '<span>' + esc(o.name) + ' · ' + esc(o.phone) + ' · ' + esc(h.role) + ' hub · live since ' +
-        esc(h.activatedOn || "—") + '</span></div>' +
+        esc(h.activatedOn || "-") + '</span></div>' +
       (h.status === "inactive" ? '<span class="st grey">Inactive</span>' : '<span class="st green">Active</span>') +
     '</div><div class="ap-form">' +
       (pend
@@ -6405,12 +6430,12 @@ function apHubView(h) {
         : '') +
       editor + editBar +
       '<div class="kv" style="margin-bottom:16px" data-testid="ap-hub-details">' +
-        row("Hub address", esc(h.address || "—")) +
-        row("Pincode", esc(h.pincode || "—") + (area ? ' · ' + esc(area.name) : '')) +
-        row("City / State", esc(h.city || knownCity(h.pincode) || "—")) +
+        row("Hub address", esc(h.address || "-")) +
+        row("Pincode", esc(h.pincode || "-") + (area ? ' · ' + esc(area.name) : '')) +
+        row("City / State", esc(h.city || knownCity(h.pincode) || "-")) +
         row("Map pin", mapCell) +
         row("Hub area", esc(fmtArea(h.areaSqft))) +
-        row("Max vehicle size", esc(h.maxVehicle || "—")) +
+        row("Max vehicle size", esc(h.maxVehicle || "-")) +
         (h.role === "FM" && cat ? row("Hub type", esc(cat.label)) : '') +
         (h.rateCard
           ? row("Rate card", esc(rateSummary(h.rateCard)) + ' <span class="mute">· v' + (h.rateCard.version || 1) +
@@ -6427,7 +6452,7 @@ function apHubView(h) {
 function apEditDetail(e) {
   var m = HE_STATUS[e.status], changed = hubEditChanged(e).map(function (f) { return f.id; });
   var show = function (id, v) {
-    return id === "areaSqft" ? fmtArea(v) : id === "mapLink" ? fmtPin(v) : (v || "—");
+    return id === "areaSqft" ? fmtArea(v) : id === "mapLink" ? fmtPin(v) : (v || "-");
   };
   var rows = HUB_EDIT_FIELDS.map(function (f) {
     var ch = changed.indexOf(f.id) >= 0;
@@ -6566,7 +6591,7 @@ function sideDefault(r, extraTop) {
   var rows = [
     ["Mobile", maskPhone(S.phone)],
     ["Role", ROLE_META[r.role].name],
-    ["Request ID", r.requestId || "—"],
+    ["Request ID", r.requestId || "-"],
     ["Status", list[idx].title]
   ];
   /* Hub category and the ceiling it drives are internal — the FM captain is
@@ -6788,10 +6813,10 @@ function phaseKYC(r) {
         'margin:0 0 16px">You can now continue to PAN verification.</p>' +
       '<div class="kv" data-testid="aadhaar-fetched">' +
         '<div class="row"><span class="k">Fetched from Aadhaar</span><span class="v mute"></span></div>' +
-        '<div class="row"><span class="k">Name</span><span class="v">' + esc(ad.name || "—") + '</span></div>' +
-        '<div class="row"><span class="k">Date of birth</span><span class="v">' + esc(ad.dob || "—") + '</span></div>' +
+        '<div class="row"><span class="k">Name</span><span class="v">' + esc(ad.name || "-") + '</span></div>' +
+        '<div class="row"><span class="k">Date of birth</span><span class="v">' + esc(ad.dob || "-") + '</span></div>' +
         '<div class="row"><span class="k">Aadhaar address</span>' +
-          '<span class="v" style="max-width:62%;white-space:normal">' + esc(ad.address || "—") + '</span></div>' +
+          '<span class="v" style="max-width:62%;white-space:normal">' + esc(ad.address || "-") + '</span></div>' +
       '</div>' +
       '<div class="cfoot">' + backBtn(r) +
         kycEditBtn("aadhaar") +
@@ -6816,7 +6841,7 @@ function phaseKYC(r) {
           '<input id="kyc-pan-father" placeholder="Enter father’s name (as on PAN card)" ' +
             'value="' + esc(k.pan.father) + '"></div>' +
           '<div class="hint' + (e.panFather ? ' err' : '') + '">' +
-            (e.panFather || "Required — as printed on your PAN card.") + '</div></div>' +
+            (e.panFather || "Required, as printed on your PAN card.") + '</div></div>' +
       '</div>' +
       failNotice(failOf(r, "pan")) +
       kycFoot(r, "kyc-pan-go", failOf(r, "pan") ? "Resume verification →" : "Verify PAN →", true);
@@ -6858,7 +6883,7 @@ function phaseKYC(r) {
           '<div class="hint' + (e.ifsc ? ' err' : '') + '">' +
             (e.ifsc || "Enter branch IFSC code.") + '</div></div>' +
       '</div>' +
-      (fm ? '<div class="hint" style="padding-bottom:4px">Cancelled cheque is not required for FM — ' +
+      (fm ? '<div class="hint" style="padding-bottom:4px">Cancelled cheque is not required for FM: ' +
             'the ₹1 penny-drop is the bank proof.</div>' : '') +
       failNotice(failOf(r, "bank")) +
       kycFoot(r, "kyc-bank-go", failOf(r, "bank") ? "Resume verification →" : "Verify bank account →", true);
@@ -6876,7 +6901,7 @@ function phaseKYC(r) {
           esc(k.bank.acc.replace(/\d(?=\d{4})/g, "•")) + '</span></div>' +
         '<div class="row"><span class="k">IFSC code</span><span class="v">' + esc(k.bank.ifsc) + '</span></div>' +
         '<div class="row"><span class="k">Account holder name</span><span class="v">' +
-          esc(k.bank.holder || "—") + '</span></div>' +
+          esc(k.bank.holder || "-") + '</span></div>' +
       '</div>' +
       '<div class="cfoot">' + backBtn(r) + kycEditBtn("bank") +
         '<button class="btn btn-primary" id="kyc-ack-bank">Continue to GST status →</button>' +
@@ -6970,7 +6995,7 @@ function phaseKYC(r) {
       (fm && !k.msme.done
         ? '<div class="upload" style="margin-top:16px" data-testid="msme-optional-upload">' +
           '<div class="ut"><b>MSME registration certificate</b>' +
-          '<span>Optional — attach it now, or add it later.</span></div>' +
+          '<span>Optional. Attach it now, or add it later.</span></div>' +
           '<button class="btn btn-ghost" id="kyc-msme-go">Upload file</button></div>'
         : '') +
       '<div class="cfoot">' + backBtn(r) +
@@ -7010,8 +7035,8 @@ function phaseBGV(r) {
         '<button class="btn btn-primary" id="bgv-retry">Resubmit for verification</button></div>';
   } else if (failOf(r, "bgv")) {
     inner = statusBlock("bad", "Background verification paused",
-        "Your check could not reach our verification partner. It has not failed — " +
-        "resume to send it again.") +
+        "Your check could not reach our verification partner. It has not failed. " +
+        "Resume to send it again.") +
       failNotice(failOf(r, "bgv"), "bgv-resume", "Resume verification") +
       '<div class="tl">' +
         tlRow("ok", "KYC submitted", "Your identity and payout records were received.") +
@@ -7020,7 +7045,7 @@ function phaseBGV(r) {
       '</div>';
   } else {
     inner = statusBlock("run", "Background verification in progress",
-        "This usually finishes within a few minutes. You can safely close this page — " +
+        "This usually finishes within a few minutes. You can safely close this page, as " +
         "we will notify you at " + maskPhone(S.phone) + " when it is done.") +
       '<div class="tl">' +
         tlRow("ok", "KYC submitted", "Your identity and payout records were received.") +
@@ -7048,7 +7073,7 @@ function chContactCard() {
       '<span>' + esc(CH_CONTACT.cluster) + '</span></div></div>' +
     '<div class="contact"><div class="ci">📞</div><div class="cx">' +
       '<a href="tel:' + esc(CH_CONTACT.phone) + '">' + esc(CH_CONTACT.phone) + '</a>' +
-      '<span>Tap to call — reach out anytime</span></div></div>' +
+      '<span>Tap to call, and reach out anytime</span></div></div>' +
     '<div class="contact"><div class="ci">⏱</div><div class="cx"><b>48 hours</b>' +
       '<span>Typical review time. Call ' + esc(CH_CONTACT.name.split(" ")[0]) +
       ' if it&rsquo;s urgent.</span></div></div></div>';
@@ -7108,8 +7133,8 @@ function phaseCH(r) {
     var k = r.kyc, e = k.errors || {};
     inner = '<div data-testid="nogst-declined">' +
       '<div class="notice bad"><b>Your Area Manager needs a GSTIN for this hub</b>' +
-        'They reviewed your request to continue without GST and declined it. Add your GSTIN to carry on — ' +
-        'nothing else you’ve entered is lost.</div>' +
+        'They reviewed your request to continue without GST and declined it. Add your GSTIN to carry on. ' +
+        'Nothing else you’ve entered is lost.</div>' +
       '<div class="fl"><label>GSTIN</label>' +
         '<div class="box' + (e.gstin ? ' bad' : '') + '">' +
         '<input id="ch-gstin" maxlength="15" style="text-transform:uppercase" ' +
@@ -7133,7 +7158,7 @@ function phaseCH(r) {
   if (fm && !ch.category && ch.status !== "approved") {
     inner = '<div data-testid="waiting-category">' +
       statusBlock("run", "Cluster Head review in progress",
-        CH_CONTACT.name.split(" ")[0] + " is reviewing your request — usually within 48 hours. " +
+        CH_CONTACT.name.split(" ")[0] + " is reviewing your request, usually within 48 hours. " +
         "No need to wait here; we’ll notify you at " + maskPhone(S.phone) +
         " when there’s an update.") +
       '<div class="tl">' +
@@ -7209,7 +7234,7 @@ function phaseCH(r) {
 
   } else {
     inner = statusBlock("run", "Cluster Head review in progress",
-        CH_CONTACT.name.split(" ")[0] + " reviews your request from his panel — usually within 48 hours. " +
+        CH_CONTACT.name.split(" ")[0] + " reviews your request from his panel, usually within 48 hours. " +
         "No need to wait here; we&rsquo;ll notify you at " + maskPhone(S.phone) + " when there&rsquo;s an update.") +
       (fm ? rateCardPanel(r) : "") +
       '<div class="tl">' +
@@ -7311,7 +7336,7 @@ function vehHintText(max, err) {
   return n
     ? "Max " + max + ". The " + n + " smaller " + (n === 1 ? "type" : "types") +
       " in the list are assumed to fit too."
-    : "Max " + max + " — the smallest type on the list.";
+    : "Max " + max + ", the smallest type on the list.";
 }
 
 /* Rows are ordered smallest to largest. Everything at or below the chosen row
@@ -7402,26 +7427,26 @@ function mapRow(link) {
       ? '<a href="' + esc(c ? gmapsUrl(c) : String(link).trim()) + '" target="_blank" rel="noopener" ' +
         'style="color:var(--cyan-ink);text-decoration:none">' +
         (c ? c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) : 'Google Maps share link') + ' ↗</a>'
-      : '—') + '</span></div>';
+      : '-') + '</span></div>';
 }
 
 function servicedRow(h) {
   return '<div class="row" data-testid="hub-serviced"><span class="k">Pincodes serviced</span>' +
-    '<span class="v">' + esc((h.pincodes || []).join(", ") || "—") + '</span></div>';
+    '<span class="v">' + esc((h.pincodes || []).join(", ") || "-") + '</span></div>';
 }
 function hubSpecRows(h) {
-  var area = h.areaSqft ? Number(h.areaSqft).toLocaleString("en-IN") + " sq ft" : "—";
+  var area = h.areaSqft ? Number(h.areaSqft).toLocaleString("en-IN") + " sq ft" : "-";
   var maxV = h.maxVehicle || "";
   var alsoFits = smallerThan(maxV).length;
   return '<div class="row"><span class="k">Area of the hub</span>' +
            '<span class="v">' + esc(area) + '</span></div>' +
          '<div class="row"><span class="k">Estimated manpower</span>' +
-           '<span class="v">' + esc(h.manpower || "—") + '</span></div>' +
+           '<span class="v">' + esc(h.manpower || "-") + '</span></div>' +
          '<div class="row"><span class="k">Max vehicle size</span>' +
-           '<span class="v">' + esc(maxV || "—") + '</span></div>' +
+           '<span class="v">' + esc(maxV || "-") + '</span></div>' +
          '<div class="row"><span class="k">Smaller types also accommodated</span>' +
            '<span class="v' + (maxV ? '' : ' mute') + '">' +
-           (maxV ? alsoFitsText(alsoFits) : "—") + '</span></div>';
+           (maxV ? alsoFitsText(alsoFits) : "-") + '</span></div>';
 }
 
 /* The pincodes this hub will service: up to five, typed or pasted. There is no
@@ -7442,7 +7467,7 @@ function pincodePicker(h) {
     '<div class="fl" style="margin-bottom:10px"><label>Pincodes this hub will service</label>' +
       '<div class="box' + (e.pincode ? (h.lastAdded ? ' warn' : ' bad') : '') +
         '" style="justify-content:space-between;padding-right:8px">' +
-        '<input id="hub-pins" placeholder="Enter or paste pincodes — e.g. 560076, 560034, 560102">' +
+        '<input id="hub-pins" placeholder="Enter or paste pincodes, e.g. 560076, 560034, 560102">' +
         '<button class="addbtn" id="hub-addpin"' +
           (h.pincodes.length >= 5 ? ' disabled' : '') + '>＋ Add</button></div>' +
       (e.pincode
@@ -7637,7 +7662,7 @@ function phaseAM(r) {
         "Your facility was rejected twice by the Area Manager, so the case has been escalated " +
         "to your Cluster Head for a final decision.") +
       '<div class="notice warn" data-testid="am-escalated"><b>Two-strike rule</b>' +
-        'After two Area Manager rejections a request no longer sits with the AM — ' +
+        'After two Area Manager rejections a request no longer sits with the AM: ' +
         'the Cluster Head decides whether to proceed, rework or close it.</div>' +
       '<div class="tl">' +
         tlRow("bad", "Area Manager rejection 1", "Facility did not meet requirements.") +
@@ -7657,7 +7682,7 @@ function phaseAM(r) {
         "An Area Manager will visit your hub to verify the facility. " +
         "This usually happens within 3 working days.") +
       '<div class="tl">' +
-        tlRow("ok", "Hub details submitted", "Hub code " + esc(r.hub.hubCode || "—") + " generated.") +
+        tlRow("ok", "Hub details submitted", "Hub code " + esc(r.hub.hubCode || "-") + " generated.") +
         tlRow("now", "Facility check", "Area Manager site visit pending.") +
         tlRow("", nextRowLabel(r), "Follows facility approval.") +
       '</div>';
@@ -7765,23 +7790,23 @@ function phaseACT(r) {
         (fm ? "receiving first mile pickups." : "receiving orders.")) +
       '<div class="kv" style="margin-bottom:16px">' +
         '<div class="row"><span class="k">Hub code</span><span class="v">' +
-          esc(r.hub.hubCode || "—") + '</span></div>' +
+          esc(r.hub.hubCode || "-") + '</span></div>' +
         '<div class="row"><span class="k">Hub name</span><span class="v">' +
           esc(defaultHubName(r)) + '</span></div>' +
         (fm
           ? '<div class="row"><span class="k">Partner ID</span><span class="v">' +
-            esc(a.partnerId || "—") + '</span></div>'
+            esc(a.partnerId || "-") + '</span></div>'
           : '<div class="row"><span class="k">Oracle vendor ID</span><span class="v">' +
-            esc(a.vendorId || "—") + '</span></div>') +
+            esc(a.vendorId || "-") + '</span></div>') +
         '<div class="row"><span class="k">Activated on</span><span class="v">' +
-          esc(a.activatedOn || "—") + '</span></div>' +
+          esc(a.activatedOn || "-") + '</span></div>' +
         '<div class="row"><span class="k">Captain Panel access</span>' +
           '<span class="v ok">Unlocked</span></div>' +
       '</div>' +
       (fm
         ? '<div class="notice info" data-testid="fm-partner-id"><b>Auto-payouts key off your Partner ID</b>' +
           'First Mile hubs do not get an Oracle vendor ID. Your internal Partner ID ' +
-          '(' + esc(a.partnerId || "—") + ') is what payouts are keyed against.</div>'
+          '(' + esc(a.partnerId || "-") + ') is what payouts are keyed against.</div>'
         : '') +
       '<div class="tl">' + fan + '</div>' +
       '<div style="display:flex;justify-content:center;margin-top:20px">' +
@@ -7789,7 +7814,7 @@ function phaseACT(r) {
 
   } else if (a.failed) {
     inner = statusBlock("bad", "Activation paused",
-        "A system did not complete. The systems that finished stay done — resume to carry " +
+        "A system did not complete. The systems that finished stay done. Resume to carry " +
         "on from where it stopped.") +
       (actFailed
         ? failNotice(actFailed, "act-retry", "Resume activation")
@@ -7800,7 +7825,7 @@ function phaseACT(r) {
   } else {
     inner = statusBlock("run", "Activation in progress",
         "We are enabling your hub and unlocking Captain Panel access. This can take up to " +
-        "30 minutes. You can safely close this page — we will notify you at " +
+        "30 minutes. You can safely close this page, and we will notify you at " +
         maskPhone(S.phone) + " the moment your hub is live.") +
       (fm
         ? '<div class="notice info" data-testid="fm-design-passive"><b>Design &amp; hub-code mapping ' +
@@ -8359,8 +8384,8 @@ var A = {
     if (!r || !r.noGst || !actsAs("am")) return;
     r.noGst.decision = val === "yes" ? "approved" : "declined";
     r.noGst.decidedOn = fmtDay(new Date());
-    S.admin.toast = val === "yes" ? "Approved — " + r.captain + " continues without GST."
-                                  : "Declined — " + r.captain + " is asked to add a GSTIN.";
+    S.admin.toast = val === "yes" ? "Approved: " + r.captain + " continues without GST."
+                                  : "Declined: " + r.captain + " is asked to add a GSTIN.";
     save(); render();
   },
   /* Simulated: the captain adds a GSTIN after a decline. */
@@ -8412,7 +8437,7 @@ var A = {
     if (apMapLink(r) !== before) {
       logAmChange({ kind:"map", requestId:r.id, hubName:r.hubAppId || r.id, captain:r.captain, phone:r.phone,
                     fields:["mapLink"], before:{ mapLink:before }, after:{ mapLink:apMapLink(r) } });
-      S.admin.toast = r.id + ": map pin saved — " + r.captain + " has been notified.";
+      S.admin.toast = r.id + ": map pin saved, and " + r.captain + " has been notified.";
     }
     save(); render();
   },
@@ -8755,7 +8780,7 @@ var A = {
                                             mapLink:d.mapLink, areaSqft:d.areaSqft };
     if (!Object.keys(e).length &&
         !HUB_EDIT_FIELDS.some(function (f) { return before[f.id] !== after[f.id]; })) {
-      e.form = "Nothing has changed yet — edit at least one detail to send a request.";
+      e.form = "Nothing has changed yet. Edit at least one detail to send a request.";
     }
     he.errors = e;
     if (Object.keys(e).length) { save(); render(); return; }
@@ -9028,7 +9053,7 @@ var A = {
       : !V.vehicle(after.maxVehicle) ? ERR.hubVehicle
       : "";
     var fields = Object.keys(before).filter(function (k) { return before[k] !== after[k]; });
-    if (!err && !fields.length) err = "Nothing has changed yet — edit at least one detail to save.";
+    if (!err && !fields.length) err = "Nothing has changed yet. Edit at least one detail to save.";
     if (err) { S.admin.hubError = err; save(); render(); return; }
     var pick = function (o) { var x = {}; fields.forEach(function (k) { x[k] = o[k]; }); return x; };
     fields.forEach(function (k) { h[k] = after[k]; });
@@ -9036,7 +9061,7 @@ var A = {
     logAmChange({ kind:"details", hubId:h.id, hubCode:h.code, hubName:h.name, captain:owner.name,
                   phone:owner.phone, fields:fields, before:pick(before), after:pick(after) });
     S.admin.hubEditing = false; S.admin.hubDraft = null; S.admin.hubError = "";
-    S.admin.toast = "Hub " + h.code + " updated — " + owner.name + " has been notified.";
+    S.admin.toast = "Hub " + h.code + " updated, and " + owner.name + " has been notified.";
     save(); render();
   },
   adminListFilter: function (k, v) {
@@ -9091,11 +9116,11 @@ var A = {
     var err = !slabsValid(to.slabs) || !rateOk(to.touchpoint)
         ? "Every slab needs a rate."
       : !ratesChanged && !typeChanged
-        ? "These are the rates in force today — change at least one, or the hub type, to send an update."
+        ? "These are the rates in force today. Change at least one, or the hub type, to send an update."
       : !isIso(d.effectiveFrom)
         ? "Pick the day the new rate card applies from."
       : d.effectiveFrom < todayIso()
-        ? "Rate cards are never backdated — pick today or a later day."
+        ? "Rate cards are never backdated. Pick today or a later day."
       : "";
     if (err) { S.admin.rateError = err; save(); render(); return; }
     var m = ADMIN_ROLES.am.person, owner = hubOwner(h);
@@ -9120,10 +9145,10 @@ var A = {
       ruTrail(u, "am", "sent");
     }
     S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = "";
-    S.admin.toast = "Sent to the Cluster Head for review." +
-      (ruAbove(u) ? " It’s above the " + HUB_CATEGORIES[cat].label + " ceilings, so they’ll raise it to BizFin."
-                  : " Once approved it goes to " + owner.name + " to agree — it applies from " +
-                    fmtIso(u.effectiveFrom) + ", or the day they agree if later.");
+    S.admin.toast = "Sent to the Cluster Head for review, then the Zonal Head." +
+      (ruAbove(u) ? " It’s above the " + HUB_CATEGORIES[cat].label + " ceilings, so BizFin approves it after them."
+                  : "") + " Once approved it goes to " + owner.name + " to agree. It applies from " +
+                    fmtIso(u.effectiveFrom) + ", or the day they agree if later.";
     save(); render();
   },
   adminRateWithdraw: function () {
@@ -9132,7 +9157,7 @@ var A = {
     u.status = "withdrawn"; u.withdrawnOn = fmtDay(new Date());
     ruTrail(u, "am", "withdrawn");
     S.admin.rate = null; S.admin.rateDraft = null; S.admin.rateError = "";
-    S.admin.toast = u.id + " withdrawn — " + h.code + " stays on the rate card in force.";
+    S.admin.toast = u.id + " withdrawn. " + h.code + " stays on the rate card in force.";
     save(); render();
   },
   /* ---- slab settings ---- */
@@ -9189,7 +9214,7 @@ var A = {
     if (persona === "bizfin") {
       types.forEach(function (t) { S.slabSettings.byType[t] = nums.slice(); });
       S.slabSettings.log.push({ id:id, at:at, by:"BizFin", types:types, breaks:nums, before:before, approvedBy:"BizFin" });
-      a.toast = "Slab structure saved — new rate cards for " + (types.length > 1 ? "every hub type" :
+      a.toast = "Slab structure saved. New rate cards for " + (types.length > 1 ? "every hub type" :
         HUB_CATEGORIES[types[0]].label) + " are priced on it.";
     } else {
       S.slabSettings.requests.push({ id:id, at:at, by:"FM Central Ops", types:types, breaks:nums, before:before,
@@ -9203,7 +9228,7 @@ var A = {
     var a = S.admin, x = S.slabSettings.requests.filter(function (q) { return q.id === id; })[0];
     if (!x || x.status !== "pending" || a.role !== "central" || a.central !== "bizfin") return;
     if (!approve && !String(a.slabReason || "").trim()) {
-      a.slabError = "Say why you’re rejecting it — FM Central Ops sees this."; save(); render(); return;
+      a.slabError = "Say why you’re rejecting it. FM Central Ops sees this."; save(); render(); return;
     }
     x.status = approve ? "approved" : "rejected"; x.decidedOn = fmtDay(new Date());
     x.reason = approve ? "" : String(a.slabReason).trim();
@@ -9213,8 +9238,8 @@ var A = {
                                 approvedBy:"BizFin" });
     }
     a.slabReason = ""; a.slabError = "";
-    a.toast = approve ? x.id + " approved — the new slabs apply to rate cards priced from now."
-                      : x.id + " rejected — FM Central Ops sees why.";
+    a.toast = approve ? x.id + " approved. The new slabs apply to rate cards priced from now."
+                      : x.id + " rejected. FM Central Ops sees why.";
     save(); render();
   },
 
@@ -9234,8 +9259,8 @@ var A = {
     var err = !plan.codes.length ? "List at least one FM hub code."
       : !plan.complete ? "Every slab needs a rate."
       : !isIso(b.effectiveFrom) ? "Pick the day the new rate card applies from."
-      : b.effectiveFrom < todayIso() ? "Rate cards are never backdated — pick today or a later day."
-      : !plan.publish.length && !plan.bizfin.length ? "None of these hubs can take the update — see why below."
+      : b.effectiveFrom < todayIso() ? "Rate cards are never backdated. Pick today or a later day."
+      : !plan.publish.length && !plan.bizfin.length ? "None of these hubs can take the update. See why below."
       : "";
     if (err) { a.bulkError = err; save(); render(); return; }
     var id = "BLK-" + String(10000 + Math.floor(Math.random() * 90000)), today = fmtDay(new Date());
@@ -9254,7 +9279,7 @@ var A = {
         u.raisedOn = today;
         ruTrail(u, "ops", "sent to BizFin", "Above the " + HUB_CATEGORIES[h.category].label + " ceilings");
       } else {
-        ruTrail(u, "ops", "within the ceilings — no approval needed");
+        ruTrail(u, "ops", "within the ceilings, no approval needed");
         sendToCaptain(u, "ops");
       }
     });
@@ -9277,18 +9302,21 @@ var A = {
   },
   adminRuBack: function () { S.admin.ruReview = null; S.admin.ruError = ""; save(); render(); },
   adminRuDecide: function (decision) {
-    var u = rateUpdateById(S.admin.ruReview), desk = rateDesk();
+    var u = rateUpdateById(S.admin.ruReview), desk = u && rateDesks().indexOf(u.status) >= 0 ? u.status : null;
     var err = rateUpdateDecide(u, desk, decision, S.admin.ruReason, rateActor());
     if (err) { S.admin.ruError = err; save(); render(); return; }
     S.admin.ruReview = null; S.admin.ruReason = ""; S.admin.ruError = "";
-    S.admin.toast = decision === "approve"
+    S.admin.toast = decision === "approve" && u.status === "zh"
+      ? u.id + " approved and sent to the Zonal Head, " + ruChain(u).zh.name + "."
+      : decision === "approve" && u.status === "central"
+      ? u.id + " approved. It’s above the ceilings, so it goes to BizFin."
+      : decision === "approve"
       ? (sameRateCard(u.from, u.to)
-          ? u.id + " approved and published — the hub type changes on " + fmtIso(u.effectiveFrom) +
+          ? u.id + " approved and published. The hub type changes on " + fmtIso(u.effectiveFrom) +
             ". The rates are the same, so the captain isn’t asked to agree."
           : u.id + " approved and sent to " + u.captain + " to agree, in the app and by SMS and email. It applies " +
             "from " + fmtIso(u.effectiveFrom) + " once they do.")
-      : decision === "raise" ? u.id + " raised to BizFin."
-      : u.source === "bulk" ? u.id + " not approved — FM Central Ops sees why."
+      : u.source === "bulk" ? u.id + " not approved. FM Central Ops sees why."
       : u.id + " sent back to the Area Manager.";
     save(); render();
   },
@@ -9301,13 +9329,13 @@ var A = {
   adminEditDecide: function (decision) {
     var id = S.admin.edit, approve = decision === "approve";
     if (!approve && !S.admin.editReason.trim()) {
-      S.admin.editError = "Say why you’re rejecting it — the captain sees this reason.";
+      S.admin.editError = "Say why you’re rejecting it. The captain sees this reason.";
       save(); render(); return;
     }
     if (!A.hubEditDecide(id, approve, S.admin.editReason)) return;
     S.admin.edit = null; S.admin.editReason = ""; S.admin.editError = "";
-    S.admin.toast = approve ? id + " approved — the hub now runs on the new details."
-                            : id + " rejected — the hub keeps its current details.";
+    S.admin.toast = approve ? id + " approved. The hub now runs on the new details."
+                            : id + " rejected. The hub keeps its current details.";
     save(); render();
   },
   adminOpen: function (id) {
@@ -9480,7 +9508,7 @@ var A = {
       } else if (r.stage === "ch") {
         // an above-ceiling card is not the Cluster Head's to settle
         if (r.rateEscalated) {
-          S.admin.toast = "This rate card is above ceiling — raise it to BizFin.";
+          S.admin.toast = "This rate card is above ceiling. Raise it to BizFin.";
           save(); render(); return;
         }
         r.stage = "done"; r.status = "pending"; r.ch.done = true; r.settled = "approved";
@@ -9856,7 +9884,7 @@ function paintSlabState() {
     var cv = row.querySelector(".cv");
     if (!sl || !cv) return;
     var o = slabOverCeiling(r, sl);
-    cv.textContent = (r.hubCategory ? ceilingCell(r.hubCategory, r.city, sl) : "—") + (o ? " · over" : "");
+    cv.textContent = (r.hubCategory ? ceilingCell(r.hubCategory, r.city, sl) : "-") + (o ? " · over" : "");
     cv.classList.toggle("over", o);
   });
 
@@ -9991,7 +10019,6 @@ function bindAdmin() {
   on("ap-ru-back", "click", A.adminRuBack);
   on("ap-ru-reason", "input", function (e) { S.admin.ruReason = e.target.value; save(); });
   on("ap-ru-approve", "click", function () { A.adminRuDecide("approve"); });
-  on("ap-ru-raise", "click", function () { A.adminRuDecide("raise"); });
   on("ap-ru-reject", "click", function () { A.adminRuDecide("reject"); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-rslab]"), function (el) {
     el.addEventListener("input", function () {
@@ -10243,7 +10270,7 @@ function devActions() {
             }).join("") + '</select>' +
           devBtn("Captain · sample, the one above", "as:sample", S.loginAs === "sample" ? "ok" : "") +
           devBtn("Admin panel", "as:admin", S.loginAs === "admin" ? "ok" : "") +
-          '<p class="dnone">Captain opens the onboarding flow — new starts at role selection, ' +
+          '<p class="dnone">Captain opens the onboarding flow: new starts at role selection, ' +
           'existing lands in the Captain Hub. Admin opens the panel picker: FM Area Manager, ' +
           'FM Cluster Head, FM Zonal Head or FM Central Admin.</p>'
       }]
@@ -10255,7 +10282,7 @@ function devActions() {
   }
   if (S.screen === "admin") {
     var adminGroups = [{ title: "Admin panel", html:
-      '<p class="dnone">You are the backend here — decisions are made in the panel itself, ' +
+      '<p class="dnone">You are the backend here. Decisions are made in the panel itself, ' +
       'not simulated from this box.</p>' }];
     if (S.admin.role === "central") {
       adminGroups.unshift({ title: "Central Admin role", html:
@@ -10322,7 +10349,7 @@ function devActions() {
     if (gstEntry) groups.push(failGroup(["gst"]), gstRegistryGroup());
     if (!groups.length) {
       groups.push({ title: "Captain Hub", html:
-        '<p class="dnone">No backend actors act here — profile and hub edits are ' +
+        '<p class="dnone">No backend actors act here. Profile and hub edits are ' +
         'captain-driven. Add a hub to re-enter onboarding.</p>' });
     }
     return { ctx: "<b>Captain Hub</b> · " + esc(S.panel.section), groups: groups };
@@ -10338,7 +10365,7 @@ function devActions() {
   if (id === "bgv") {
     if (failOf(r, "bgv")) {
       groups.push({ title: "Background verification", html:
-        '<p class="dnone">Paused — the check reaches the partner again when the captain ' +
+        '<p class="dnone">Paused. The check reaches the partner again when the captain ' +
         'resumes.</p>' });
     } else {
       groups.push({ title: "Background verification", html:
@@ -10361,11 +10388,11 @@ function devActions() {
     if (ng === "pending") {
       groups.push({ title: "Area Manager · no-GST declaration", html:
         '<p class="dnone">' + esc(r.kyc.gst.noGst.reason) + '</p>' +
-        devBtn("Approve — continue without GST", "nogst:approve", "ok") +
-        devBtn("Decline — ask for a GSTIN", "nogst:decline", "bad") });
+        devBtn("Approve: continue without GST", "nogst:approve", "ok") +
+        devBtn("Decline: ask for a GSTIN", "nogst:decline", "bad") });
     } else if (ng === "declined") {
       groups.push({ title: "Area Manager", html:
-        '<p class="dnone">Declined the no-GST declaration — waiting for the captain to add a GSTIN.</p>' });
+        '<p class="dnone">Declined the no-GST declaration. Waiting for the captain to add a GSTIN.</p>' });
       groups.push(gstRegistryGroup());
     } else if (fm) {
       if (!r.ch.category) {
@@ -10436,7 +10463,7 @@ function devActions() {
 
   if (!groups.length) {
     groups.push({ title: "This phase", html:
-      '<p class="dnone">No backend actors act on this phase — it is entirely ' +
+      '<p class="dnone">No backend actors act on this phase. It is entirely ' +
       'captain-driven.</p>' });
   }
   return { ctx: ctx, groups: groups };
@@ -10446,13 +10473,17 @@ function devActions() {
 function ruDevGroup(u) {
   if (u.status === "ch") {
     return { title: "Cluster Head · " + u.id, html:
-      (ruAbove(u) ? devBtn("Raise to BizFin", "ru:raise:" + u.id, "warn")
-                  : devBtn("Approve — send to the captain", "ru:approve:" + u.id, "ok")) +
+      devBtn("Approve and send to the Zonal Head", "ru:approve:" + u.id, "ok") +
+      devBtn("Send back to the Area Manager", "ru:reject:" + u.id, "bad") };
+  }
+  if (u.status === "zh") {
+    return { title: "Zonal Head · " + u.id, html:
+      devBtn(ruAbove(u) ? "Approve and send to BizFin" : "Approve and send to the captain", "ru:approve:" + u.id, "ok") +
       devBtn("Send back to the Area Manager", "ru:reject:" + u.id, "bad") };
   }
   if (u.status === "central") {
     return { title: "BizFin · " + u.id, html:
-      devBtn("Approve — send to the captain", "ru:approve:" + u.id, "ok") +
+      devBtn("Approve and send to the captain", "ru:approve:" + u.id, "ok") +
       devBtn(u.source === "bulk" ? "Don’t approve" : "Send back to the Area Manager", "ru:reject:" + u.id, "bad") };
   }
   if (u.status === "captain") {
@@ -10462,8 +10493,8 @@ function ruDevGroup(u) {
       'by phone; there is no decline.</p>' };
   }
   return { title: "Rate card update " + u.id, html: '<p class="dnone">' +
-    (u.status === "revision" ? "Sent back — waiting for the Area Manager to revise or withdraw it."
-     : "Agreed and published — it applies from " + fmtIso(u.effectiveFrom) + ".") + '</p>' };
+    (u.status === "revision" ? "Sent back. Waiting for the Area Manager to revise or withdraw it."
+     : "Agreed and published. It applies from " + fmtIso(u.effectiveFrom) + ".") + '</p>' };
 }
 
 function failGroup(apis) {
@@ -10576,9 +10607,11 @@ function devDo(cmd) {
       if (ruU) {
         if (arg === "agree") captainAgree(ruU);
         else rateUpdateDecide(ruU, ruU.status, arg,
-          arg === "reject" ? "Keep the first slab as it is \u2014 volumes don\u2019t support it yet." : "");
+          arg === "reject" ? "Keep the first slab as it is. Volumes don\u2019t support it yet." : "");
+        if (ruU.status === "zh") S.admin.toast = ruU.id + " sent to the Zonal Head.";
+        if (ruU.status === "central") S.admin.toast = ruU.id + " sent to BizFin.";
         if (ruU.status === "captain") S.admin.toast = ruU.id + " sent to " + ruU.captain + " to agree.";
-        if (ruU.status === "published") S.admin.toast = ruU.id + " published — it applies from " +
+        if (ruU.status === "published") S.admin.toast = ruU.id + " published. It applies from " +
           fmtIso(ruU.effectiveFrom) + ".";
         save(); render();
       }
