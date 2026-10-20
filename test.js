@@ -687,8 +687,10 @@ async function testRoleIndependence() {
   eq(api.helpers.phaseId(), "bgv", "LM parked at background verification");
 
   /* Switch to FM and run a different set of inputs through it. */
-  click(doc, "switch-role");
-  eq(api.state.screen, "roles", "switch-role returns to role selection mid-flow");
+  check(!exists(doc, "#switch-role") && !exists(doc, ".rail #logout"),
+        "the onboarding rail has no Log out or Switch role");
+  click(doc, "save-exit");
+  eq(api.state.screen, "roles", "Save & Exit returns to role selection mid-flow");
   pickRole(doc, "FM");
   doPersonalDetails(doc, { name: "Karan FM" });
   eq(api.state.roles.FM.pd.name, "Karan FM", "FM captured its own name");
@@ -704,7 +706,7 @@ async function testRoleIndependence() {
         "FM KYC is independent and still empty");
 
   /* Resume LM where it was left. */
-  click(doc, "switch-role");
+  click(doc, "save-exit");
   pickRole(doc, "LM");
   eq(api.state.activeRole, "LM", "LM reopened");
   eq(api.helpers.phaseId(), "bgv", "LM resumed exactly where it was left");
@@ -2499,7 +2501,7 @@ async function testCeilingEscalation() {
   clickSel(doc, '[data-apopen="OBD-78222"]');
   check(txt(doc).indexOf("Slab ceilings (Standalone (mini-hub), Bengaluru)") >= 0 &&
         txt(doc).indexOf("₹3.20 → ₹2.20") >= 0, "the CH's read-only card names the ceilings it was held to");
-  check(txt(doc).indexOf("₹6.00 / shipment · fixed for Standalone (mini-hub)") >= 0,
+  check(txt(doc).indexOf("₹6.00 / touchpoint · fixed for Standalone (mini-hub)") >= 0,
         "and shows the touchpoint as fixed for the hub type");
   check(txt(doc).indexOf("₹2.80 / shipment · above ceiling") >= 0, "with the slab over its ceiling flagged");
   check(!exists(doc, "#ap-approve"), "the CH cannot settle it");
@@ -3801,7 +3803,7 @@ async function testRateUpdates() {
   eq(table.length, 6, "a row for each of the five slabs, then the touchpoint rate");
   eq(table[0], "Slab 1 0 – 2,500 ₹3.40 / shipment", "each slab with its orders and rate");
   eq(table[4], "Slab 5 10,001 and above ₹3.00 / shipment", "the top slab open-ended");
-  eq(table[5], "Touchpoint rate ₹5.00 / shipment", "and the touchpoint rate last");
+  eq(table[5], "Touchpoint rate ₹5.00 / touchpoint", "and the touchpoint rate last");
   check(sec().textContent.indexOf("In force since 01 Sept 2026") >= 0, "with the day it took effect");
   check(!exists(doc, '[data-hub="hub-aqt"] [data-testid="hub-rate"]'), "LM hubs have no rate card section");
   check(!exists(doc, '[data-testid="bell-count"]'), "the bell has nothing new");

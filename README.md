@@ -172,7 +172,7 @@ The **touchpoint rate is fixed per hub type** — no one prices it, the Area Man
 It's shown read-only wherever a card is made (onboarding, an update, a bulk update) and
 changes only with the hub type:
 
-| Hub type | Touchpoint (₹/shipment) |
+| Hub type | Touchpoint (₹/touchpoint) |
 |---|---|
 | Standalone (mini-hub) | 6.00 |
 | Standalone | 5.00 |

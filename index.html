@@ -367,10 +367,6 @@ img{max-width:100%}
 .ruser .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .ruser .who span{font-size:11px;font-weight:500;color:var(--rail-mute3);line-height:14px}
 .ruser .who b{font-size:13px;font-weight:700;color:#fff;line-height:16px}
-.rfoot{display:flex;gap:16px;padding-top:14px}
-.rfoot button{font-size:13px;font-weight:700;line-height:16px;padding:0}
-.rfoot .out{color:var(--logout)}
-.rfoot .swap{color:var(--rail-mute4)}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{
@@ -2999,7 +2995,7 @@ function rateCardRowsHtml(rc, testid) {
              '<span class="v">₹' + esc(sl.rate) + ' / shipment</span></div>';
     }).join("") +
     '<div class="row"><span class="k">Touchpoint rate</span><span class="v">₹' +
-      esc(rc.touchpoint || "-") + ' / shipment</span></div></div>';
+      esc(rc.touchpoint || "-") + ' / touchpoint</span></div></div>';
 }
 function sameRateCard(a, b) {
   var norm = function (rc) {
@@ -4415,7 +4411,7 @@ function rateTableHtml(card, testid) {
         '<td class="num">₹' + esc(sl.rate) + ' / shipment</td></tr>';
     }).join("") +
     '<tr class="tp"><td colspan="2">Touchpoint rate</td><td class="num">₹' + esc(card.touchpoint || "-") +
-      ' / shipment</td></tr>' +
+      ' / touchpoint</td></tr>' +
   '</tbody></table>';
 }
 
@@ -5327,7 +5323,7 @@ function slabEditor(r) {
     rows +
     '<div class="slab-tp" data-testid="am-tp">' +
       '<div class="sf" style="max-width:230px">' +
-        '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
+        '<span class="sl">Touchpoint rate (₹ / touchpoint)</span>' +
         '<span class="bv" id="am-touchpoint" data-testid="am-tp-fixed">' +
           (cat ? "₹" + esc(fixedTp(r.hubCategory)) : "-") + '</span></div>' +
       '<span class="tph">Paid per touchpoint, on top of the slab rate. Fixed for ' +
@@ -5356,7 +5352,7 @@ function apRateCardRows(r) {
       '</span></div>';
   }).join("") +
   '<div class="row"><span class="k">Touchpoint rate</span>' +
-    '<span class="v' + (r.rate.touchpoint ? ' ok' : '') + '">₹' + esc(r.rate.touchpoint || "-") + ' / shipment' +
+    '<span class="v' + (r.rate.touchpoint ? ' ok' : '') + '">₹' + esc(r.rate.touchpoint || "-") + ' / touchpoint' +
     (cat ? ' <span class="mute">· fixed for ' + esc(cat.label) + '</span>' : '') + '</span></div>' +
   '<div class="row"><span class="k">Slab ceilings (' + esc(cat ? cat.label : "-") + ', ' +
     esc(cityKey(r.city) || "-") + ')</span>' +
@@ -6227,7 +6223,7 @@ function apRateDetail(h) {
                ' are shown on each' : '') + '. The slabs are set centrally for the hub type.</span></div></div>' +
       rows +
       '<div class="slab-tp" data-testid="ap-rate-tp"><div class="sf" style="max-width:230px">' +
-        '<span class="sl">Touchpoint rate (₹ / shipment)</span>' +
+        '<span class="sl">Touchpoint rate (₹ / touchpoint)</span>' +
         '<span class="bv" id="ap-rate-tp">₹' + esc(fixedTp(dcat)) + '</span></div>' +
         '<span class="tph">Fixed for ' + esc(cm2 ? cm2.label : "the hub type") + ' hubs, and changes only with ' +
           'the hub type.</span></div>' +
@@ -6535,10 +6531,6 @@ function viewFlow() {
     '<div class="ruser">' +
       '<div class="av">' + esc(initials(r.pd.name, S.phone)) + '</div>' +
       '<div class="who"><span>Logged in as</span><b>' + esc(maskPhone(S.phone)) + '</b></div>' +
-    '</div>' +
-    '<div class="rfoot">' +
-      '<button class="out" id="logout">↩ Log out</button>' +
-      '<button class="swap" id="switch-role">⇄ Switch role</button>' +
     '</div>' +
   '</div>';
 
@@ -7090,7 +7082,7 @@ function captainRateRows(ch) {
   }).join("") +
   (ch.touchpoint
     ? '<div class="row"><span class="k">Touchpoint rate</span>' +
-      '<span class="v">₹' + esc(ch.touchpoint) + ' / shipment</span></div>'
+      '<span class="v">₹' + esc(ch.touchpoint) + ' / touchpoint</span></div>'
     : "");
 }
 
