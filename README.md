@@ -529,9 +529,11 @@ Submission needs a hub type **and** a rate for every slab; the touchpoint rate c
 hub type and can't be typed or changed. Each slab shows its own ceiling as it is typed and
 flags the row if it goes over.
 
-The approved card is what the **captain** then sees — the same bands and the same touchpoint
-rate, on the Cluster Head screen and again on agreements. The hub category and the benchmark
-ceiling that produced it stay internal.
+The **captain** sees the rate card only once it is final, approved by the Cluster Head or
+BizFin: the same bands and the same touchpoint rate, labelled *Approved rate card* on the
+Cluster Head screen and again on agreements. While it is still being reviewed, or waiting for
+BizFin, the captain sees the status only. The hub category and the benchmark ceiling that
+produced it stay internal.
 
 ### The AM infra checklist
 
@@ -887,7 +889,7 @@ build from.
 npm install && npm test
 ```
 
-**2047 assertions across 38 groups:**
+**2051 assertions across 38 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the

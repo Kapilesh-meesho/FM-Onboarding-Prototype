@@ -7086,11 +7086,13 @@ function captainRateRows(ch) {
     : "");
 }
 
-/* Rate card panel — FM only. The card the Area Manager authored: one row per
-   volume slab plus the touchpoint rate. Those are the only figures shown; there
-   is no blended per-shipment number, and nothing is read off the ceiling. */
+/* Rate card panel, FM only. The approved card: one row per volume slab plus
+   the touchpoint rate. Those are the only figures shown; there is no blended
+   per-shipment number, and nothing is read off the ceiling. The captain sees
+   it only once it is final, approved by the Cluster Head or BizFin, never
+   while it is still being reviewed. */
 function rateCardPanel(r) {
-  if (!r.ch.category) return "";
+  if (!r.ch.category || r.ch.status !== "approved") return "";
 
   var rows = captainRateRows(r.ch);
   if (!rows) return "";                       // no card authored yet
@@ -7102,7 +7104,7 @@ function rateCardPanel(r) {
     'on one payout line.</div>';
 
   return '<p style="margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted)">' +
-      (r.ch.status === "approved" ? "Approved rate card" : "Proposed rate card") + '</p>' +
+      'Approved rate card</p>' +
     '<div class="kv" style="margin-bottom:16px" data-testid="captain-rate-card">' + rows +
     '</div>' + modeBlock;
 }
@@ -7195,7 +7197,6 @@ function phaseCH(r) {
       statusBlock("run", "Rate card pending sign-off",
         "Your rate card needs one more sign-off. We\u2019ll notify you at " +
         maskPhone(S.phone) + " when there\u2019s an update.") +
-      rateCardPanel(r) +
       '<div class="tl">' +
         tlRow("ok", "Cluster Head: " + CH_CONTACT.name, "Reviewed and sent for sign-off.") +
         tlRow("now", "Sign-off pending", "We\u2019ll update you here as soon as it lands.") +
@@ -7228,7 +7229,6 @@ function phaseCH(r) {
     inner = statusBlock("run", "Cluster Head review in progress",
         CH_CONTACT.name.split(" ")[0] + " reviews your request from his panel, usually within 48 hours. " +
         "No need to wait here; we&rsquo;ll notify you at " + maskPhone(S.phone) + " when there&rsquo;s an update.") +
-      (fm ? rateCardPanel(r) : "") +
       '<div class="tl">' +
         tlRow("ok", "Background verification passed", "Identity and risk checks cleared.") +
         tlRow("now", "Cluster Head: " + CH_CONTACT.name, "Phone: " + CH_CONTACT.phone) +

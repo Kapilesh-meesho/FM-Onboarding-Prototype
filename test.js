@@ -589,6 +589,8 @@ async function testFMAboveCeiling() {
   let r = api.helpers.R();
   check(api.helpers.chAboveCeiling(r), "the submitted card is above the mall-hub ceiling");
   eq(r.ch.rateMode, "combined", "only Combined exists");
+  check(!exists(doc, '[data-testid="captain-rate-card"]') && txt(doc).indexOf("Proposed rate card") === -1,
+        "while the Cluster Head reviews it, the captain sees no rate card");
 
   api.actions.chApprove();
   eq(api.helpers.R().ch.status, "pending",
@@ -598,6 +600,7 @@ async function testFMAboveCeiling() {
   api.actions.chRaise();
   r = api.helpers.R();
   eq(r.ch.status, "central", "above-ceiling card is raised to Central Admin");
+  check(!exists(doc, '[data-testid="captain-rate-card"]'), "and none while it waits for BizFin either");
   check(exists(doc, '[data-testid="ch-signoff"]'), "captain sees a pending sign-off state");
   check(mainTxt(doc).indexOf("needs one more sign-off") >= 0,
         "copy says only that one more sign-off is needed");
@@ -636,6 +639,8 @@ async function testFMAboveCeiling() {
   r = api.helpers.R();
   eq(r.ch.status, "approved", "the revised card clears at the Cluster Head");
   eq(r.ch.decidedBy, "ch", "attributed to the Cluster Head");
+  check(exists(doc, '[data-testid="captain-rate-card"]') && txt(doc).indexOf("Approved rate card") >= 0,
+        "once approved, the captain sees the final rate card");
 
   click(doc, "ch-continue");
   eq(api.helpers.phaseId(), "ag", "approved request moves on to agreements");
