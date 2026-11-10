@@ -6021,13 +6021,109 @@ async function testCityRates() {
   win.close();
 }
 
+/* =========================================================================
+   41. The Area Manager rejects an application
+   ====================================================================== */
+
+async function testAmRejectsApplication() {
+  section("41. The Area Manager rejects an application");
+  const { win, doc, api } = await boot();
+  const A = api.actions, H = api.helpers;
+
+  /* --- a new FM captain, with the Area Manager at Cluster Head review --- */
+  login(doc);
+  pickRole(doc, "FM");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  doHubDetails(doc, { address: "Plot 7, 16th Main, BTM Layout 2nd Stage, Bengaluru" });
+  click(doc, "hub-continue");
+  A.bgvSet("passed");
+  click(doc, "bgv-continue");
+  eq(H.phaseId(), "ch", "the application is with the Area Manager");
+  const firstId = H.R().requestId;
+  check(devText(doc).indexOf("Reject the application") >= 0, "the simulator lets the Area Manager reject it");
+  devClick(doc, "cat:standalone");
+  check(devText(doc).indexOf("Reject the application") >= 0, "while they price it, too");
+  devClick(doc, "amapp:reject");
+
+  /* --- the captain is told, and pointed to the Area Manager --- */
+  check(exists(doc, '[data-testid="am-app-rejected"]'), "the captain sees the application was rejected");
+  check(txt(doc).indexOf("Your application was rejected") >= 0, "in plain words");
+  const contact = sel(doc, '[data-testid="am-app-rejected-contact"]').textContent;
+  check(contact.indexOf("Priya Sharma") >= 0 && contact.indexOf("+91 98450 11223") >= 0,
+        "with the Area Manager to call for details");
+  check(txt(doc).indexOf(firstId) >= 0, "naming the application");
+  check(!exists(doc, "#phase-back"), "there is no going back into it");
+  eq($(doc, "am-app-rejected-ok").textContent, "Okay, start a new application", "one button acknowledges it");
+  check(devText(doc).indexOf("Waiting for the captain to acknowledge it") >= 0 &&
+        devText(doc).indexOf("Reject the application") < 0, "the simulator waits on the captain");
+  check(api.reload(), "a reload keeps it");
+  check(exists(doc, '[data-testid="am-app-rejected"]'), "and the captain still sees it until they acknowledge it");
+
+  /* --- acknowledged: the application closes and its details go --- */
+  click(doc, "am-app-rejected-ok");
+  eq(api.state.screen, "roles", "acknowledging it goes back to picking a role");
+  const closed = api.state.closedApps.slice(-1)[0];
+  check(closed && closed.requestId === firstId && closed.deprecated, "the application is kept only as a deprecated record");
+  const fm = api.state.roles.FM;
+  check(!fm.started && fm.pd.name === "" && fm.kyc.aadhaar.value === "" && fm.kyc.gst.gstin === "" &&
+        !fm.hub.selected && !fm.hub.pincodes.length, "none of its details are kept on the captain");
+  check(sel(doc, '[data-testid="closed-app-notice"]').textContent.indexOf(firstId) >= 0,
+        "the role picker says the application was rejected");
+  check(exists(doc, '[data-pick="FM"]'), "and offers FM again");
+
+  /* --- a new application starts clean, and the same details go through --- */
+  pickRole(doc, "FM");
+  check(H.R().requestId && H.R().requestId !== firstId, "a new application gets a new request ID");
+  eq(H.phaseId(), "pd", "starting from personal details");
+  eq($(doc, "pd-name").value, "", "with nothing filled in");
+  doPersonalDetails(doc);
+  doKyc(doc, "FM");
+  eq(H.phaseId(), "hub", "the same Aadhaar, PAN, bank account and GSTIN verify again");
+  A.switchRole();
+  eq(api.state.screen, "roles", "back on the role picker");
+  check(!exists(doc, '[data-testid="closed-app-notice"]'), "the notice goes once a new one is started");
+  api.stopTimers();
+  win.close();
+
+  /* --- a live captain's new-hub application --- */
+  const b = await boot();
+  b.api.state.loginAs = "existing";
+  b.api.helpers.seedExistingCaptain();
+  login(b.doc);
+  const liveHubs = b.api.state.hubs.filter(h => h.status === "active").length;
+  const aadhaar = b.api.state.profile.aadhaar;
+  b.api.actions.openPanel("hubs", "hubs");
+  b.api.actions.addHubOpen();
+  b.api.actions.addHubRole("FM");
+  b.api.actions.addHubChoice("existing");
+  b.api.actions.addHubContinue();
+  doHubDetails(b.doc, { pin: "560102", address: "Unit 3, 5th Cross, HSR Layout, Bengaluru" });
+  click(b.doc, "hub-continue");
+  if (b.api.helpers.phaseId() === "bgv") { b.api.actions.bgvSet("passed"); click(b.doc, "bgv-continue"); }
+  eq(b.api.helpers.phaseId(), "ch", "the new hub's application reaches the Area Manager");
+  check(b.api.state.hubs.some(h => h.status === "in_progress" && h.role === "FM"), "and is listed as in progress");
+  devClick(b.doc, "amapp:reject");
+  check(txt(b.doc).indexOf("rejected your application for this hub") >= 0, "the captain is told it’s this hub");
+  eq($(b.doc, "am-app-rejected-ok").textContent, "Okay, back to My Hubs", "and goes back to My Hubs");
+  click(b.doc, "am-app-rejected-ok");
+  eq([b.api.state.screen, b.api.state.panel.section], ["panel", "hubs"], "acknowledging it opens My Hubs");
+  check(exists(b.doc, '[data-testid="closed-hub-notice"]'), "which says the new hub was rejected");
+  check(!b.api.state.hubs.some(h => h.status === "in_progress" && h.role === "FM"), "the in-progress hub is gone");
+  eq(b.api.state.hubs.filter(h => h.status === "active").length, liveHubs, "the captain’s live hubs are untouched");
+  eq(b.api.state.profile.aadhaar, aadhaar, "and so is their account");
+  check(exists(b.doc, "#hub-add"), "they can add a new hub");
+  b.api.stopTimers();
+  b.win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
   const t0 = Date.now();
   /* each group runs on its own — a harness error in one is reported and the
      rest still run */
-  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes, testNoEmDashes, testPanelDs, testCityRates];
+  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes, testNoEmDashes, testPanelDs, testCityRates, testAmRejectsApplication];
   for (const g of groups) {
     try {
       await g();

@@ -3157,6 +3157,7 @@ function blankState() {
     sampleCaptain: null,       // a sample captain signed in instead (one of their hub ids)
     selfStash: null,           // whoever was signed in before them, parked until they come back
     amChanges: [],             // changes the Area Manager made directly — the captain is told, not asked
+    closedApps: [],            // applications the Area Manager rejected: closed, their details deprecated
     seededExisting: false      // the dev panel's existing captain is loaded — don't re-seed over it
   };
 }
@@ -4314,7 +4315,7 @@ function prevEditableIdx(r) {
   if (i < 0 || BACK_EDITABLE.indexOf(list[i].id) < 0) return -1;
   return i;
 }
-function canGoBack(r) { return prevEditableIdx(r) >= 0; }
+function canGoBack(r) { return !r.amRejected && prevEditableIdx(r) >= 0; }
 function backLabel(r) {
   var i = prevEditableIdx(r);
   return i < 0 ? "" : "← Back to " + phases()[i].lc;
@@ -4631,6 +4632,14 @@ function roleCard(code) {
   '</div>';
 }
 
+/* After a rejected application, until a new one is started for that role. */
+function closedAppNotice() {
+  var x = (S.closedApps || []).filter(function (c) { return !c.addingHub; }).slice(-1)[0];
+  if (!x || S.roles[x.role].started) return "";
+  return '<div class="notice info" data-testid="closed-app-notice" style="margin:0 0 20px"><b>Your application ' +
+    esc(x.requestId || "") + ' was rejected</b>You can start a new one below. Your earlier details were cleared, ' +
+    'so you’ll fill them in again.</div>';
+}
 function viewRoles() {
   var active = [], inactive = [];
   ["LM","FM"].forEach(function (c) {
@@ -4656,6 +4665,7 @@ function viewRoles() {
     '<div class="rs-body">' +
       '<h1>Select role</h1>' +
       '<p class="lede">Pick a role to continue. A new role needs onboarding before you can use it.</p>' +
+      closedAppNotice() +
       '<div class="rs-sec">Active roles (' + active.length + ')</div>' +
       activeHtml +
       '<div class="rs-sec">Inactive roles (' + inactive.length + ')</div>' +
@@ -5681,6 +5691,14 @@ function gstEditBlock(h) {
          inner + '</div>';
 }
 
+/* After a rejected new-hub application, until another hub is started. */
+function closedHubNotice() {
+  var x = (S.closedApps || []).slice(-1)[0];
+  if (!x || !x.addingHub || S.roles[x.role].started) return "";
+  return '<div class="notice info" data-testid="closed-hub-notice" style="margin:0 0 16px"><b>Your application ' +
+    esc(x.requestId || "") + ' for a new hub was rejected</b>You can add a new hub whenever you’re ready. ' +
+    'Your account and active hubs aren’t affected.</div>';
+}
 function panelHubs() {
   var active = S.hubs.filter(function (h) { return h.status === "active"; });
   var pending = S.hubs.filter(function (h) { return h.status === "in_progress"; });
@@ -5689,6 +5707,7 @@ function panelHubs() {
   var out = '<div class="crumbs">My Profile<span class="sep">›</span><b>My Hubs</b></div>' +
     '<h2 class="hub-h1"><button id="hub-back"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M17 7l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>My Profile</h2>' +
     panelTabs("hubs") +
+    closedHubNotice() +
     '<div class="hubs-head"><b>Active hubs (' + active.length + ')</b>' +
       '<button class="btn btn-primary" id="hub-add">＋ Add new hub</button></div>';
 
@@ -7837,7 +7856,7 @@ function sideDefault(r, extraTop) {
     ["Mobile", maskPhone(S.phone)],
     ["Role", ROLE_META[r.role].name],
     ["Request ID", r.requestId || "-"],
-    ["Status", list[idx].title]
+    ["Status", r.amRejected ? "Rejected" : list[idx].title]
   ];
   /* Hub category and the ceiling it drives are internal — the FM captain is
      never shown either. */
@@ -7850,13 +7869,20 @@ function sideDefault(r, extraTop) {
            '<span class="v">' + esc(x[1]) + '</span></div>';
   }).join("");
 
+  var s2 = { b: "Progress is saved", s: "You can leave and continue from here later." };
+  if (r.amRejected) {                 // a closed application: who to call, then start again
+    s1 = { b: "Call your Area Manager", s: r.amRejected.by + " can tell you why it was rejected." };
+    s2 = r.addingHub ? { b: "Add a new hub", s: "From My Hubs, whenever you’re ready." }
+                     : { b: "Start a new application", s: "You’ll fill in your details again." };
+  }
+
   return (extraTop || "") +
   '<div class="side-card">' +
     '<b>What happens next?</b>' +
     '<div class="side-step"><div class="n">1</div><div class="sx"><b>' + esc(s1.b) + '</b>' +
       '<span>' + esc(s1.s) + '</span></div></div>' +
-    '<div class="side-step"><div class="n">2</div><div class="sx"><b>Progress is saved</b>' +
-      '<span>You can leave and continue from here later.</span></div></div>' +
+    '<div class="side-step"><div class="n">2</div><div class="sx"><b>' + esc(s2.b) + '</b>' +
+      '<span>' + esc(s2.s) + '</span></div></div>' +
     '<div class="side-step"><div class="n">3</div><div class="sx"><b>Need help?</b>' +
       '<span>Contact VALMO Support for help.</span></div></div>' +
   '</div>' +
@@ -8306,6 +8332,8 @@ function phaseBGV(r) {
 /* ------------------------------------------------------ 4. Cluster Head review */
 
 var CH_CONTACT = { name:"Rakesh Sharma", cluster:"Bengaluru Urban Cluster", phone:"+91 98765 43210" };
+/* The captain's Area Manager, named only when they reject an application. */
+var AM_CONTACT = { name:"Priya Sharma", phone:"+91 98450 11223" };
 
 /* The Cluster Head is the captain's only named contact through this phase.
    Sign-off desks above them are internal and are never surfaced here. */
@@ -8370,6 +8398,32 @@ function chPhaseSub(r) {
 function phaseCH(r) {
   var ch = r.ch, fm = r.role === "FM", inner, side;
   var ng = fm ? noGstState(r.kyc.gst) : null;
+
+  /* The Area Manager rejected the application. Nothing more happens on it: the
+     captain is told, pointed to the Area Manager for why, and starts again. */
+  if (r.amRejected) {
+    inner = '<div data-testid="am-app-rejected">' +
+      statusBlock("bad", "Your application was rejected",
+        "Your Area Manager has rejected your application" + (r.addingHub ? " for this hub" : "") + ".") +
+      '<div class="notice info" data-testid="am-app-rejected-contact"><b>Want to know why?</b>Call your Area ' +
+        'Manager, ' + esc(r.amRejected.by) + ', on <a href="tel:' + esc(r.amRejected.phone.replace(/\s+/g, "")) +
+        '" style="color:var(--cyan-ink);font-weight:700;text-decoration:none">' + esc(r.amRejected.phone) + '</a>. ' +
+        'They can tell you more about the decision.</div>' +
+      '<div class="tl">' +
+        tlRow("bad", "Application " + esc(r.requestId || "-"), "Rejected on " + esc(r.amRejected.on) + ".") +
+        tlRow("", r.addingHub ? "Add a new hub" : "Start a new application",
+          r.addingHub ? "From My Hubs, whenever you’re ready."
+                      : "Your details from this application are cleared, so you’ll fill them in again.") +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:20px">' +
+        '<button class="btn btn-primary" id="am-app-rejected-ok">' +
+          (r.addingHub ? 'Okay, back to My Hubs' : 'Okay, start a new application') + '</button></div></div>';
+    return {
+      left: phaseHeader(r, "Application rejected", "Your Area Manager has closed this application.") +
+            cardWrap("Application rejected", "Your Area Manager has closed this application.", inner),
+      side: sideDefault(r)
+    };
+  }
 
   /* FM, no GST, and the Area Manager declined it: a GSTIN before anything else. */
   if (ng === "declined") {
@@ -9780,6 +9834,36 @@ var A = {
     if (r.am.status !== "approved") return;
     nextPhase();
   },
+  /* FM: the Area Manager rejects the application outright, at any point it's
+     with them, before the Cluster Head has approved it. */
+  amRejectApp: function () {
+    var r = R();
+    if (r.role !== "FM" || phases()[r.phaseIdx].id !== "ch" || r.ch.status === "approved" || r.amRejected) return;
+    r.amRejected = { on:fmtDay(new Date()), by:AM_CONTACT.name, phone:AM_CONTACT.phone };
+    save(); render();
+  },
+  /* The captain has read it. The application is closed and its details are
+     deprecated: kept only as a record, never read again, so a new application
+     with the same Aadhaar, PAN, bank account, GSTIN or pincodes isn't caught
+     as a duplicate of it. A new captain goes back to picking a role; a captain
+     adding a hub goes back to My Hubs, their own account untouched. */
+  amRejectedAck: function () {
+    var role = S.activeRole, r = role && S.roles[role];
+    if (!r || !r.amRejected) return;
+    S.closedApps = (S.closedApps || []).concat([{
+      requestId:r.requestId, role:role, rejectedOn:r.amRejected.on, by:r.amRejected.by,
+      addingHub:!!r.addingHub, hubPincode:r.hub.selected || "", deprecated:true
+    }]);
+    S.roles[role] = blankRole(role);
+    S.hubs = S.hubs.filter(function (h) { return !(h.status === "in_progress" && h.role === role); });
+    S.activeRole = null;
+    if (r.addingHub && S.hubs.length) {
+      S.screen = "panel"; S.panel.section = "hubs"; S.panel.tab = "hubs";
+    } else {
+      S.screen = "roles";
+    }
+    save(); render();
+  },
 
   /* ---- agreements ---- */
   markAgreementRead: function () {
@@ -10906,7 +10990,7 @@ var A = {
       S.admin.toast = "Sent back to the Area Manager to revise the rate card.";
     } else {
       r.stage = "done"; r.settled = "rejected";
-      S.admin.toast = "Request rejected · sent back to the captain.";
+      S.admin.toast = "Application rejected. The captain is told and asked to contact you, and can apply again.";
     }
     S.admin.selected = null;
     save(); render();
@@ -11364,6 +11448,7 @@ function bind() {
 
   /* area manager */
   on("am-continue", "click", A.amContinue);
+  on("am-app-rejected-ok", "click", A.amRejectedAck);
   on("am-fix-hub", "click", A.hubReopen);
 
   /* agreements */
@@ -11794,6 +11879,9 @@ function devBtn(label, action, kind, disabled) {
 }
 
 
+/* Dev panel: the Area Manager closing the application outright. */
+function amRejectBtn() { return devBtn("Reject the application", "amapp:reject", "bad"); }
+
 /* Dev panel: the checks a real service answers, armed for the next call. */
 function vxGroup(keys) {
   if (!keys.length) return null;
@@ -11961,18 +12049,22 @@ function devActions() {
       groups.push({ title: "Area Manager · no-GST declaration", html:
         '<p class="dnone">' + esc(r.kyc.gst.noGst.reason) + '</p>' +
         devBtn("Approve: continue without GST", "nogst:approve", "ok") +
-        devBtn("Decline: ask for a GSTIN", "nogst:decline", "bad") });
+        devBtn("Decline: ask for a GSTIN", "nogst:decline", "bad") + amRejectBtn() });
     } else if (ng === "declined") {
       groups.push({ title: "Area Manager", html:
         '<p class="dnone">Declined the no-GST declaration. Waiting for the captain to add a GSTIN.</p>' });
       groups.push(gstRegistryGroup());
+    } else if (fm && r.amRejected) {
+      groups.push({ title: "Area Manager", html:
+        '<p class="dnone">Rejected the application on ' + esc(r.amRejected.on) + '. Waiting for the captain to ' +
+        'acknowledge it.</p>' });
     } else if (fm) {
       if (!r.ch.category) {
         groups.push({ title: "Area Manager · pick hub type", html:
           CATEGORY_ORDER.map(function (c) {
             var m = HUB_CATEGORIES[c];
             return devBtn(m.label + " · slabs " + ceilingText(c, chCity(r)), "cat:" + c);
-          }).join("") });
+          }).join("") + amRejectBtn() });
       } else {
         var m = HUB_CATEGORIES[r.ch.category];
         var above = chAboveCeiling(r);
@@ -11983,14 +12075,14 @@ function devActions() {
             " · touchpoint fixed at " + money(m.tp) + '</p>' +
             devBtn("Submit rate card within ceiling", "am:rate-within", "ok") +
             devBtn("Submit rate card above ceiling", "am:rate-above", "warn") +
-            devBtn("Change hub type", "cat:clear") });
+            devBtn("Change hub type", "cat:clear") + amRejectBtn() });
         } else if (r.ch.status === "central") {
           groups.push({ title: "BizFin", html:
             devBtn("Approve rate card", "central:approve", "ok") +
             devBtn("Reject → back to Area Manager", "central:reject", "bad") });
         } else if (r.ch.status === "revision") {
           groups.push({ title: "Area Manager revision", html:
-            devBtn("Reprice within ceiling and resubmit", "am:reprice", "ok") });
+            devBtn("Reprice within ceiling and resubmit", "am:reprice", "ok") + amRejectBtn() });
         } else if (r.ch.status !== "approved") {
           groups.push({ title: "Cluster Head", html:
             (above
@@ -12218,6 +12310,7 @@ function devDo(cmd) {
       break;
     case "bgvfail": A.bgvApiFail(arg); break;
     case "bgv": A.bgvSet(arg); break;
+    case "amapp": A.amRejectApp(); break;
     case "nogst":
       if (arg === "gstin") A.amNoGstGstin();
       else A.chNoGstDecide(arg === "approve");

@@ -243,7 +243,24 @@ and tells the captain the code is finalised later. (LM still mints its hub code 
   separate system fed by the AM's survey.
 - **The FM hub code is generated when that checklist item completes** — not at hub details.
 
-**8. Seller-to-hub mapping is out of scope** and appears nowhere in the flow. It's handled
+**8. The Area Manager can reject an application outright.** While an FM application is with
+the Area Manager at Cluster Head review (the no-GST review, picking the hub type, pricing the
+rate card or revising it), they can reject it, and nothing more happens on it. The captain
+sees *Your application was rejected*, with the Area Manager to call for details (*Want to
+know why? Call your Area Manager, Priya Sharma, on …*), the application's request ID, and one
+button. Acknowledging it closes the application:
+
+- **Its details are deprecated.** The application is kept only as a record (`closedApps`) and
+  everything entered on it is cleared from the captain, so a new application with the same
+  Aadhaar, PAN, bank account, GSTIN or pincodes isn't caught as a duplicate of it.
+- **A new captain goes back to picking a role.** The role picker says the application was
+  rejected, and a new one starts from personal details with a new request ID.
+- **A live captain adding a hub goes back to My Hubs.** The in-progress hub goes, with a note
+  that it was rejected; their account and live hubs are untouched.
+
+The LM flow keeps its own Area Manager step and two-strike rule (below).
+
+**9. Seller-to-hub mapping is out of scope** and appears nowhere in the flow. It's handled
 by a different system. (The *SAH — seller as hub* category name is unrelated; that's a hub
 classification, not a mapping feature.)
 
@@ -881,11 +898,11 @@ The panel is contextual to the current phase and exposes exactly those actors:
 |---|---|
 | Background verification | mark passed / mark failed |
 | Cluster Head (LM) | approve / reject |
-| Area Manager (FM) | approve / decline a captain's no-GST declaration (first, when there is one); pick hub type (one button per type), then submit rate card within ceiling / above ceiling |
+| Area Manager (FM) | approve / decline a captain's no-GST declaration (first, when there is one); pick hub type (one button per type), then submit rate card within ceiling / above ceiling; **reject the application** at any of these, or while revising |
 | Cluster Head (FM) | approve rate card (within ceiling only) / raise to BizFin (above ceiling only) / reject → back to Area Manager |
 | BizFin (FM, once raised) | approve rate card / reject → back to Area Manager |
 | Admin · FM Central Admin | pick the role signed in: BizFin, Design team or FM Central Ops |
-| Area Manager revision (FM, after a rejection) | reprice within ceiling and resubmit |
+| Area Manager revision (FM, after a rejection) | reprice within ceiling and resubmit / reject the application |
 | Security deposit (LM only) | force success / failure / quote expired |
 | Area Manager (LM only) | approve / reject (two-strike counter shown) |
 | Agreements | mark agreement scrolled to end |
@@ -928,7 +945,7 @@ build from.
 npm install && npm test
 ```
 
-**2155 assertions across 40 groups:**
+**2188 assertions across 41 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -1171,6 +1188,13 @@ npm install && npm test
    the acknowledgement, changing only the columns filled in; a city added (duplicates refused,
    every ceiling needed) and holding cards there to its ceilings, Mall left out; kept across a
    reload; and read-only for FM Central Ops
+41. **The Area Manager rejects an application**: the simulator offering it while the Area Manager
+   has the application; the captain told, with the Area Manager to call, the request ID, no way
+   back in and one button; kept across a reload; on acknowledging it, the application kept only
+   as a deprecated record and every detail cleared, the role picker saying so and offering FM
+   again, a new application with a new request ID and nothing filled in, the same Aadhaar, PAN,
+   bank account and GSTIN verifying again; and for a live captain adding a hub, back to My Hubs
+   with a note, the in-progress hub gone and their account and live hubs untouched
 
 Six notes on how the tests drive the app:
 
