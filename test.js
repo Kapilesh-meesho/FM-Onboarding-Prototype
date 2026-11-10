@@ -8,7 +8,13 @@ const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
 
-const HTML = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+/* The page carries Leaflet inline. The harness takes it out, so the app runs the
+   way it does with no map library: the Google-embed fallback, or the stand-in
+   below when a test needs to tap the map. */
+const LEAFLET_JS = /<script>\s*\/\* @preserve\s*\n \* Leaflet [\s\S]*?<\/script>/;
+const PAGE = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+if (!LEAFLET_JS.test(PAGE)) throw new Error("inlined Leaflet script not found in index.html");
+const HTML = PAGE.replace(LEAFLET_JS, "");
 
 /* ------------------------------------------------------------- harness --- */
 
@@ -149,6 +155,7 @@ function doPersonalDetails(doc, { name = "Karan Verma" } = {}) {
   click(doc, "pd-verify-email");
   type(doc, "pd-email-otp", "000000");
   click(doc, "pd-email-otp-go");
+  setCheck(doc, "pd-tnc", true);
   click(doc, "pd-continue");
 }
 
@@ -312,7 +319,7 @@ async function testLM() {
   check(!lm.act.partnerId, "LM does not mint an FM Partner ID");
   eq(Object.keys(lm.act.done).length, 6, "all 6 LM fan-out targets completed");
   const lmFan = api.config.FANOUT.LM.map(f => f.label);
-  eq(lmFan, ["VLS","OpsTech","Captain Service","UMS","Agreement store","Payout profile"],
+  eq(lmFan, ["Vendor account","Hub setup","Captain profile","Login access","Agreements","Payments"],
      "LM fan-out list matches the brief");
   check(lm.complete, "LM role marked complete");
 
@@ -495,9 +502,9 @@ async function testFMCombined() {
   /* --- the combined blurb describes the card, it does not blend it --- */
   check(exists(doc, '[data-testid="combined-blurb"]'), "the combined blurb is shown");
   const blurb = sel(doc, '[data-testid="combined-blurb"]').textContent;
-  check(blurb.indexOf("slab rate for your order volume plus the touchpoint rate") >= 0,
-        "it says slab rate plus touchpoint, on one payout line");
-  check(blurb.indexOf("on one payout line") >= 0, "and names the single payout line");
+  check(blurb.indexOf("order rate plus the touchpoint rate") >= 0,
+        "it says order rate plus touchpoint");
+  check(blurb.indexOf("paid together") >= 0, "and that they are paid together");
   check(blurb.indexOf("blended") === -1, "no 'blended figure' claim");
   check(blurb.indexOf("single per-shipment rate") === -1,
         "and no single per-shipment rate that would contradict the slabs above");
@@ -543,8 +550,8 @@ async function testFMCombined() {
   check(!!fm.hub.hubCode,
         "FM hub code is issued at design & hub-code mapping (" + fm.hub.hubCode + ")");
   const fmFan = api.config.FANOUT.FM.map(f => f.label);
-  eq(fmFan, ["Design & hub-code mapping","Partner ID","Captain Service","UMS",
-             "Agreement store","Payout profile"], "FM fan-out list matches the brief");
+  eq(fmFan, ["Hub code","Partner ID","Captain profile","Login access",
+             "Agreements","Payments"], "FM fan-out list matches the brief");
   check(api.config.FANOUT.FM[0].passive === true,
         "design & hub-code mapping is a passive checklist item");
   /* Seller-to-hub mapping is out of scope. "SAH (seller as hub)" is a category
@@ -602,7 +609,7 @@ async function testFMAboveCeiling() {
   eq(r.ch.status, "central", "above-ceiling card is raised to Central Admin");
   check(!exists(doc, '[data-testid="captain-rate-card"]'), "and none while it waits for BizFin either");
   check(exists(doc, '[data-testid="ch-signoff"]'), "captain sees a pending sign-off state");
-  check(mainTxt(doc).indexOf("needs one more sign-off") >= 0,
+  check(mainTxt(doc).indexOf("need one more approval") >= 0,
         "copy says only that one more sign-off is needed");
   check(txt(doc).indexOf("Zonal Head") === -1, "no Zonal Head anywhere on the page");
   check(txt(doc).indexOf("Central Admin") === -1, "and the deciding desk is not named either");
@@ -619,7 +626,7 @@ async function testFMAboveCeiling() {
   eq(r.ch.status, "revision", "a Central Admin rejection sends the card back to the AM");
   eq(r.ch.revision.by, "BizFin", "and records which desk sent it back");
   check(exists(doc, '[data-testid="ch-revision"]'), "captain sees a revision state");
-  check(mainTxt(doc).indexOf("being revised by your Area Manager") >= 0,
+  check(mainTxt(doc).indexOf("Your Area Manager is updating your rates") >= 0,
         "copy names only the Area Manager");
   check(mainTxt(doc).indexOf("reject") === -1 && mainTxt(doc).indexOf("Reject") === -1,
         "the captain is not told it was rejected");
@@ -844,8 +851,8 @@ async function testValidation() {
   type(doc, "kyc-acc", "12");
   type(doc, "kyc-ifsc", "BADIFSC");
   click(doc, "kyc-bank-go");
-  check(txt(doc).indexOf(E.account) >= 0, "bad account number → '" + E.account + "'");
-  check(txt(doc).indexOf(E.ifsc) >= 0, "bad IFSC → '" + E.ifsc + "'");
+  check(txt(doc).indexOf(api.vx.accShort) >= 0, "short account number → '" + api.vx.accShort + "'");
+  check(txt(doc).indexOf(api.vx.ifscFormat) >= 0, "bad IFSC → '" + api.vx.ifscFormat + "'");
   check(!api.helpers.R().kyc.bank.done, "bank not marked verified on a bad input");
 
   /* --- map link error copy --- */
@@ -1069,8 +1076,9 @@ async function testCeilings() {
         "a mini-hub card exactly on every ceiling is within");
   check(H.cardAbove("standalone_mini", "", card(["3.00", "2.90", "2.80", "2.40", "2.30"])),
         "one slab over its own ceiling (2.80 against 2.73) puts it above");
-  check(H.cardAbove("standalone", "Jaipur", card(["1.00", "1.00", "1.00", "1.00", "1.00"])),
+  check(H.cardAbove("standalone", "Kochi", card(["1.00", "1.00", "1.00", "1.00", "1.00"])),
         "a Standalone card in a city with no ceilings goes to BizFin, however low");
+  eq(H.slabCeiling("standalone", "Jaipur, Rajasthan", 0), 2.55, "every city on the sheet has its ceilings (Jaipur 2.55)");
   eq(H.ceilingText("standalone_mini", ""), "₹3.20 → ₹2.20", "stepped ceilings read first to last");
   eq(H.ceilingText("standalone", "Bengaluru"), "₹3.50", "flat ceilings read as one figure");
 
@@ -1767,7 +1775,7 @@ async function testCaptainHub() {
   /* --- PR-01 --- */
   body = txt(doc);
   check(body.indexOf("KYC details") >= 0, "PR-01 shows the KYC card");
-  check(body.indexOf("shared across all your hubs") >= 0, "KYC is stated as captain-level");
+  check(body.indexOf("used for all your hubs") >= 0, "KYC is stated as captain-level");
   check(body.indexOf("XXXX XXXX 1234") >= 0, "Aadhaar is masked");
   check(body.indexOf("ABCDE••••F") >= 0, "PAN is masked");
   check(body.indexOf("HDFC Bank •••• 4321") >= 0, "bank account is masked");
@@ -1846,7 +1854,7 @@ async function testCaptainHub() {
   eq(api.state.panel.section, "addhub", "Add new hub opens the GST choice screen");
   body = txt(doc);
   check(body.indexOf("How is this hub registered for GST?") >= 0, "HB-07 heading present");
-  check(body.indexOf("Your KYC and bank details carry over automatically") >= 0,
+  check(body.indexOf("Your KYC and bank details are already saved") >= 0,
         "HB-07 states that KYC and bank carry over");
   ["existing","none","new"].forEach(c =>
     check(!!sel(doc, '[data-choice="' + c + '"]'), "GST choice offered: " + c));
@@ -2601,7 +2609,7 @@ async function testFMCaptainCopy() {
         txt(doc).indexOf("it applies only once you agree to it") >= 0 &&
         txt(doc).indexOf("never applies to days before you agree") >= 0,
         "the service agreement says a revision applies only once the captain agrees, never backdated, naming no desk");
-  check(txt(doc).indexOf("Rate card values are set by your Area Manager") >= 0,
+  check(txt(doc).indexOf("Your rates are set by your Area Manager") >= 0,
         "the rate card checkbox credits the Area Manager");
   check(txt(doc).indexOf("captured during Cluster Head review") === -1,
         "and no longer says the Cluster Head captured the values");
@@ -2963,7 +2971,7 @@ async function testPincodesOnHub() {
   api.actions.removePincode("560076");
   api.actions.removePincode("700001");
   api.actions.typeHubPincode("");
-  api.actions.hubSubmit({ address: "Plot 7", mapLink: mapFor(doc, "560076"), areaSqft: "4000", manpower: "12",
+  api.actions.hubSubmit({ address: "Plot 7, Bommasandra Industrial Area", mapLink: mapFor(doc, "560076"), areaSqft: "4000", manpower: "12",
                           maxVehicle: "7MT_20FT" });
   check(!api.helpers.R().hub.submitted, "with no pincodes at all it won’t submit");
   eq(api.helpers.R().hub.errors.hubPin, api.errors.pincodeSelect, "it asks for the hub’s pincode");
@@ -3093,7 +3101,7 @@ async function testMapPin() {
   check(!$(doc, "hub-map-box").classList.contains("bad"), "a half-typed link is not shouted at");
   $(doc, "hub-map").dispatchEvent(new win.Event("change", { bubbles: true }));
   check($(doc, "hub-map-box").classList.contains("bad"), "but is flagged once the field is left");
-  eq($(doc, "hub-map-hint").textContent, E.mapLink, "with the format error");
+  eq($(doc, "hub-map-hint").textContent, api.vx.mapNotGoogle, "with the format error");
 
   /* submit runs the same check */
   doHubDetails(doc, { pin: null, map: at("560034") });
@@ -3171,6 +3179,7 @@ async function testApiFailures() {
   check(exists(doc, "#pd-email-otp"), "and sends the code");
   type(doc, "pd-email-otp", "000000");
   click(doc, "pd-email-otp-go");
+  setCheck(doc, "pd-tnc", true);
   click(doc, "pd-continue");
   eq(H.phaseId(), "kyc", "personal details completes after the resume");
 
@@ -3287,7 +3296,7 @@ async function testApiFailures() {
   b.api.actions.actFail();
   const doneAtFail = Object.keys(act().done);
   const failedSys = b.api.config.FANOUT.LM.filter(f => doneAtFail.indexOf(f.id) < 0)[0];
-  check(failText(b.doc).indexOf(failedSys.label + " did not respond in time.") >= 0,
+  check(failText(b.doc).indexOf(failedSys.label + " is taking too long right now.") >= 0,
         "activation names the system that failed (" + failedSys.label + ")");
   check(txt(b.doc).indexOf("Activation paused") >= 0, "and calls activation paused");
   /* the admin status chip shares the .st class — it must not stop a status line wrapping */
@@ -3443,7 +3452,7 @@ async function testGstVerification() {
   /* a similar name is accepted, labelled so, and still has to be saved */
   check(txt(doc).indexOf("GSTIN verified") >= 0, "the verified record is shown");
   eq(sel(doc, '[data-testid="gst-check"]').getAttribute("data-level"), "similar", "as a similar name");
-  check(txt(doc).indexOf("Similar to your bank account name: accepted · 80%") >= 0,
+  check(txt(doc).indexOf("Close to your bank account name: accepted · 80%") >= 0,
         "with its score");
   eq(H.hubById("hub-aqt").gst.gstin, "29ABCDE1234F1Z5", "nothing is saved until the captain saves it");
   click(doc, "gst-again");
@@ -4830,7 +4839,7 @@ async function testLeanAdmin() {
    33. Dropping the pin on the map — captain and Area Manager
    ====================================================================== */
 
-/* jsdom loads no external scripts, so the page never gets Leaflet. This stand-in
+/* The harness strips the page’s Leaflet, so the app never gets it. This stand-in
    records what the app asks of it (the view, the tiles, the pin and the
    handlers) and lets a test fire a tap or a drag the way Leaflet would. */
 function mockLeaflet() {
@@ -4907,7 +4916,7 @@ async function testMapPick() {
   eq(m.opts.scrollWheelZoom, false, "scrolling the page past it doesn’t zoom the map");
   check(!m.pin(), "there is no pin until one is dropped");
   check(sel(doc, '[data-testid="map-pick-hint"]').textContent.indexOf("Tap the map") >= 0, "the map says to tap it");
-  check($(doc, "hub-map-hint").textContent.indexOf("Tap the map to drop the pin") >= 0,
+  check($(doc, "hub-map-hint").textContent.indexOf("Tap the map to mark your hub") >= 0,
         "and so does the hint under the link field");
 
   /* the frame used to share data-pick with the role cards, so a click on it
@@ -5319,7 +5328,7 @@ async function testNoGst() {
   check(exists(doc, '[data-testid="kyc-nogst"]'), "Don’t have GST? opens a declaration");
   check(!exists(doc, "#kyc-gstin"), "in place of the GSTIN field");
   check(txt(doc).indexOf("Your Area Manager has to approve this") >= 0 &&
-        txt(doc).indexOf("only goes live once your Area Manager approves it") >= 0,
+        txt(doc).indexOf("goes live only after your Area Manager approves") >= 0,
         "saying the Area Manager has to approve it");
   check(devText(doc).indexOf("GST portal") === -1 && devText(doc).indexOf("GSTIN check") === -1,
         "and the simulator offers no GSTIN check — none is made");
@@ -5352,7 +5361,7 @@ async function testNoGst() {
   eq(H.phaseId(), "ch", "and on to the review");
 
   /* the Area Manager's call comes first */
-  check(txt(doc).indexOf("Area Manager: reviewing your request to continue without GST") >= 0,
+  check(txt(doc).indexOf("Area Manager is checking your request to continue without GST") >= 0,
         "the captain sees the Area Manager reviewing it");
   check(devText(doc).indexOf("Area Manager · no-GST declaration") >= 0, "the simulator offers the AM’s call");
   check(devText(doc).indexOf("pick hub type") === -1, "before the hub type");
@@ -5722,13 +5731,269 @@ async function testNoEmDashes() {
   win.close();
 }
 
+/* =========================================================================
+   39. Panel DS v1: the designer's revision, with the product calls on it
+   ====================================================================== */
+
+async function testPanelDs() {
+  section("39. Panel DS v1: design pass, Terms consent, input checks");
+  const { win, doc, api } = await boot();
+  const A = api.actions, H = api.helpers, VX = api.vx, E = api.errors;
+  const leave = (id, value) => {           // type into a field, then move on from it
+    const el = $(doc, id);
+    el.value = value;
+    el.dispatchEvent(new win.Event("input", { bubbles: true }));
+    el.dispatchEvent(new win.FocusEvent("focusout", { bubbles: true }));
+  };
+  const hintOf = (id) => {
+    const fl = $(doc, id).closest(".fl");
+    const h = fl && fl.querySelector(".hint");
+    return h ? h.textContent : "";
+  };
+
+  /* --- the design system --- */
+  const css = [...doc.querySelectorAll("style")].map(s => s.textContent).join("\n");
+  check(/--font:'Mier B02',/.test(css), "Mier B02 leads the font stack, as the designer set it");
+  check(/body\{[^}]*font-size:13px;line-height:20px/.test(css.replace(/\s+/g, "")), "body text is 13/20");
+
+  /* --- the OTP flow is unchanged: no resend cap, no armable expiry --- */
+  login(doc);
+  pickRole(doc, "FM");
+  A.logout();
+  type(doc, "phone", "7004301290");
+  click(doc, "go-otp");
+  check(devText(doc).indexOf("Simulate a check result") < 0, "the OTP screen offers no check to arm");
+  for (let i = 0; i < 5; i++) A.resendOtp();
+  eq(api.state.otpError, "", "five resends in a row are all allowed");
+  eq(api.state.otpSeconds, 25, "and each restarts the timer");
+  A.resetAll();
+
+  /* --- Terms consent gates personal details --- */
+  login(doc);
+  pickRole(doc, "FM");
+  type(doc, "pd-name", "Karan Verma");
+  type(doc, "pd-email", "karan.verma@gmail.com");
+  click(doc, "pd-verify-email");
+  type(doc, "pd-email-otp", "000000");
+  click(doc, "pd-email-otp-go");
+  check(exists(doc, "#pd-tnc"), "personal details asks for Terms consent");
+  check($(doc, "pd-continue").disabled, "Continue stays off until it is ticked");
+  setCheck(doc, "pd-tnc", true);
+  check(!$(doc, "pd-continue").disabled, "and comes on once it is");
+
+  /* --- fields are checked on leaving them, and clear once fixed --- */
+  leave("pd-name", "Karan 2");
+  eq(hintOf("pd-name"), VX.nameChars, "a name with a digit is flagged on leaving the field");
+  leave("pd-name", "Karan Verma");
+  check(hintOf("pd-name") !== VX.nameChars, "and the error clears once it is fixed");
+  leave("pd-alt", "7004301290");
+  eq(hintOf("pd-alt"), VX.phoneSame, "the alternate number can’t be the login number");
+  leave("pd-alt", "5876543210");
+  eq(hintOf("pd-alt"), VX.phoneStart, "nor start with 0 to 5");
+  leave("pd-alt", "9876543210");
+  click(doc, "pd-continue");
+  eq(H.phaseId(), "kyc", "personal details completes");
+
+  /* --- the demo Aadhaar still verifies --- */
+  type(doc, "kyc-aadhaar", "123412341234");
+  click(doc, "kyc-aadhaar-go");
+  check(exists(doc, "#kyc-aadhaar-otp"), "the demo Aadhaar 1234 1234 1234 is accepted");
+  check(devText(doc).indexOf("Simulate a check result") < 0, "no check to arm while the Aadhaar OTP is open");
+  type(doc, "kyc-aadhaar-otp", "000000");
+  click(doc, "kyc-aadhaar-confirm");
+  click(doc, "kyc-ack-aadhaar");
+
+  /* --- no PAN is turned away for its type --- */
+  type(doc, "kyc-pan", "ABCCE1234F");                // 4th letter C: a company PAN
+  type(doc, "kyc-pan-father", "Suresh Verma");
+  click(doc, "kyc-pan-go");
+  check(H.R().kyc.pan.done, "a company PAN verifies like any other");
+  check(VX.panType === undefined, "and no message exists to turn one away");
+  click(doc, "kyc-ack-pan");
+
+  /* --- bank format checks, and a ₹1 check that is debited and refunded --- */
+  check(txt(doc).indexOf("₹1 will be deducted from this account") >= 0, "the ₹1 check is described as deducted");
+  type(doc, "kyc-acc", "1234-5678-9012");
+  type(doc, "kyc-ifsc", "HDFC0001234");
+  click(doc, "kyc-bank-go");
+  check(txt(doc).indexOf(VX.accNonDigit) >= 0, "an account number with dashes is refused");
+  type(doc, "kyc-acc", "123456789012");
+  devClick(doc, "vx:pennyClosed");
+  click(doc, "kyc-bank-go");
+  check(txt(doc).indexOf(VX.pennyClosed) >= 0, "an armed ₹1 check result is reported");
+  check(!H.R().kyc.bank.done, "and the account is not verified");
+  click(doc, "kyc-bank-go");
+  check(H.R().kyc.bank.done, "the armed result is spent on that one call");
+  click(doc, "kyc-ack-bank");
+
+  /* --- an armed GSTIN result, then a clean one --- */
+  devClick(doc, "vx:gstinSusp");
+  type(doc, "kyc-gstin", "29ABCDE1234F1Z5");
+  click(doc, "kyc-gst-go");
+  check(txt(doc).indexOf(VX.gstinSusp) >= 0, "a suspended GSTIN is reported");
+  click(doc, "kyc-gst-go");
+  check(H.R().kyc.gst.done, "and the next try verifies");
+  click(doc, "kyc-continue");
+
+  /* --- hub details: the pincode rules are as they were --- */
+  H.goPhase("hub");
+  A.addPincodes("110017");
+  check(H.R().hub.pincodes.indexOf("110017") >= 0, "a pincode in another state is still accepted");
+  A.addPincodes("012345");
+  eq(H.R().hub.errors.pincode, E.pincodeFormat, "one starting with 0 gets the usual format message");
+  check(VX.pinStart === undefined && VX.pinServ === undefined, "no new pincode messages exist");
+  check(devText(doc).indexOf("not serviceable") < 0, "and no pincode check can be armed");
+  const pinHintBefore = hintOf("hub-pin");
+  leave("hub-pin", "56");
+  eq(hintOf("hub-pin"), pinHintBefore, "pincode fields aren’t checked on leaving them");
+
+  /* --- new hub field rules --- */
+  leave("hub-address", "PO Box 42, Bengaluru 560001");
+  eq(hintOf("hub-address"), VX.addrPo, "a PO Box is not a hub address");
+  leave("hub-address", "Plot 7");
+  eq(hintOf("hub-address"), VX.addrShort, "nor is a short one");
+  leave("hub-area", "4,000");
+  eq(hintOf("hub-area"), VX.areaDec, "area takes a whole number with no commas");
+  leave("hub-manpower", "6000");
+  eq(hintOf("hub-manpower"), VX.manMax, "manpower is capped at 5,000");
+
+  /* --- the back button sits in the section header --- */
+  const back = $(doc, "phase-back");
+  check(back && back.classList.contains("hdr-back") && back.closest(".hdr-ttl"),
+        "Back is a chevron beside the section title");
+  check(!sel(doc, ".cfoot #phase-back"), "and no longer sits in the card footer");
+
+  /* --- no em dash in any message the checks can show --- */
+  const msgs = Object.values(VX).concat(Object.values(E).filter(v => typeof v === "string"));
+  eq(msgs.filter(m => m.indexOf("—") >= 0), [], "no em dash in any validation message");
+
+  api.stopTimers();
+  win.close();
+}
+
+/* =========================================================================
+   40. City rates: BizFin sets Standalone and Mall ceilings by city
+   ====================================================================== */
+
+async function testCityRates() {
+  section("40. City rates: BizFin sets ceilings by city");
+  const { win, doc, api } = await boot();
+  const A = api.actions, H = api.helpers;
+  const fire = (el, t) => el.dispatchEvent(new win.Event(t, { bubbles: true }));
+  const put = (q, v) => { const el = sel(doc, q); el.value = v; fire(el, "input"); };
+  const rateBox = (i) => '[data-cityrate="' + i + '"]';
+  const cityErr = () => (sel(doc, '[data-testid="city-error"]') || { textContent:"" }).textContent;
+
+  /* --- the sheet, loaded --- */
+  eq(H.cityList("standalone").length, 256, "every Standalone city on the sheet is loaded");
+  eq(H.cityList("mall").length, 194, "and every Mall hub city");
+  eq(H.ceilingRow("standalone", "Hansi"), [1.525, 1.5, 1.5, 1.5, 1.5, 1.5], "a row keeps the sheet’s third decimal");
+  eq(H.slabCeiling("standalone", "Chennai", 0), 3.5, "Standalone in Chennai starts at 3.50");
+  eq(H.slabCeiling("mall", "Chennai", 0), 2.35, "while a Mall hub there starts at 2.35");
+  eq(H.slabCeiling("mall", "Jalandhar", 12500), 2.05, "and Jalandhar’s Mall row is its own");
+  eq(H.slabCeiling("standalone", "Hamirpur-up", 0), 2.2, "a lower-case sheet name still matches");
+  eq([H.fixedTp("standalone", "Agra"), H.fixedTp("mall", "Agra"), H.fixedTp("standalone_mini", "Agra")],
+     ["5.00", "2.00", "6.00"], "each city carries its hub type’s touchpoint");
+  eq(H.slabCeiling("standalone", "Kochi", 0), null, "a city off the sheet has no ceilings yet");
+
+  /* --- BizFin opens it on Bengaluru --- */
+  devClick(doc, "as:admin");
+  login(doc);
+  asCentral(doc, "bizfin");
+  A.adminTab("slabs");
+  clickSel(doc, '[data-slabtype="standalone_mini"]');
+  check(exists(doc, '[data-testid="city-flat"]') && !exists(doc, "#city-pick"),
+        "a mini-hub is priced the same in every city, with no city to pick");
+  clickSel(doc, '[data-slabtype="standalone"]');
+  check(exists(doc, '[data-testid="ap-city-rates"]'), "Standalone has city rates");
+  eq($(doc, "city-pick").options.length, 256, "with every city to pick from");
+  eq($(doc, "city-pick").value, "bengaluru", "opening on Bengaluru");
+  eq(sel(doc, rateBox(0)).value, "3.50", "its ceilings filled in");
+  eq($(doc, "city-tp").value, "5.00", "and its touchpoint");
+  check(txt(doc).indexOf("Bengaluru: From the rate card sheet.") >= 0, "saying where they come from");
+
+  /* --- one city --- */
+  $(doc, "city-pick").value = "delhi"; fire($(doc, "city-pick"), "change");
+  eq(sel(doc, rateBox(0)).value, "2.65", "picking Delhi shows Delhi’s ceilings");
+  click(doc, "city-save");
+  check(cityErr().indexOf("already on") >= 0, "saving them unchanged says so");
+  put(rateBox(0), "two");
+  click(doc, "city-save");
+  check(cityErr().indexOf("0–2,500 ceiling") >= 0, "a ceiling that isn’t a rate is refused, naming the column");
+  put(rateBox(0), "2.80");
+  put("#city-tp", "5.50");
+  click(doc, "city-save");
+  eq(H.slabCeiling("standalone", "New Delhi, Delhi", 0), 2.8, "Delhi’s new ceiling holds Standalone cards there");
+  eq(H.fixedTp("standalone", "Delhi"), "5.50", "and its new touchpoint");
+  eq(H.slabCeiling("mall", "Delhi", 0), 2.65, "Mall hubs in Delhi are untouched");
+  check(txt(doc).indexOf("Delhi: Changed by BizFin on") >= 0, "the city says who changed it");
+  check(sel(doc, '[data-testid="city-log"]').textContent.indexOf("Delhi") >= 0, "and the change is logged");
+
+  /* --- every city at once --- */
+  setCheck(doc, "city-all", true);
+  check(exists(doc, '[data-testid="city-all-warn"]'), "ticking All cities warns first");
+  check(sel(doc, '[data-testid="city-all-warn"]').textContent.indexOf("This changes all 256 Standalone cities") >= 0,
+        "naming how many cities it changes");
+  check($(doc, "city-pick").disabled && $(doc, "city-pick").value === "*", "the city picker stands down");
+  eq($(doc, "city-save").textContent, "Apply to all 256 cities", "and the button says what it does");
+  eq(sel(doc, rateBox(0)).value, "", "every column starts blank, to keep each city’s own rate");
+  click(doc, "city-save");
+  check(cityErr().indexOf("at least one column") >= 0, "nothing filled in, nothing changes");
+  put(rateBox(5), "1.40");
+  click(doc, "city-save");
+  check(cityErr().indexOf("Tick the box") >= 0, "it won’t apply until the warning is acknowledged");
+  check(H.slabCeiling("standalone", "Agra", 12500) === 3, "and nothing has changed yet");
+  setCheck(doc, "city-ack", true);
+  click(doc, "city-save");
+  check(H.cityList("standalone").every(c => c.row[5] === 1.4), "the top column is 1.40 in every city");
+  eq(H.slabCeiling("standalone", "Agra", 0), 3.25, "the columns left blank keep each city’s own rate");
+  eq(H.slabCeiling("standalone", "Delhi", 0), 2.8, "including a city changed earlier");
+  check(!$(doc, "city-all").checked && !exists(doc, '[data-testid="city-all-warn"]'), "and the editor goes back to one city");
+  check(sel(doc, '[data-testid="city-log"]').textContent.indexOf("All 256 cities") >= 0, "the change is logged for all cities");
+
+  /* --- a new city --- */
+  click(doc, "city-add");
+  check(exists(doc, '[data-testid="city-new"]'), "Add city opens a form");
+  eq($(doc, "city-new-tp").value, "5.00", "with the hub type’s touchpoint filled in");
+  put("#city-new-name", "bengaluru");
+  click(doc, "city-new-save");
+  check(cityErr().indexOf("already on the list") >= 0, "a city already there can’t be added again");
+  put("#city-new-name", "Kochi");
+  click(doc, "city-new-save");
+  check(cityErr().indexOf("ceiling as a rate") >= 0, "every ceiling is needed");
+  ["2.60", "2.40", "2.20", "2.00", "1.80", "1.60"].forEach((v, i) => put('[data-citynew="' + i + '"]', v));
+  click(doc, "city-new-save");
+  eq(H.cityList("standalone").length, 257, "Kochi joins the Standalone cities");
+  eq(H.slabCeiling("standalone", "Kochi, Kerala", 0), 2.6, "and holds Standalone cards there to its ceilings");
+  eq(H.slabCeiling("mall", "Kochi", 0), null, "Mall hubs are added separately");
+  eq($(doc, "city-pick").value, "kochi", "the new city is picked");
+  check(txt(doc).indexOf("257 cities, 1 added by BizFin") >= 0, "and counted as added");
+  check(!H.cardAbove("standalone", "Kochi", { slabs:[{ from:"0", to:"2500", rate:"2.50" }] }),
+        "a card under Kochi’s ceilings is now within them");
+
+  /* --- kept across a reload, and read-only for FM Central Ops --- */
+  check(api.reload(), "the save reloads");
+  eq(H.slabCeiling("standalone", "Delhi", 0), 2.8, "with Delhi’s rates kept");
+  eq(H.slabCeiling("standalone", "Kochi", 0), 2.6, "and Kochi still there");
+  A.adminSwitchRole();
+  asCentral(doc, "ops");
+  A.adminTab("slabs");
+  clickSel(doc, '[data-slabtype="standalone"]');
+  check(exists(doc, '[data-testid="ap-city-rates"]') && !exists(doc, "#city-save") && !exists(doc, "#city-all") &&
+        !exists(doc, "#city-add"), "FM Central Ops sees city rates but can’t change them");
+  check(txt(doc).indexOf("Only BizFin can change city rates.") >= 0, "and is told so");
+
+  api.stopTimers();
+  win.close();
+}
+
 /* ------------------------------------------------------------------ run --- */
 
 (async function run() {
   const t0 = Date.now();
   /* each group runs on its own — a harness error in one is reported and the
      rest still run */
-  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes, testNoEmDashes];
+  const groups = [testLM, testFMCombined, testFMAboveCeiling, testRoleIndependence, testValidation, testOtpFocusSurvivesCountdown, testAmTwoStrike, testCeilings, testDevPanel, testBulkPincodes, testHubFacilityInputs, testPhaseOrder, testBackAndPhoto, testCaptainHub, testAdminPanel, testCeilingEscalation, testCartingDesign, testFMCaptainCopy, testFMNoSplit, testCopyConsistency, testPincodesOnHub, testMapPin, testApiFailures, testGstVerification, testAmMapEdit, testHubEdits, testRateUpdates, testTypedHubPincode, testAmPortfolio, testAmDirectChanges, testSampleCaptains, testLeanAdmin, testMapPick, testCentralRates, testNoGst, testHierarchy, testSampleNotes, testNoEmDashes, testPanelDs, testCityRates];
   for (const g of groups) {
     try {
       await g();

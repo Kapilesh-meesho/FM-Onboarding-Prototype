@@ -5,9 +5,9 @@ two different journeys**: the existing **LM Captain** flow (9 phases, as designe
 new **FM Captain** flow (7 phases, which diverges after role selection).
 
 Everything is one file. Open `index.html` in a browser — no build step, no server. All CSS
-and JS are inline and the Valmo logo is embedded as a data URI. The one thing fetched is the
-map: Leaflet from unpkg and tiles from OpenStreetMap, so the maps need an internet
-connection.
+and JS are inline, Leaflet 1.9.4 (BSD-2-Clause) is inlined for the maps, and the Valmo logo is
+embedded as a data URI. The one thing fetched is the map tiles from OpenStreetMap, so the maps
+need an internet connection.
 
 ```bash
 open index.html
@@ -19,6 +19,21 @@ open index.html
 *Logged-in · Profile & Hubs* (`96:2`, 17 frames) and page *Admin Panels · Onboarding
 Approvals* (`109:2`). Colours, spacing, typography and
 component styling are taken from the frames themselves rather than approximated.
+
+**Panel DS v1.** The Product Designer's design-system pass is applied on top: the
+`Mier B02` typeface leads the font stack (it shows where the font is installed, and falls
+back to Inter elsewhere), body text is 13/20, type runs 10 · 11 · 12 · 13 · 15 · 17 · 21,
+spacing sits on a 4px grid, radii are 4 · 8 · 12 · 16 · 24, and the colour tokens are
+merged into fewer shared ones. Back is a chevron beside the section title, Edit buttons
+carry a pen icon, and the captain-facing copy is rewritten in plainer words. Personal details
+asks for Terms & Conditions and Privacy Policy consent before Continue. Fields are checked as
+the captain leaves them (name, phones, email, Aadhaar, PAN, bank, GSTIN, hub address, area,
+manpower), with format rules such as a mobile starting 6 to 9, no PO Box address and whole
+numbers for area and manpower. Checks only a real service can answer (Aadhaar in use or under
+18, PAN name or Aadhaar link, IFSC, NRE/NRO, the ₹1 check, GSTIN status) are armed from
+**Simulate a check result** in the backend panel. By product decision the revision leaves
+the OTP flows, the pincode rules and the demo Aadhaar as they were, and turns no PAN away
+for its type.
 
 ---
 
@@ -168,9 +183,10 @@ approved*. The Cluster Head stays the captain's only named contact throughout.
 **5. The rate card is approved against ceilings for the hub type and city, and the
 touchpoint is fixed.** Both come from the FM hub rate card sheet.
 
-The **touchpoint rate is fixed per hub type** — no one prices it, the Area Manager included.
-It's shown read-only wherever a card is made (onboarding, an update, a bulk update) and
-changes only with the hub type:
+The **touchpoint rate is fixed per hub type**, and for Standalone and Mall hubs per city. No one
+prices it, the Area Manager included. It's shown read-only wherever a card is made
+(onboarding, an update, a bulk update) and changes only with the hub type or BizFin's city
+rates. The sheet gives every city its hub type's rate:
 
 | Hub type | Touchpoint (₹/touchpoint) |
 |---|---|
@@ -183,9 +199,10 @@ changes only with the hub type:
 **Slab ceilings are per slab.** The sheet has six 2,500-order columns (0–2,500 up to above
 12,500); each slab is held to the column its first order falls in, so a ceiling can step down
 from slab to slab. Mini-hub and SAH ceilings are the same everywhere; Standalone and Mall hub
-ceilings differ by **city** — the prototype carries the rows for the cities its pincodes
-resolve to (Bengaluru, Delhi, Mumbai). A Standalone or Mall hub in a city with no row has no
-ceiling a Cluster Head can approve within, so its card goes to BizFin. The sheet's LM-as-FM
+ceilings differ by **city**. The prototype carries the whole sheet (256 Standalone cities and
+194 Mall hub cities; Mall matches Standalone everywhere but Jalandhar and Chennai), and BizFin
+edits it from Slab settings (see *City rates* below). A Standalone or Mall hub in a city with
+no row has no ceiling a Cluster Head can approve within, so its card goes to BizFin. The sheet's LM-as-FM
 tab is blank, so LM-as-FM keeps its earlier flat 6.00. A card is above threshold if *any*
 slab is over its own ceiling. Because the touchpoint is fixed, a hub type change that moves it
 (Standalone → LM-as-FM, 5.00 → 6.00) is a rate change the captain has to agree to; one between
@@ -334,7 +351,8 @@ pin but can't say where someone tapped, and its JavaScript API needs a key. A re
 uses the Google Maps SDK. The tiles come from the OpenStreetMap Germany server
 (`tile.openstreetmap.de`) because `tile.openstreetmap.org` refuses a page opened straight
 from disk, which sends no referrer; openstreetmap.org takes over if the first server keeps
-failing. If Leaflet can't load, the pin shows on Google's embed instead and can't be tapped.
+failing. Leaflet is inlined in the page; without it (the test harness strips it), the pin
+shows on Google's embed instead and can't be tapped.
 The same map is used wherever a pin is set: hub details, the captain's **Edit hub details**,
 the Area Manager's pin correction and the Area Manager's live-hub edit. Where a pin is only
 shown (View hub, a hub edit under review) the map can be moved around but the pin can't.
@@ -680,6 +698,24 @@ a change directly. Every applied change is logged with who approved it. New rate
 updates are priced on the new structure from then on; cards already priced keep their slabs,
 and an update moves a card onto the new bands with each band taking the rate its orders had.
 
+**City rates.** Under the slab structure, Slab settings shows the ceilings for the hub type
+picked, with one rate for each 2,500-order column plus the touchpoint rate:
+
+- **Pick a city.** Standalone and Mall hubs have a city picker with every city on the sheet,
+  opening on Bengaluru. BizFin changes a city's row and saves it, and the city then says who
+  changed it and when. The other hub types read *priced the same in every city*.
+- **All cities.** A tick changes a column in every city of that hub type at once. It warns
+  first (*This changes all 256 Standalone cities*): each rate filled in replaces that column
+  everywhere, and a column left blank keeps each city's own rate. It won't apply until BizFin
+  ticks *I understand this changes every Standalone city*.
+- **Add city.** A name, six ceilings and a touchpoint rate (pre-filled with the hub type's).
+  A city already on the list can't be added again. Standalone and Mall hubs are added
+  separately.
+
+Only BizFin edits city rates; FM Central Ops sees them read-only. Every save is logged under
+**City rate changes**. Cards already priced keep their rates; new rate cards and updates are
+held to the new ceilings.
+
 ### Bulk rate card updates
 
 FM Central Ops can update many hubs at once: a comma-separated list of **FM hub codes**, one
@@ -889,7 +925,7 @@ build from.
 npm install && npm test
 ```
 
-**2051 assertions across 38 groups:**
+**2140 assertions across 40 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -1114,6 +1150,22 @@ npm install && npm test
    bell, the rate card update and history pages, the hub edit and add-hub forms, and every tab
    of every admin desk and Central Admin role, with a detail opened on each, swept for an em
    dash in visible text, placeholders, labels and field values. Empty values show as "-"
+39. **Panel DS v1**: the Mier B02 font stack and 13/20 body text; the OTP screen offering no
+   check to arm and five resends in a row all allowed; Terms consent holding Continue until
+   ticked; a field checked on leaving it and its error clearing once fixed (name, alternate
+   phone, hub address, area, manpower); the demo Aadhaar accepted; a company PAN verified
+   like any other; an account number with dashes refused; an armed ₹1 check and GSTIN
+   result reported once and then spent; a pincode in another state still accepted, one
+   starting with 0 given the usual message, and pincode fields left alone on leaving them;
+   Back beside the section title; and no em dash in any validation message
+40. **City rates**: the whole sheet loaded (256 Standalone and 194 Mall hub cities, the sheet's
+   third decimals, Chennai and Jalandhar's own Mall rows, lower-case names matched, each city's
+   touchpoint); mini-hubs priced the same everywhere with no city to pick; Standalone opening
+   on Bengaluru; a city's row changed and saved, held to on new cards, logged and attributed,
+   with an unchanged or malformed row refused; All cities warning first, needing a column and
+   the acknowledgement, changing only the columns filled in; a city added (duplicates refused,
+   every ceiling needed) and holding cards there to its ceilings, Mall left out; kept across a
+   reload; and read-only for FM Central Ops
 
 Six notes on how the tests drive the app:
 
@@ -1121,7 +1173,7 @@ Six notes on how the tests drive the app:
   therefore no real `scrollHeight`. The test separately asserts the checkbox is disabled
   before and enabled after.
 - Activation fan-out runs on real timers; the tests wait for it rather than stubbing it.
-- jsdom loads no external scripts, so the page never gets Leaflet. Group 33 hands it a
+- The harness strips the page's inlined Leaflet, so the app never gets it. Group 33 hands it a
   stand-in (`mockLeaflet`) that records the view, tiles, pin and handlers and fires taps and
   drags; every other group runs on Google's embed, the fallback.
 - The harness awaits the app's own `DOMContentLoaded` boot before driving anything. jsdom
