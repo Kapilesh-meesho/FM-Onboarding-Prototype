@@ -26,13 +26,20 @@ const HELPERS = `
     for (let i=0;i<6;i++){ const c=sel('.otp-cell[data-i="'+i+'"]'); c.value="0"; c.dispatchEvent(new Event("input",{bubbles:true})); }
     click("verify-otp");
   };
-  const personal = (pin) => {
-    pin = pin || "560076";
+  const personal = () => {
     type("pd-name","Karan Verma"); type("pd-alt","9876543210");
     type("pd-email","karan.verma@gmail.com"); click("pd-verify-email");
     type("pd-email-otp","000000"); click("pd-email-otp-go");
-    type("pd-pin",pin); click("pd-addpin"); click("pd-check");
-    clickSel('[data-selpin="'+pin+'"]'); click("pd-continue");
+    setCheck("pd-tnc", true);
+    click("pd-continue");
+  };
+  const kycToBank = () => {
+    type("kyc-aadhaar","123412341234"); click("kyc-aadhaar-go");
+    type("kyc-aadhaar-otp","000000"); click("kyc-aadhaar-confirm"); click("kyc-ack-aadhaar");
+    type("kyc-pan","ABCDE1234F"); type("kyc-pan-father","Suresh Verma");
+    click("kyc-pan-go"); click("kyc-ack-pan");
+    type("kyc-acc","123456789012"); type("kyc-ifsc","HDFC0001234");
+    click("kyc-bank-go"); click("kyc-ack-bank");
   };
   const kyc = (role) => {
     type("kyc-aadhaar","123412341234"); click("kyc-aadhaar-go");
@@ -41,7 +48,7 @@ const HELPERS = `
     click("kyc-pan-go"); click("kyc-ack-pan");
     type("kyc-acc","123456789012"); type("kyc-ifsc","HDFC0001234");
     click("kyc-bank-go"); click("kyc-ack-bank");
-    if (role === "FM") { clickSel('[data-gstchoice="registered"]'); type("kyc-gstin","29ABCDE1234F1Z5"); click("kyc-gst-go"); }
+    if (role === "FM") { type("kyc-gstin","29ABCDE1234F1Z5"); click("kyc-gst-go"); }
     else { clickSel('[data-gstchoice="none"]'); click("kyc-gst-go"); }
     click("kyc-continue");
   };
@@ -49,10 +56,12 @@ const HELPERS = `
     if (!api.helpers.vehUI().open) click("veh-toggle");
     clickSel('#veh-list [data-veh="'+t+'"]');
   };
-  const hub = (o) => {
-    o = o || {};
-    type("hub-address", o.address || "No. 42, 4th Cross, Koramangala, Bengaluru");
-    type("hub-map","https://maps.google.com/?q=12.9352,77.6245");
+  const hub = (pin) => {
+    pin = pin || "560034";
+    type("hub-pin", pin); type("hub-pins", pin); click("hub-addpin");
+    const a = api.helpers.PIN_AREAS[pin];
+    type("hub-address", "No. 42, 4th Cross, " + a.name + ", Bengaluru");
+    type("hub-map","https://maps.google.com/?q=" + a.lat + "," + a.lng);
     type("hub-area","4000"); type("hub-manpower","12");
     vehicle("7MT_20FT");
   };
@@ -94,6 +103,16 @@ async function run() {
       if (sh <= vh + 2) break;
       await page.setViewport({ width: 1440, height: Math.min(sh + 8, 7000) });
       await new Promise((r) => setTimeout(r, 70));
+    }
+    if (process.env.PNG) {             // a picture of each screen, for checking a capture by eye
+      fs.mkdirSync(path.join(OUT, "png"), { recursive: true });
+      // let map tiles arrive, and leave out the Simulate backend panel as the JSON capture does
+      await page.waitForFunction("![...document.querySelectorAll('.leaflet-tile')].some(t => !t.classList.contains('leaflet-tile-loaded'))",
+                                 { timeout: 4000 }).catch(() => {});
+      await page.evaluate("document.getElementById('dev') && (document.getElementById('dev').style.visibility = 'hidden')");
+      await page.screenshot({ path: path.join(OUT, "png", name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".png"),
+                              fullPage: true });
+      await page.evaluate("document.getElementById('dev') && (document.getElementById('dev').style.visibility = '')");
     }
     const shot = await page.evaluate(`window.__CAP__({name: ${JSON.stringify(name)}})`);
     const file = name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".json";

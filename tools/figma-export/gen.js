@@ -16,6 +16,9 @@ const PAGES = [
   { key: "1.", name: "1 · New Captain onboarding", skip: 0 },
   { key: "2.", name: "2 · Existing Captain, new hub", skip: 0 },
   { key: "3.", name: "3 · Admin login flows", skip: 0 },
+  { key: "4.", name: "4 · Captain without GST", skip: 0 },
+  { key: "5.", name: "5 · Captain Hub after go-live", skip: 0 },
+  { key: "6.", name: "6 · Rate card updates and Central Admin", skip: 0 },
 ];
 const COLS = 4, GAPX = 160, GAPY = 240, PER_CALL = 4, CHUNK = 110;
 

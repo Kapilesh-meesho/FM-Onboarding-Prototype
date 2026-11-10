@@ -1,26 +1,38 @@
-# Figma export — complete
+# Figma export: complete
 
 **Figma file:** https://www.figma.com/design/fMILzWywpzbmqBTKIJwnXc
 (Valmo — FM Captain Self-Serve Onboarding (Prototype Mirror), Meesho org, in Drafts)
 
 | Page | Screens | Status |
 |---|---|---|
-| `1 · New Captain onboarding` | 29 | complete (1.01 – 1.29) |
-| `2 · Existing Captain, new hub` | 16 | complete (2.01 – 2.16) |
-| `3 · Admin login flows` | 22 | complete (3.01 – 3.22) |
+| `1 · New Captain onboarding` | 29 | complete (1.01 to 1.29) |
+| `2 · Existing Captain, new hub` | 16 | complete (2.01 to 2.16) |
+| `3 · Admin login flows` | 22 | complete (3.01 to 3.22) |
+| `4 · Captain without GST` | 9 | complete (4.01 to 4.09) |
+| `5 · Captain Hub after go-live` | 8 | complete (5.01 to 5.08) |
+| `6 · Rate card updates and Central Admin` | 22 | complete (6.01 to 6.22) |
 
-67 screens, logo applied on every onboarding screen.
+106 screens, rebuilt from the prototype on 27 Oct 2026. No text layer carries
+an em dash.
 
-Page 1 walks the whole FM approval chain, so it carries the two captain states
-the chain added: **1.24 pending sign-off** (the card was priced above ceiling
-and raised) and **1.25 in revision** (a desk sent it back to the Area Manager).
-1.26 is the approved state. Neither new screen names a desk above the Cluster
-Head, gives a reason, or uses the words *ceiling*, *benchmark* or *hub category*.
+Page 1 walks the whole FM approval chain. 1.13 to 1.14 type the GSTIN straight
+in, 1.17 to 1.19 add serviceable pincodes and pick vehicles, and 1.24 to 1.26
+cover the captain's view of a card raised above ceiling, sent back, and then
+approved. The captain only ever sees the approved rate card.
 
-Page 3 carries the AM's carting-design step: 3.06 – 3.09 are step 2
-(FMSC, FMCDs, onboarding type, validate, send), 3.13 – 3.14 are Central
-Admin's design queue and the eleven-field design alignment view, and the rate
-card is step 3 at 3.10 – 3.12.
+Page 3 carries the AM's three verification steps (infra check, carting design,
+rate card), the Design team's queue, the Cluster Head's review, the Zonal
+Head's pendency views and the BizFin approval.
+
+Page 4 is the captain who has no GST: the declaration, the AM's review of it,
+a decline that asks for a GSTIN, and a later hub added without GST.
+
+Page 5 is the live captain in Captain Hub: agreeing to a rate card update,
+notifications, rate card history and editing hub details.
+
+Page 6 is the rate card update chain (AM, Cluster Head, Zonal Head, BizFin)
+plus Central Admin: FM Central Ops pendency views, bulk update, slab settings
+and the slab change BizFin approves, and the AM's hub edit queue.
 
 ## What the file is
 
@@ -44,7 +56,8 @@ Known limitations, all inherent to capturing a running page:
 - **Demo IDs drift.** Request IDs and the AM's minted hub code are generated at
   random on each run, so a re-capture changes them even when nothing else moved.
 - **Captain Hub screens carry no logo rectangle.** They render the panel header
-  rather than the onboarding one, so page 2 has 10 logos across 16 screens.
+  rather than the onboarding one, so page 2 has 10 logos across 16 screens, page 4 has 8 across 9, and page 5
+  has none.
 
 ## Re-running from scratch
 
