@@ -246,9 +246,8 @@ and tells the captain the code is finalised later. (LM still mints its hub code 
 **8. The Area Manager can reject an application outright.** While an FM application is with
 the Area Manager at Cluster Head review (the no-GST review, picking the hub type, pricing the
 rate card or revising it), they can reject it, and nothing more happens on it. The captain
-sees *Your application was rejected*, with the Area Manager to call for details (*Want to
-know why? Call your Area Manager, Priya Sharma, on …*), the application's request ID, and one
-button. Acknowledging it closes the application:
+sees only *Your application was rejected* and *Contact your Area Manager, Priya Sharma, on …
+for any details*, with one button, **Acknowledged**. Acknowledging it closes the application:
 
 - **Its details are deprecated.** The application is kept only as a record (`closedApps`) and
   everything entered on it is cleared from the captain, so a new application with the same
@@ -945,7 +944,7 @@ build from.
 npm install && npm test
 ```
 
-**2188 assertions across 41 groups:**
+**2190 assertions across 41 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -1189,8 +1188,8 @@ npm install && npm test
    every ceiling needed) and holding cards there to its ceilings, Mall left out; kept across a
    reload; and read-only for FM Central Ops
 41. **The Area Manager rejects an application**: the simulator offering it while the Area Manager
-   has the application; the captain told, with the Area Manager to call, the request ID, no way
-   back in and one button; kept across a reload; on acknowledging it, the application kept only
+   has the application; the captain told it was rejected and to contact the Area Manager for
+   any details, with no way back in and one Acknowledged button; kept across a reload; on acknowledging it, the application kept only
    as a deprecated record and every detail cleared, the role picker saying so and offering FM
    again, a new application with a new request ID and nothing filled in, the same Aadhaar, PAN,
    bank account and GSTIN verifying again; and for a live captain adding a hub, back to My Hubs

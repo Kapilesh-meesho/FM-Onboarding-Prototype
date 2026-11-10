@@ -6025,6 +6025,7 @@ async function testCityRates() {
    41. The Area Manager rejects an application
    ====================================================================== */
 
+const contactText = (doc) => sel(doc, '[data-testid="am-app-rejected-contact"]').textContent;
 async function testAmRejectsApplication() {
   section("41. The Area Manager rejects an application");
   const { win, doc, api } = await boot();
@@ -6049,12 +6050,14 @@ async function testAmRejectsApplication() {
   /* --- the captain is told, and pointed to the Area Manager --- */
   check(exists(doc, '[data-testid="am-app-rejected"]'), "the captain sees the application was rejected");
   check(txt(doc).indexOf("Your application was rejected") >= 0, "in plain words");
-  const contact = sel(doc, '[data-testid="am-app-rejected-contact"]').textContent;
+  check(contactText(doc).indexOf("for any details") >= 0, "and told to contact the Area Manager for any details");
+  check(txt(doc).indexOf("Start a new application") < 0, "with nothing else to do but acknowledge it");
+  const contact = contactText(doc);
   check(contact.indexOf("Priya Sharma") >= 0 && contact.indexOf("+91 98450 11223") >= 0,
         "with the Area Manager to call for details");
   check(txt(doc).indexOf(firstId) >= 0, "naming the application");
   check(!exists(doc, "#phase-back"), "there is no going back into it");
-  eq($(doc, "am-app-rejected-ok").textContent, "Okay, start a new application", "one button acknowledges it");
+  eq($(doc, "am-app-rejected-ok").textContent, "Acknowledged", "one button acknowledges it");
   check(devText(doc).indexOf("Waiting for the captain to acknowledge it") >= 0 &&
         devText(doc).indexOf("Reject the application") < 0, "the simulator waits on the captain");
   check(api.reload(), "a reload keeps it");
@@ -6104,8 +6107,8 @@ async function testAmRejectsApplication() {
   eq(b.api.helpers.phaseId(), "ch", "the new hub's application reaches the Area Manager");
   check(b.api.state.hubs.some(h => h.status === "in_progress" && h.role === "FM"), "and is listed as in progress");
   devClick(b.doc, "amapp:reject");
-  check(txt(b.doc).indexOf("rejected your application for this hub") >= 0, "the captain is told it’s this hub");
-  eq($(b.doc, "am-app-rejected-ok").textContent, "Okay, back to My Hubs", "and goes back to My Hubs");
+  check(txt(b.doc).indexOf("Your application was rejected") >= 0, "the captain is told it was rejected");
+  eq($(b.doc, "am-app-rejected-ok").textContent, "Acknowledged", "with the same one button");
   click(b.doc, "am-app-rejected-ok");
   eq([b.api.state.screen, b.api.state.panel.section], ["panel", "hubs"], "acknowledging it opens My Hubs");
   check(exists(b.doc, '[data-testid="closed-hub-notice"]'), "which says the new hub was rejected");
