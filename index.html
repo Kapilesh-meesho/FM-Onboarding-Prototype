@@ -1739,6 +1739,23 @@ body{font-size:13px;line-height:20px}
 .fl .box .prefix{font-size:15px;line-height:20px}
 .fl .hint{padding:4px 0 0 12px;font-size:12px;line-height:16px}
 .ms-control{min-height:40px;padding:8px 32px 8px 12px;border-radius:4px;font-size:15px;line-height:20px}
+/* City rates: picker, All cities and Add city on one line, 40px tall like the picker */
+.city-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 20px}
+.city-bar .fl{margin:0;width:320px}
+.city-bar .ms-control:disabled{background:var(--page-alt);color:var(--muted);cursor:not-allowed}
+.city-all{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;margin:0;box-sizing:border-box;
+  border:1px solid var(--line-field);border-radius:4px;background:#fff;cursor:pointer;
+  font-size:13px;font-weight:600;line-height:20px;color:var(--ink);white-space:nowrap}
+.city-all input{width:16px;height:16px;margin:0;accent-color:var(--navy);cursor:pointer}
+.city-all:has(input:checked){border-color:var(--navy);background:var(--chip-bg)}
+.city-bar .city-add{height:40px;padding:0 16px;border-radius:4px;white-space:nowrap}
+.city-list{max-height:396px}   /* ten rows of 36px, 4px apart; the rest scroll */
+.city-table{width:auto;min-width:420px}
+.city-table td{vertical-align:middle}
+.city-table td:first-child{width:180px;color:var(--ink)}
+.city-table tr.city-tp td{border-top:1px solid var(--line)}
+.city-table .city-in{width:104px}
+.city-unit{margin-left:8px;font-size:12px;line-height:16px;color:var(--muted)}
 .ms-search{height:36px;border-radius:4px}
 .slab-row input,.slab-tp input,.slab-to{height:36px;border-radius:4px}
 .otp-row{gap:12px}
@@ -6874,50 +6891,82 @@ function cityDraftFor(type) {
            rates:CEILING_COLS.map(function (x, i) { return c ? fmtCeil(c.row[i]) : ""; }),
            tp:c ? (+c.tp).toFixed(2) : "" };
 }
-function cityRateInputs(attr, values, tpId, tpValue, placeholder) {
-  return CEILING_COLS.map(function (x, i) {
-      return '<td><input class="slab-to" style="width:84px" ' + attr + '="' + i + '" inputmode="decimal" value="' +
-        esc(values[i] || "") + '"' + (placeholder ? ' placeholder="' + placeholder + '"' : '') + '></td>';
+/* The rates as a column: one row for each 2,500-order band, then the touchpoint.
+   With `attr` the cells are inputs; without, they read the values. */
+function cityTableHtml(o) {
+  var cell = function (v, attrs, unit) {
+    return (o.attr
+      ? '<input class="slab-to city-in" ' + attrs + ' inputmode="decimal" value="' + esc(v == null ? "" : v) + '"' +
+          (o.placeholder ? ' placeholder="' + o.placeholder + '"' : '') + '>'
+      : '<b>₹' + esc(v) + '</b>') + '<span class="city-unit">' + unit + '</span>';
+  };
+  return '<table class="ap-table city-table" data-testid="' + o.testid + '"><thead><tr><th>Orders</th>' +
+      '<th>Ceiling (₹)</th></tr></thead><tbody>' +
+    CEILING_COLS.map(function (x, i) {
+      return '<tr><td>' + esc(cityColLabel(i)) + '</td><td>' +
+        cell(o.attr ? o.values[i] : fmtCeil(o.values[i]), o.attr + '="' + i + '"', "/ shipment") + '</td></tr>';
     }).join("") +
-    '<td><input class="slab-to" style="width:84px" id="' + tpId + '" inputmode="decimal" value="' + esc(tpValue || "") + '"' +
-      (placeholder ? ' placeholder="' + placeholder + '"' : '') + '></td>';
+    '<tr class="city-tp"><td>Touchpoint rate</td><td>' +
+      cell(o.attr ? o.tp : (+o.tp).toFixed(2), 'id="' + o.tpId + '"', "/ touchpoint") + '</td></tr>' +
+    '</tbody></table>';
 }
-function cityHeadRow() {
-  return '<tr>' + CEILING_COLS.map(function (x, i) { return '<th>' + esc(cityColLabel(i)) + '</th>'; }).join("") +
-    '<th>Touchpoint</th></tr>';
+/* The city picker: a list ten cities tall that scrolls, and a search box that
+   narrows it as BizFin types. Like the vehicle picker, the list is repainted in
+   place, so the search box keeps focus while it filters. */
+var cityUI = { open:false, filter:"" };
+function cityMatches(type) {
+  var q = cityUI.filter.trim().toLowerCase();
+  return cityList(type).filter(function (c) { return !q || c.name.toLowerCase().indexOf(q) >= 0; });
+}
+function cityRowsHtml(type) {
+  var pick = cityPicked(type), list = cityMatches(type);
+  if (!list.length) return '<div class="ms-empty">No city matches “' + esc(cityUI.filter.trim()) + '”.</div>';
+  return list.map(function (c) {
+    var on = !!pick && c.name === pick.name;
+    return '<button type="button" class="ms-row pick' + (on ? ' on' : '') + '" data-citypick="' +
+      esc(c.name.toLowerCase()) + '" role="option" aria-selected="' + on + '"><span class="mark">' + (on ? '●' : '') +
+      '</span><span>' + esc(c.name) + '</span>' + (c.added ? '<i>added</i>' : c.at ? '<i>changed</i>' : '') + '</button>';
+  }).join("");
+}
+function cityCountText(type) {
+  var list = cityList(type), added = list.filter(function (c) { return c.added; }).length;
+  var shown = cityMatches(type).length;
+  return (shown < list.length ? shown + " of " : "") + list.length + " cities" +
+    (added ? " · " + added + " added by BizFin" : "");
 }
 function apCityRates(type, biz) {
   var a = S.admin, cm = HUB_CATEGORIES[type];
-  var lede = 'The most an Area Manager can price each slab at, by the 2,500-order column its first order falls in, ' +
+  var lede = 'The most an Area Manager can price each slab at, by the 2,500-order band its first order falls in, ' +
     'and the touchpoint rate every card carries. A card above its ceilings goes to BizFin. Cards already priced ' +
     'keep their rates; new rate cards and updates are held to these.';
   var head = '<div class="ph"><div><b>City rates</b><span>' + lede + '</span></div></div>';
 
   if (!isCityType(type)) {
-    var flat = ceilingRow(type, "");
     return '<div class="ap-panel" data-testid="ap-city-rates" style="margin-bottom:20px">' + head +
-      '<div class="ap-form"><div class="notice info" data-testid="city-flat" style="margin:0 0 12px"><b>' +
+      '<div class="ap-form"><div class="notice info" data-testid="city-flat" style="margin:0 0 16px"><b>' +
         esc(cm.label) + ' hubs are priced the same in every city</b>Only Standalone and Mall hubs have city rates.</div>' +
-      '<table class="ap-table"><thead>' + cityHeadRow() + '</thead><tbody><tr>' +
-        flat.map(function (v) { return '<td>₹' + esc(fmtCeil(v)) + '</td>'; }).join("") +
-        '<td>₹' + esc(fixedTp(type)) + '</td></tr></tbody></table></div></div>';
+      cityTableHtml({ testid:"city-flat-table", values:ceilingRow(type, ""), tp:fixedTp(type) }) + '</div></div>';
   }
 
   var list = cityList(type), all = !!a.cityAll && biz, pick = cityPicked(type), d = cityDraftFor(type);
-  var added = list.filter(function (c) { return c.added; }).length;
-  var options = all ? '<option value="*" selected>All ' + list.length + ' cities</option>' : list.map(function (c) {
-    return '<option value="' + esc(c.name.toLowerCase()) + '"' + (pick && c === pick ? ' selected' : '') + '>' +
-      esc(c.name) + '</option>';
-  }).join("");
-  var picker = '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:12px">' +
-    '<div class="fl" style="min-width:260px;margin-bottom:0" data-testid="city-picker"><label>City</label>' +
-      '<div class="box sel"><select id="city-pick" aria-label="City"' + (all ? ' disabled' : '') + '>' + options +
-      '</select></div><div class="hint">' + list.length + ' cities' + (added ? ', ' + added + ' added by BizFin' : '') +
-      '</div></div>' +
+  var open = cityUI.open && !all;
+  var bar = '<div class="city-bar">' +
+    '<div class="fl" data-testid="city-picker"><label>City</label>' +
+      '<div class="ms" id="city-ms">' +
+        '<button type="button" id="city-toggle" class="ms-control' + (open ? ' open' : '') + '" aria-haspopup="listbox" ' +
+          'aria-expanded="' + open + '"' + (all ? ' disabled' : '') + '><span class="ms-val">' +
+          (all ? 'All ' + list.length + ' cities' : pick ? esc(pick.name) : '<span class="ph">Pick a city</span>') +
+          '</span></button>' +
+        '<div class="ms-panel" id="city-panel"' + (open ? '' : ' hidden') + '>' +
+          '<input class="ms-search" id="city-search" placeholder="Search ' + list.length + ' cities" autocomplete="off" ' +
+            'aria-label="Search cities" value="' + esc(cityUI.filter) + '">' +
+          '<div class="ms-list city-list" id="city-list" role="listbox">' + cityRowsHtml(type) + '</div>' +
+          '<div class="ms-foot"><span class="cnt" id="city-count">' + esc(cityCountText(type)) + '</span></div>' +
+        '</div></div></div>' +
     (biz
-      ? '<label class="check-row" style="margin:12px 0 0"><input type="checkbox" id="city-all"' + (all ? ' checked' : '') + '>' +
-          '<span class="cl"><b>All cities</b><span>Change a column in all ' + list.length + ' cities at once</span></span></label>' +
-        '<button class="btn btn-ghost" id="city-add" style="margin-top:8px">＋ Add city</button>'
+      ? '<label class="city-all"><input type="checkbox" id="city-all"' + (all ? ' checked' : '') + '>' +
+          '<span>All ' + list.length + ' cities</span></label>' +
+        '<button class="btn btn-ghost city-add" id="city-add">＋ Add city</button>'
       : '') +
     '</div>';
 
@@ -6929,10 +6978,9 @@ function apCityRates(type, biz) {
         'this city are held to these ceilings from now on. Mall hubs and Standalone hubs are added separately.</span>' +
       '<div class="fl" style="max-width:320px"><label>City name</label><div class="box">' +
         '<input id="city-new-name" placeholder="e.g. Kochi" value="' + esc(n.name) + '"></div></div>' +
-      '<table class="ap-table" data-testid="city-new-table"><thead>' + cityHeadRow() + '</thead><tbody><tr>' +
-        cityRateInputs("data-citynew", n.rates, "city-new-tp", n.tp) + '</tr></tbody></table>' +
+      cityTableHtml({ testid:"city-new-table", attr:"data-citynew", values:n.rates, tpId:"city-new-tp", tp:n.tp }) +
       (a.cityError ? '<div class="notice bad" data-testid="city-error" style="margin:12px 0 0">' + esc(a.cityError) + '</div>' : '') +
-      '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:12px">' +
+      '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">' +
         '<button class="btn btn-ghost" id="city-new-cancel">Cancel</button>' +
         '<button class="btn btn-primary" id="city-new-save">Add city</button></div></div>';
   } else if (!pick && !all) {
@@ -6941,36 +6989,55 @@ function apCityRates(type, biz) {
     var source = all ? "" : pick.added ? "Added by " + pick.by + " on " + pick.at + "."
       : pick.at ? "Changed by " + pick.by + " on " + pick.at + "." : "From the rate card sheet.";
     body = (all
-        ? '<div class="notice warn" data-testid="city-all-warn" style="margin:0 0 12px"><b>This changes all ' +
-            list.length + ' ' + esc(cm.label) + ' cities</b>Each rate you fill in replaces that column in every ' +
-            'city, including the cities priced higher or lower than it today. Leave a column blank to keep each city’s ' +
+        ? '<div class="notice warn" data-testid="city-all-warn" style="margin:0 0 16px"><b>This changes all ' +
+            list.length + ' ' + esc(cm.label) + ' cities</b>Each rate you fill in replaces that band in every ' +
+            'city, including the cities priced higher or lower than it today. Leave a band blank to keep each city’s ' +
             'own rate. Cards already priced keep their rates; new rate cards and updates in every city are held to ' +
             'the new ceilings.</div>'
         : '') +
-      '<table class="ap-table" data-testid="city-rate-table"><thead>' + cityHeadRow() + '</thead><tbody><tr>' +
-        (biz
-          ? cityRateInputs("data-cityrate", d.rates, "city-tp", d.tp, all ? "Keep" : "")
-          : pick.row.map(function (v) { return '<td>₹' + esc(fmtCeil(v)) + '</td>'; }).join("") +
-            '<td>₹' + esc((+pick.tp).toFixed(2)) + '</td>') +
-      '</tr></tbody></table>' +
+      (biz
+        ? cityTableHtml({ testid:"city-rate-table", attr:"data-cityrate", values:d.rates, tpId:"city-tp", tp:d.tp,
+                          placeholder:all ? "Keep" : "" })
+        : cityTableHtml({ testid:"city-rate-table", values:pick.row, tp:pick.tp })) +
       (source ? '<span class="mute" data-testid="city-source" style="display:block;margin-top:8px;font-size:12px;' +
         'line-height:16px">' + esc(pick.name) + ': ' + esc(source) + '</span>' : '') +
       (all
-        ? '<label class="check-row" style="margin:12px 0 0"><input type="checkbox" id="city-ack"' +
+        ? '<label class="check-row" style="margin:16px 0 0"><input type="checkbox" id="city-ack"' +
             (a.cityAck ? ' checked' : '') + '><span class="cl"><b>I understand this changes every ' + esc(cm.label) +
             ' city</b></span></label>'
         : '') +
-      (!biz ? '<div class="notice info" style="margin:12px 0 0">Only BizFin can change city rates.</div>' : '') +
+      (!biz ? '<div class="notice info" style="margin:16px 0 0">Only BizFin can change city rates.</div>' : '') +
       (a.cityError && biz ? '<div class="notice bad" data-testid="city-error" style="margin:12px 0 0">' + esc(a.cityError) + '</div>' : '') +
       (biz
-        ? '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:12px">' +
+        ? '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">' +
             '<button class="btn btn-ghost" id="city-reset">Reset</button>' +
             '<button class="btn btn-primary" id="city-save">' +
               (all ? 'Apply to all ' + list.length + ' cities' : 'Save ' + esc(pick.name) + ' rates') + '</button></div>'
         : '');
   }
   return '<div class="ap-panel" data-testid="ap-city-rates" style="margin-bottom:20px">' + head +
-    '<div class="ap-form">' + picker + body + '</div></div>';
+    '<div class="ap-form">' + bar + body + '</div></div>';
+}
+/* Repaint the open list and its count without a full render. */
+function paintCityList() {
+  var t = HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
+  var list = document.getElementById("city-list"), cnt = document.getElementById("city-count");
+  if (!list) return;
+  list.innerHTML = cityRowsHtml(t);
+  if (cnt) cnt.textContent = cityCountText(t);
+  bindCityRows();
+}
+function bindCityRows() {
+  Array.prototype.forEach.call(document.querySelectorAll("#city-list [data-citypick]"), function (row) {
+    row.addEventListener("click", function (e) { e.stopPropagation(); A.cityPick(row.getAttribute("data-citypick")); });
+  });
+}
+var cityGlobalBound = false;
+function bindCityGlobals() {
+  if (cityGlobalBound) return;
+  cityGlobalBound = true;
+  document.addEventListener("click", function () { if (cityUI.open) A.cityOpen(false); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && cityUI.open) A.cityOpen(false); });
 }
 /* "₹3.50 → ₹2.50 · touchpoint ₹5", or for all cities only the columns changed. */
 function cityChangeText(x) {
@@ -10360,7 +10427,7 @@ var A = {
     if (!HUB_CATEGORIES[t]) return;
     S.admin.slabType = t; S.admin.slabDraft = null; S.admin.slabError = "";
     S.admin.cityDraft = null; S.admin.cityNew = null; S.admin.cityAll = false; S.admin.cityAck = false;
-    S.admin.cityError = "";
+    S.admin.cityError = ""; cityUI.open = false; cityUI.filter = "";
     save(); render();
   },
   slabDraftOf: function () {
@@ -10444,9 +10511,24 @@ var A = {
   cityPick: function (k) {
     var t = S.admin.slabType && HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
     S.admin.cityPick[t] = String(k || "").toLowerCase();
+    cityUI.open = false; cityUI.filter = "";
     S.admin.cityDraft = null; S.admin.cityError = ""; save(); render();
   },
+  cityOpen: function (open) {
+    cityUI.open = open === undefined ? !cityUI.open : !!open;
+    if (!cityUI.open) cityUI.filter = "";
+    render();
+    if (cityUI.open) { var sx = document.getElementById("city-search"); if (sx) sx.focus(); }
+  },
+  cityFilter: function (q) { cityUI.filter = q == null ? "" : String(q); paintCityList(); },
+  /* Enter in the search box takes the first city that matches */
+  cityPickFirst: function () {
+    var t = HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
+    var hit = cityMatches(t)[0];
+    if (hit) A.cityPick(hit.name.toLowerCase());
+  },
   cityAllToggle: function (v) {
+    cityUI.open = false; cityUI.filter = "";
     S.admin.cityAll = !!v; S.admin.cityAck = false; S.admin.cityDraft = null; S.admin.cityError = "";
     save(); render();
   },
@@ -11380,7 +11462,16 @@ function bindAdmin() {
   on("slab-all", "change", function (e) { A.slabAll(e.target.checked); });
   on("slab-reason", "input", function (e) { S.admin.slabReason = e.target.value; save(); });
   /* city rates */
-  on("city-pick", "change", function (e) { A.cityPick(e.target.value); });
+  bindCityGlobals();
+  bindCityRows();
+  on("city-toggle", "click", function (e) { e.stopPropagation(); A.cityOpen(); });
+  on("city-search", "input", function (e) { A.cityFilter(e.target.value); });
+  on("city-search", "keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); A.cityPickFirst(); }
+    if (e.key === "Escape") { e.stopPropagation(); A.cityOpen(false); }
+  });
+  var cityPanel = document.getElementById("city-panel");
+  if (cityPanel) cityPanel.addEventListener("click", function (e) { e.stopPropagation(); });
   on("city-all", "change", function (e) { A.cityAllToggle(e.target.checked); });
   on("city-ack", "change", function (e) { A.cityAckToggle(e.target.checked); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-cityrate]"), function (el) {

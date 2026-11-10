@@ -699,14 +699,17 @@ updates are priced on the new structure from then on; cards already priced keep 
 and an update moves a card onto the new bands with each band taking the rate its orders had.
 
 **City rates.** Under the slab structure, Slab settings shows the ceilings for the hub type
-picked, with one rate for each 2,500-order column plus the touchpoint rate:
+picked, read down the page: one row for each 2,500-order band, then the touchpoint rate.
+The city picker, the *All cities* tick and **＋ Add city** sit on one line:
 
 - **Pick a city.** Standalone and Mall hubs have a city picker with every city on the sheet,
-  opening on Bengaluru. BizFin changes a city's row and saves it, and the city then says who
+  opening on Bengaluru. Its list is ten cities tall and scrolls for the rest; typing in its
+  search box narrows it (*2 of 256 cities*), and Enter takes the first match. Cities BizFin
+  has added or changed are marked in the list. BizFin changes a city's row and saves it, and the city then says who
   changed it and when. The other hub types read *priced the same in every city*.
 - **All cities.** A tick changes a column in every city of that hub type at once. It warns
-  first (*This changes all 256 Standalone cities*): each rate filled in replaces that column
-  everywhere, and a column left blank keeps each city's own rate. It won't apply until BizFin
+  first (*This changes all 256 Standalone cities*): each rate filled in replaces that band
+  everywhere, and a band left blank keeps each city's own rate. It won't apply until BizFin
   ticks *I understand this changes every Standalone city*.
 - **Add city.** A name, six ceilings and a touchpoint rate (pre-filled with the hub type's).
   A city already on the list can't be added again. Standalone and Mall hubs are added
@@ -925,7 +928,7 @@ build from.
 npm install && npm test
 ```
 
-**2140 assertions across 40 groups:**
+**2155 assertions across 40 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -1161,7 +1164,9 @@ npm install && npm test
 40. **City rates**: the whole sheet loaded (256 Standalone and 194 Mall hub cities, the sheet's
    third decimals, Chennai and Jalandhar's own Mall rows, lower-case names matched, each city's
    touchpoint); mini-hubs priced the same everywhere with no city to pick; Standalone opening
-   on Bengaluru; a city's row changed and saved, held to on new cards, logged and attributed,
+   on Bengaluru, its rates reading down the page; the city list ten cities tall, opening on its
+   search box, narrowing as typed, saying when nothing matches, taking the first match on
+   Enter, marking added and changed cities and closing on a click elsewhere; a city's row changed and saved, held to on new cards, logged and attributed,
    with an unchanged or malformed row refused; All cities warning first, needing a column and
    the acknowledgement, changing only the columns filled in; a city added (duplicates refused,
    every ceiling needed) and holding cards there to its ceilings, Mall left out; kept across a

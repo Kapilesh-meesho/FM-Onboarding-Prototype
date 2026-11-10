@@ -5902,18 +5902,45 @@ async function testCityRates() {
   asCentral(doc, "bizfin");
   A.adminTab("slabs");
   clickSel(doc, '[data-slabtype="standalone_mini"]');
-  check(exists(doc, '[data-testid="city-flat"]') && !exists(doc, "#city-pick"),
+  check(exists(doc, '[data-testid="city-flat"]') && !exists(doc, "#city-toggle"),
         "a mini-hub is priced the same in every city, with no city to pick");
   clickSel(doc, '[data-slabtype="standalone"]');
   check(exists(doc, '[data-testid="ap-city-rates"]'), "Standalone has city rates");
-  eq($(doc, "city-pick").options.length, 256, "with every city to pick from");
-  eq($(doc, "city-pick").value, "bengaluru", "opening on Bengaluru");
+  eq($(doc, "city-toggle").textContent, "Bengaluru", "opening on Bengaluru");
+  check($(doc, "city-panel").hidden, "with the city list closed");
+  const css = [...doc.querySelectorAll("style")].map(x => x.textContent).join("");
+  check(/\.city-list\{max-height:396px\}/.test(css), "the list is ten cities tall, and scrolls for the rest");
+  check(/\.city-table\{/.test(css) && doc.querySelectorAll('[data-testid="city-rate-table"] tbody tr').length === 7,
+        "the rates read down the page: six bands and the touchpoint");
+  eq([...doc.querySelectorAll('[data-testid="city-rate-table"] tbody td:first-child')].map(td => td.textContent),
+     ["0–2,500", "2,500–5,000", "5,000–7,500", "7,500–10,000", "10,000–12,500", "Above 12,500", "Touchpoint rate"],
+     "one row for each band, then the touchpoint");
+  click(doc, "city-toggle");
+  check(!$(doc, "city-panel").hidden, "the picker opens the list");
+  eq(doc.querySelectorAll("#city-list [data-citypick]").length, 256, "with every city in it");
+  check(doc.activeElement === $(doc, "city-search"), "and puts the cursor in its search box");
+  eq($(doc, "city-count").textContent, "256 cities", "counting them");
+  put("#city-search", "pur");
+  const hits = [...doc.querySelectorAll("#city-list [data-citypick]")].map(b => b.textContent);
+  check(hits.length > 1 && hits.every(t => /pur/i.test(t)), "typing narrows it to the cities that match");
+  check(/^\d+ of 256 cities$/.test($(doc, "city-count").textContent), "and says how many of them");
+  put("#city-search", "zzz");
+  check(txt(doc).indexOf("No city matches") >= 0, "a search with no match says so");
+  put("#city-search", "mysore");
+  $(doc, "city-search").dispatchEvent(new win.KeyboardEvent("keydown", { key:"Enter", bubbles:true }));
+  eq($(doc, "city-toggle").textContent, "Mysore", "Enter picks the first match");
+  check($(doc, "city-panel").hidden, "and closes the list");
+  click(doc, "city-toggle");
+  clickSel(doc, '#city-list [data-citypick="bengaluru"]');
+  eq($(doc, "city-toggle").textContent, "Bengaluru", "a click on a city picks it");
   eq(sel(doc, rateBox(0)).value, "3.50", "its ceilings filled in");
   eq($(doc, "city-tp").value, "5.00", "and its touchpoint");
   check(txt(doc).indexOf("Bengaluru: From the rate card sheet.") >= 0, "saying where they come from");
 
   /* --- one city --- */
-  $(doc, "city-pick").value = "delhi"; fire($(doc, "city-pick"), "change");
+  click(doc, "city-toggle");
+  put("#city-search", "del");
+  clickSel(doc, '#city-list [data-citypick="delhi"]');
   eq(sel(doc, rateBox(0)).value, "2.65", "picking Delhi shows Delhi’s ceilings");
   click(doc, "city-save");
   check(cityErr().indexOf("already on") >= 0, "saving them unchanged says so");
@@ -5934,7 +5961,8 @@ async function testCityRates() {
   check(exists(doc, '[data-testid="city-all-warn"]'), "ticking All cities warns first");
   check(sel(doc, '[data-testid="city-all-warn"]').textContent.indexOf("This changes all 256 Standalone cities") >= 0,
         "naming how many cities it changes");
-  check($(doc, "city-pick").disabled && $(doc, "city-pick").value === "*", "the city picker stands down");
+  check($(doc, "city-toggle").disabled && $(doc, "city-toggle").textContent === "All 256 cities",
+        "the city picker stands down");
   eq($(doc, "city-save").textContent, "Apply to all 256 cities", "and the button says what it does");
   eq(sel(doc, rateBox(0)).value, "", "every column starts blank, to keep each city’s own rate");
   click(doc, "city-save");
@@ -5966,8 +5994,14 @@ async function testCityRates() {
   eq(H.cityList("standalone").length, 257, "Kochi joins the Standalone cities");
   eq(H.slabCeiling("standalone", "Kochi, Kerala", 0), 2.6, "and holds Standalone cards there to its ceilings");
   eq(H.slabCeiling("mall", "Kochi", 0), null, "Mall hubs are added separately");
-  eq($(doc, "city-pick").value, "kochi", "the new city is picked");
-  check(txt(doc).indexOf("257 cities, 1 added by BizFin") >= 0, "and counted as added");
+  eq($(doc, "city-toggle").textContent, "Kochi", "the new city is picked");
+  eq($(doc, "city-count").textContent, "257 cities · 1 added by BizFin", "and counted as added");
+  click(doc, "city-toggle");
+  check(sel(doc, '#city-list [data-citypick="kochi"]').textContent.indexOf("added") >= 0 &&
+        sel(doc, '#city-list [data-citypick="delhi"]').textContent.indexOf("changed") >= 0,
+        "the list marks the cities added or changed");
+  doc.body.dispatchEvent(new win.MouseEvent("click", { bubbles:true }));
+  check($(doc, "city-panel").hidden, "a click elsewhere closes it");
   check(!H.cardAbove("standalone", "Kochi", { slabs:[{ from:"0", to:"2500", rate:"2.50" }] }),
         "a card under Kochi’s ceilings is now within them");
 
