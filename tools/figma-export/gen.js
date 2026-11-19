@@ -19,6 +19,7 @@ const PAGES = [
   { key: "4.", name: "4 · Captain without GST", skip: 0 },
   { key: "5.", name: "5 · Captain Hub after go-live", skip: 0 },
   { key: "6.", name: "6 · Rate card updates and Central Admin", skip: 0 },
+  { key: "7.", name: "7 · Area Manager rejects an application", skip: 0 },
 ];
 const COLS = 4, GAPX = 160, GAPY = 240, PER_CALL = 4, CHUNK = 110;
 

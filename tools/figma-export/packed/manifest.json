@@ -4,375 +4,375 @@
     "file": "1-01-login.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 3218,
-    "packed": 753
+    "bytes": 3196,
+    "packed": 751
   },
   {
     "name": "1.02 OTP entry",
     "file": "1-02-otp-entry.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 5614,
-    "packed": 877
+    "bytes": 5332,
+    "packed": 827
   },
   {
     "name": "1.03 Role selection",
     "file": "1-03-role-selection.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 8322,
-    "packed": 1585
+    "bytes": 7973,
+    "packed": 1479
   },
   {
     "name": "1.04 Personal details",
     "file": "1-04-personal-details.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33919,
-    "packed": 5646
+    "bytes": 35598,
+    "packed": 5575
   },
   {
     "name": "1.05 Personal details filled",
     "file": "1-05-personal-details-filled.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 34099,
-    "packed": 5632
+    "bytes": 35657,
+    "packed": 5530
   },
   {
     "name": "1.06 KYC · Aadhaar",
     "file": "1-06-kyc-aadhaar.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 31560,
-    "packed": 5154
+    "bytes": 30530,
+    "packed": 4739
   },
   {
     "name": "1.07 KYC · Aadhaar OTP",
     "file": "1-07-kyc-aadhaar-otp.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 34158,
-    "packed": 5570
+    "bytes": 33123,
+    "packed": 5144
   },
   {
     "name": "1.08 KYC · Aadhaar verified",
     "file": "1-08-kyc-aadhaar-verified.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 34496,
-    "packed": 5619
+    "bytes": 33930,
+    "packed": 5233
   },
   {
     "name": "1.09 KYC · PAN",
     "file": "1-09-kyc-pan.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 32990,
-    "packed": 5332
+    "bytes": 31977,
+    "packed": 4890
   },
   {
     "name": "1.10 KYC · PAN verified",
     "file": "1-10-kyc-pan-verified.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33185,
-    "packed": 5345
+    "bytes": 32615,
+    "packed": 4953
   },
   {
     "name": "1.11 KYC · Bank account",
     "file": "1-11-kyc-bank-account.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33334,
-    "packed": 5472
+    "bytes": 32376,
+    "packed": 5081
   },
   {
     "name": "1.12 KYC · Bank verified",
     "file": "1-12-kyc-bank-verified.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33957,
-    "packed": 5461
+    "bytes": 33425,
+    "packed": 5108
   },
   {
     "name": "1.13 KYC · GSTIN",
     "file": "1-13-kyc-gstin.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 31879,
-    "packed": 5273
+    "bytes": 30811,
+    "packed": 4819
   },
   {
     "name": "1.14 KYC · GSTIN entered",
     "file": "1-14-kyc-gstin-entered.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 31887,
-    "packed": 5269
+    "bytes": 30819,
+    "packed": 4825
   },
   {
     "name": "1.15 KYC · MSME optional",
     "file": "1-15-kyc-msme-optional.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 38830,
-    "packed": 6274
+    "bytes": 37761,
+    "packed": 5806
   },
   {
     "name": "1.16 KYC complete",
     "file": "1-16-kyc-complete.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 36953,
-    "packed": 5924
+    "bytes": 35835,
+    "packed": 5490
   },
   {
     "name": "1.17 Hub details",
     "file": "1-17-hub-details.json",
     "w": 1440,
-    "h": 1445,
-    "bytes": 46863,
-    "packed": 7951
+    "h": 1350,
+    "bytes": 46019,
+    "packed": 7377
   },
   {
     "name": "1.18 Hub details · vehicle picker",
     "file": "1-18-hub-details-vehicle-picker.json",
     "w": 1440,
-    "h": 1613,
-    "bytes": 65279,
-    "packed": 10142
+    "h": 1573,
+    "bytes": 64222,
+    "packed": 9493
   },
   {
     "name": "1.19 Hub details complete",
     "file": "1-19-hub-details-complete.json",
     "w": 1440,
-    "h": 1449,
-    "bytes": 51655,
-    "packed": 8465
+    "h": 1390,
+    "bytes": 50804,
+    "packed": 7861
   },
   {
     "name": "1.20 Hub submitted",
     "file": "1-20-hub-submitted.json",
     "w": 1440,
-    "h": 1051,
-    "bytes": 41034,
-    "packed": 6834
+    "h": 1063,
+    "bytes": 39798,
+    "packed": 6279
   },
   {
     "name": "1.21 Background verification",
     "file": "1-21-background-verification.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33912,
-    "packed": 5416
+    "bytes": 33762,
+    "packed": 5111
   },
   {
     "name": "1.22 Background verification passed",
     "file": "1-22-background-verification-passed.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33072,
-    "packed": 5273
+    "bytes": 32816,
+    "packed": 4983
   },
   {
     "name": "1.23 Cluster Head review · waiting",
     "file": "1-23-cluster-head-review-waiting.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 37144,
-    "packed": 5839
+    "bytes": 37019,
+    "packed": 5566
   },
   {
     "name": "1.24 Cluster Head review · pending sign-off",
     "file": "1-24-cluster-head-review-pending-sign-off.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 37102,
-    "packed": 5786
+    "bytes": 36952,
+    "packed": 5487
   },
   {
     "name": "1.25 Cluster Head review · in revision",
     "file": "1-25-cluster-head-review-in-revision.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 35532,
-    "packed": 5523
+    "bytes": 35369,
+    "packed": 5213
   },
   {
     "name": "1.26 Cluster Head review · approved",
     "file": "1-26-cluster-head-review-approved.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 41138,
-    "packed": 6571
+    "bytes": 40798,
+    "packed": 6219
   },
   {
     "name": "1.27 Agreements",
     "file": "1-27-agreements.json",
     "w": 1440,
-    "h": 1070,
-    "bytes": 41121,
-    "packed": 7354
+    "h": 1133,
+    "bytes": 40911,
+    "packed": 7024
   },
   {
     "name": "1.28 Agreements accepted",
     "file": "1-28-agreements-accepted.json",
     "w": 1440,
-    "h": 1070,
-    "bytes": 41181,
-    "packed": 7331
+    "h": 1133,
+    "bytes": 40861,
+    "packed": 6996
   },
   {
     "name": "1.29 Activation",
     "file": "1-29-activation.json",
     "w": 1440,
-    "h": 1033,
-    "bytes": 40346,
-    "packed": 6194
+    "h": 1047,
+    "bytes": 40094,
+    "packed": 5826
   },
   {
     "name": "2.01 Login switch · existing captain",
     "file": "2-01-login-switch-existing-captain.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 3245,
-    "packed": 779
+    "bytes": 3223,
+    "packed": 777
   },
   {
     "name": "2.02 Captain Hub · my hubs",
     "file": "2-02-captain-hub-my-hubs.json",
     "w": 1440,
-    "h": 2091,
-    "bytes": 53891,
-    "packed": 8554
+    "h": 2177,
+    "bytes": 53080,
+    "packed": 8324
   },
   {
     "name": "2.03 Captain Hub · profile",
     "file": "2-03-captain-hub-profile.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 19111,
-    "packed": 3060
+    "bytes": 18689,
+    "packed": 2899
   },
   {
     "name": "2.04 Captain Hub · hubs tab",
     "file": "2-04-captain-hub-hubs-tab.json",
     "w": 1440,
-    "h": 2091,
-    "bytes": 53892,
-    "packed": 8555
+    "h": 2177,
+    "bytes": 53081,
+    "packed": 8325
   },
   {
     "name": "2.05 Add a hub · choices",
     "file": "2-05-add-a-hub-choices.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 18766,
-    "packed": 3100
+    "bytes": 18410,
+    "packed": 2976
   },
   {
     "name": "2.06 Add a hub · FM, new GSTIN",
     "file": "2-06-add-a-hub-fm-new-gstin.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 18236,
-    "packed": 3084
+    "bytes": 17863,
+    "packed": 2962
   },
   {
     "name": "2.07 Hub details · KYC carried over",
     "file": "2-07-hub-details-kyc-carried-over.json",
     "w": 1440,
-    "h": 1429,
-    "bytes": 47178,
-    "packed": 7997
+    "h": 1350,
+    "bytes": 47161,
+    "packed": 7550
   },
   {
     "name": "2.08 Hub details · vehicle picker",
     "file": "2-08-hub-details-vehicle-picker.json",
     "w": 1440,
-    "h": 1613,
-    "bytes": 64501,
-    "packed": 10068
+    "h": 1545,
+    "bytes": 64268,
+    "packed": 9551
   },
   {
     "name": "2.09 Hub details complete",
     "file": "2-09-hub-details-complete.json",
     "w": 1440,
-    "h": 1433,
-    "bytes": 50874,
-    "packed": 8387
+    "h": 1362,
+    "bytes": 50848,
+    "packed": 7917
   },
   {
     "name": "2.10 Hub submitted",
     "file": "2-10-hub-submitted.json",
     "w": 1440,
-    "h": 1035,
-    "bytes": 41312,
-    "packed": 6843
+    "h": 1063,
+    "bytes": 40901,
+    "packed": 6416
   },
   {
     "name": "2.11 Cluster Head review · waiting",
     "file": "2-11-cluster-head-review-waiting.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 38114,
-    "packed": 5995
+    "bytes": 37991,
+    "packed": 5724
   },
   {
     "name": "2.12 Cluster Head review · approved",
     "file": "2-12-cluster-head-review-approved.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 42108,
-    "packed": 6727
+    "bytes": 41770,
+    "packed": 6377
   },
   {
     "name": "2.13 Agreements",
     "file": "2-13-agreements.json",
     "w": 1440,
-    "h": 1070,
-    "bytes": 42091,
-    "packed": 7510
+    "h": 1133,
+    "bytes": 41883,
+    "packed": 7182
   },
   {
     "name": "2.14 Agreements accepted",
     "file": "2-14-agreements-accepted.json",
     "w": 1440,
-    "h": 1070,
-    "bytes": 42151,
-    "packed": 7487
+    "h": 1133,
+    "bytes": 41833,
+    "packed": 7154
   },
   {
     "name": "2.15 Activation",
     "file": "2-15-activation.json",
     "w": 1440,
-    "h": 1033,
-    "bytes": 41316,
-    "packed": 6352
+    "h": 1047,
+    "bytes": 41066,
+    "packed": 5986
   },
   {
     "name": "2.16 Captain Hub · five hubs",
     "file": "2-16-captain-hub-five-hubs.json",
     "w": 1440,
-    "h": 2312,
-    "bytes": 58662,
-    "packed": 9172
+    "h": 2418,
+    "bytes": 57706,
+    "packed": 8930
   },
   {
     "name": "3.01 Login switch · admin",
     "file": "3-01-login-switch-admin.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 3234,
-    "packed": 768
+    "bytes": 3212,
+    "packed": 766
   },
   {
     "name": "3.02 Admin role picker",
     "file": "3-02-admin-role-picker.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 10429,
+    "bytes": 10383,
     "packed": 1952
   },
   {
@@ -380,471 +380,591 @@
     "file": "3-03-am-my-requests.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 32664,
-    "packed": 5366
+    "bytes": 32402,
+    "packed": 5177
   },
   {
     "name": "3.04 AM · infra checklist",
     "file": "3-04-am-infra-checklist.json",
     "w": 1440,
-    "h": 1265,
-    "bytes": 54605,
-    "packed": 8028
+    "h": 1364,
+    "bytes": 54543,
+    "packed": 8072
   },
   {
     "name": "3.05 AM · infra checklist passed",
     "file": "3-05-am-infra-checklist-passed.json",
     "w": 1440,
-    "h": 1265,
-    "bytes": 56037,
-    "packed": 8117
+    "h": 1364,
+    "bytes": 55282,
+    "packed": 8134
   },
   {
     "name": "3.06 AM · carting design",
     "file": "3-06-am-carting-design.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 31854,
-    "packed": 5559
+    "bytes": 31689,
+    "packed": 5363
   },
   {
     "name": "3.07 AM · carting design · invalid code",
     "file": "3-07-am-carting-design-invalid-code.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33155,
-    "packed": 5793
+    "bytes": 32866,
+    "packed": 5583
   },
   {
     "name": "3.08 AM · carting design validated",
     "file": "3-08-am-carting-design-validated.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 32606,
-    "packed": 5675
+    "bytes": 32313,
+    "packed": 5488
   },
   {
     "name": "3.09 AM · carting design sent",
     "file": "3-09-am-carting-design-sent.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33131,
-    "packed": 5779
+    "bytes": 32839,
+    "packed": 5575
   },
   {
     "name": "3.10 AM · rate card",
     "file": "3-10-am-rate-card.json",
     "w": 1440,
-    "h": 1069,
-    "bytes": 42319,
-    "packed": 6978
+    "h": 1133,
+    "bytes": 42362,
+    "packed": 6775
   },
   {
     "name": "3.11 AM · rate card within ceiling",
     "file": "3-11-am-rate-card-within-ceiling.json",
     "w": 1440,
-    "h": 1019,
-    "bytes": 41930,
-    "packed": 6887
+    "h": 1077,
+    "bytes": 41852,
+    "packed": 6689
   },
   {
     "name": "3.12 AM · rate card above ceiling",
     "file": "3-12-am-rate-card-above-ceiling.json",
     "w": 1440,
-    "h": 1124,
-    "bytes": 43420,
-    "packed": 7327
+    "h": 1163,
+    "bytes": 43200,
+    "packed": 7120
   },
   {
     "name": "3.13 Design team · design approvals",
     "file": "3-13-design-team-design-approvals.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 27035,
-    "packed": 4520
+    "bytes": 26791,
+    "packed": 4335
   },
   {
     "name": "3.14 Design team · design alignment",
     "file": "3-14-design-team-design-alignment.json",
     "w": 1440,
-    "h": 1000,
-    "bytes": 37148,
-    "packed": 6424
+    "h": 1086,
+    "bytes": 36825,
+    "packed": 6187
   },
   {
     "name": "3.15 CH · my requests",
     "file": "3-15-ch-my-requests.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 28534,
-    "packed": 4651
+    "bytes": 28285,
+    "packed": 4493
   },
   {
     "name": "3.16 CH · review within ceiling",
     "file": "3-16-ch-review-within-ceiling.json",
     "w": 1440,
-    "h": 1088,
-    "bytes": 44474,
-    "packed": 7452
+    "h": 1138,
+    "bytes": 44692,
+    "packed": 7264
   },
   {
     "name": "3.17 CH · review above ceiling",
     "file": "3-17-ch-review-above-ceiling.json",
     "w": 1440,
-    "h": 1197,
-    "bytes": 45376,
-    "packed": 7683
+    "h": 1228,
+    "bytes": 45352,
+    "packed": 7481
   },
   {
     "name": "3.18 ZH · AM pendency",
     "file": "3-18-zh-am-pendency.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 45785,
-    "packed": 7407
+    "bytes": 45503,
+    "packed": 7284
   },
   {
     "name": "3.19 ZH · CH pendency",
     "file": "3-19-zh-ch-pendency.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 36060,
-    "packed": 5884
+    "bytes": 35849,
+    "packed": 5701
   },
   {
     "name": "3.20 ZH · request status",
     "file": "3-20-zh-request-status.json",
     "w": 1440,
-    "h": 1000,
-    "bytes": 33663,
-    "packed": 5988
+    "h": 1029,
+    "bytes": 33264,
+    "packed": 5826
   },
   {
     "name": "3.21 BizFin · above-ceiling queue",
     "file": "3-21-bizfin-above-ceiling-queue.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 28650,
-    "packed": 4740
+    "bytes": 28407,
+    "packed": 4574
   },
   {
     "name": "3.22 BizFin · rate card approval",
     "file": "3-22-bizfin-rate-card-approval.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 33245,
-    "packed": 6164
+    "bytes": 32704,
+    "packed": 5961
   },
   {
     "name": "4.01 KYC · Don't have GST?",
     "file": "4-01-kyc-don-t-have-gst-.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 34385,
-    "packed": 5804
+    "bytes": 33243,
+    "packed": 5362
   },
   {
     "name": "4.02 KYC · declaration incomplete",
     "file": "4-02-kyc-declaration-incomplete.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 35025,
-    "packed": 5954
+    "bytes": 33825,
+    "packed": 5524
   },
   {
     "name": "4.03 KYC complete · awaiting AM approval",
     "file": "4-03-kyc-complete-awaiting-am-approval.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 38087,
-    "packed": 6173
+    "bytes": 37024,
+    "packed": 5704
   },
   {
     "name": "4.04 Cluster Head review · AM reviewing no GST",
     "file": "4-04-cluster-head-review-am-reviewing-no-gst.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 38504,
-    "packed": 6070
+    "bytes": 38377,
+    "packed": 5797
   },
   {
     "name": "4.05 Cluster Head review · declined, add GSTIN",
     "file": "4-05-cluster-head-review-declined-add-gstin.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 35270,
-    "packed": 5767
+    "bytes": 35000,
+    "packed": 5399
   },
   {
     "name": "4.06 Cluster Head review · GSTIN verified",
     "file": "4-06-cluster-head-review-gstin-verified.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 37151,
-    "packed": 5846
+    "bytes": 37026,
+    "packed": 5573
   },
   {
     "name": "4.07 Add a hub · Don't have GST for this hub",
     "file": "4-07-add-a-hub-don-t-have-gst-for-this-hub.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 17280,
-    "packed": 3299
+    "bytes": 16706,
+    "packed": 3159
   },
   {
     "name": "4.08 AM · infra check · continuing without GST",
     "file": "4-08-am-infra-check-continuing-without-gst.json",
     "w": 1440,
-    "h": 1357,
-    "bytes": 58798,
-    "packed": 8561
+    "h": 1474,
+    "bytes": 58103,
+    "packed": 8605
   },
   {
     "name": "4.09 AM · continuing without GST approved",
     "file": "4-09-am-continuing-without-gst-approved.json",
     "w": 1440,
-    "h": 1357,
-    "bytes": 59689,
-    "packed": 8729
+    "h": 1474,
+    "bytes": 58812,
+    "packed": 8775
   },
   {
     "name": "5.01 My hubs · rate card update to agree",
     "file": "5-01-my-hubs-rate-card-update-to-agree.json",
     "w": 1440,
-    "h": 2091,
-    "bytes": 53905,
-    "packed": 8568
+    "h": 2177,
+    "bytes": 53094,
+    "packed": 8338
   },
   {
     "name": "5.02 Notifications",
     "file": "5-02-notifications.json",
     "w": 1440,
-    "h": 2091,
-    "bytes": 60602,
-    "packed": 9976
+    "h": 2177,
+    "bytes": 59782,
+    "packed": 9698
   },
   {
     "name": "5.03 Rate card update · review and agree",
     "file": "5-03-rate-card-update-review-and-agree.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 37282,
-    "packed": 6689
+    "bytes": 36866,
+    "packed": 6530
   },
   {
     "name": "5.04 Rate card update · agreed",
     "file": "5-04-rate-card-update-agreed.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 23742,
-    "packed": 4209
+    "bytes": 23216,
+    "packed": 4037
   },
   {
     "name": "5.05 Rate card history",
     "file": "5-05-rate-card-history.json",
     "w": 1440,
-    "h": 1881,
-    "bytes": 75165,
-    "packed": 12348
+    "h": 2023,
+    "bytes": 74525,
+    "packed": 12107
   },
   {
     "name": "5.06 Rate card history · older",
     "file": "5-06-rate-card-history-older.json",
     "w": 1440,
-    "h": 1283,
-    "bytes": 50373,
-    "packed": 8330
+    "h": 1373,
+    "bytes": 49901,
+    "packed": 8140
   },
   {
     "name": "5.07 Edit hub details",
     "file": "5-07-edit-hub-details.json",
     "w": 1440,
-    "h": 2946,
-    "bytes": 74357,
-    "packed": 12316
+    "h": 2978,
+    "bytes": 73749,
+    "packed": 11872
   },
   {
     "name": "5.08 Hub edit sent",
     "file": "5-08-hub-edit-sent.json",
     "w": 1440,
-    "h": 2311,
-    "bytes": 64152,
-    "packed": 10328
+    "h": 2384,
+    "bytes": 63512,
+    "packed": 9989
   },
   {
     "name": "6.01 AM · rate card updates",
     "file": "6-01-am-rate-card-updates.json",
     "w": 1440,
-    "h": 1861,
-    "bytes": 74702,
-    "packed": 14199
+    "h": 2142,
+    "bytes": 73337,
+    "packed": 13913
   },
   {
     "name": "6.02 AM · update editor",
     "file": "6-02-am-update-editor.json",
     "w": 1440,
-    "h": 1394,
-    "bytes": 40453,
-    "packed": 6624
+    "h": 1538,
+    "bytes": 40501,
+    "packed": 6426
   },
   {
     "name": "6.03 AM · update priced",
     "file": "6-03-am-update-priced.json",
     "w": 1440,
-    "h": 1394,
-    "bytes": 40453,
-    "packed": 6624
+    "h": 1538,
+    "bytes": 40501,
+    "packed": 6426
   },
   {
     "name": "6.04 AM · update sent",
     "file": "6-04-am-update-sent.json",
     "w": 1440,
-    "h": 1861,
-    "bytes": 75875,
-    "packed": 14472
+    "h": 2142,
+    "bytes": 74633,
+    "packed": 14197
   },
   {
     "name": "6.05 AM · update sent back",
     "file": "6-05-am-update-sent-back.json",
     "w": 1440,
-    "h": 1625,
-    "bytes": 45203,
-    "packed": 7589
+    "h": 1769,
+    "bytes": 45211,
+    "packed": 7378
   },
   {
     "name": "6.06 CH · rate card updates",
     "file": "6-06-ch-rate-card-updates.json",
     "w": 1440,
-    "h": 1097,
-    "bytes": 62027,
-    "packed": 9915
+    "h": 1169,
+    "bytes": 61239,
+    "packed": 9740
   },
   {
     "name": "6.07 CH · update review",
     "file": "6-07-ch-update-review.json",
     "w": 1440,
-    "h": 1000,
-    "bytes": 33210,
-    "packed": 5926
+    "h": 1111,
+    "bytes": 32921,
+    "packed": 5716
   },
   {
     "name": "6.08 ZH · rate card updates",
     "file": "6-08-zh-rate-card-updates.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 39780,
-    "packed": 6510
+    "bytes": 39411,
+    "packed": 6340
   },
   {
     "name": "6.09 ZH · update review",
     "file": "6-09-zh-update-review.json",
     "w": 1440,
-    "h": 1073,
-    "bytes": 34654,
-    "packed": 6098
+    "h": 1176,
+    "bytes": 34371,
+    "packed": 5892
   },
   {
     "name": "6.10 Central Admin · pick a role",
     "file": "6-10-central-admin-pick-a-role.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 12744,
-    "packed": 2665
+    "bytes": 12665,
+    "packed": 2598
   },
   {
     "name": "6.11 BizFin · rate card updates",
     "file": "6-11-bizfin-rate-card-updates.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 36285,
-    "packed": 6109
+    "bytes": 35849,
+    "packed": 5934
   },
   {
     "name": "6.12 BizFin · update review",
     "file": "6-12-bizfin-update-review.json",
     "w": 1440,
-    "h": 1175,
-    "bytes": 37823,
-    "packed": 6692
+    "h": 1306,
+    "bytes": 37523,
+    "packed": 6486
   },
   {
     "name": "6.13 FM Central Ops · AM pendency",
     "file": "6-13-fm-central-ops-am-pendency.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 53066,
-    "packed": 8596
+    "bytes": 52824,
+    "packed": 8442
   },
   {
     "name": "6.14 FM Central Ops · AM pendency by zone",
     "file": "6-14-fm-central-ops-am-pendency-by-zone.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 28783,
-    "packed": 4730
+    "bytes": 28664,
+    "packed": 4568
   },
   {
     "name": "6.15 FM Central Ops · CH pendency",
     "file": "6-15-fm-central-ops-ch-pendency.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 48199,
-    "packed": 7852
+    "bytes": 47969,
+    "packed": 7674
   },
   {
     "name": "6.16 FM Central Ops · rate card updates",
     "file": "6-16-fm-central-ops-rate-card-updates.json",
     "w": 1440,
-    "h": 1090,
-    "bytes": 53667,
-    "packed": 8809
+    "h": 1166,
+    "bytes": 52983,
+    "packed": 8607
   },
   {
     "name": "6.17 FM Central Ops · bulk update",
     "file": "6-17-fm-central-ops-bulk-update.json",
     "w": 1440,
-    "h": 1708,
-    "bytes": 52275,
-    "packed": 9399
+    "h": 1827,
+    "bytes": 52304,
+    "packed": 9318
   },
   {
     "name": "6.18 FM Central Ops · slab settings",
     "file": "6-18-fm-central-ops-slab-settings.json",
     "w": 1440,
-    "h": 1039,
-    "bytes": 38080,
-    "packed": 6568
+    "h": 1894,
+    "bytes": 54359,
+    "packed": 9211
   },
   {
     "name": "6.19 FM Central Ops · slab change proposed",
     "file": "6-19-fm-central-ops-slab-change-proposed.json",
     "w": 1440,
-    "h": 1174,
-    "bytes": 40407,
-    "packed": 7127
+    "h": 2008,
+    "bytes": 56794,
+    "packed": 9734
   },
   {
     "name": "6.20 BizFin · slab settings",
     "file": "6-20-bizfin-slab-settings.json",
     "w": 1440,
-    "h": 1258,
-    "bytes": 40549,
-    "packed": 7153
+    "h": 2080,
+    "bytes": 56671,
+    "packed": 9764
   },
   {
-    "name": "6.21 AM · hub edits",
-    "file": "6-21-am-hub-edits.json",
+    "name": "6.21 BizFin · city rates",
+    "file": "6-21-bizfin-city-rates.json",
     "w": 1440,
-    "h": 1308,
-    "bytes": 66685,
-    "packed": 11062
+    "h": 2262,
+    "bytes": 63783,
+    "packed": 10574
   },
   {
-    "name": "6.22 AM · hub edit review",
-    "file": "6-22-am-hub-edit-review.json",
+    "name": "6.22 BizFin · city picker",
+    "file": "6-22-bizfin-city-picker.json",
+    "w": 1440,
+    "h": 2262,
+    "bytes": 130750,
+    "packed": 17529
+  },
+  {
+    "name": "6.23 BizFin · city search",
+    "file": "6-23-bizfin-city-search.json",
+    "w": 1440,
+    "h": 2262,
+    "bytes": 66506,
+    "packed": 10974
+  },
+  {
+    "name": "6.24 BizFin · city rates saved",
+    "file": "6-24-bizfin-city-rates-saved.json",
+    "w": 1440,
+    "h": 2250,
+    "bytes": 65457,
+    "packed": 10855
+  },
+  {
+    "name": "6.25 BizFin · all cities warning",
+    "file": "6-25-bizfin-all-cities-warning.json",
+    "w": 1440,
+    "h": 2386,
+    "bytes": 66859,
+    "packed": 11179
+  },
+  {
+    "name": "6.26 BizFin · add a city",
+    "file": "6-26-bizfin-add-a-city.json",
+    "w": 1440,
+    "h": 2338,
+    "bytes": 66340,
+    "packed": 10939
+  },
+  {
+    "name": "6.27 BizFin · city added",
+    "file": "6-27-bizfin-city-added.json",
+    "w": 1440,
+    "h": 2315,
+    "bytes": 67754,
+    "packed": 11234
+  },
+  {
+    "name": "6.28 FM Central Ops · city rates",
+    "file": "6-28-fm-central-ops-city-rates.json",
+    "w": 1440,
+    "h": 2129,
+    "bytes": 60702,
+    "packed": 10269
+  },
+  {
+    "name": "6.29 AM · hub edits",
+    "file": "6-29-am-hub-edits.json",
+    "w": 1440,
+    "h": 1326,
+    "bytes": 65847,
+    "packed": 10909
+  },
+  {
+    "name": "6.30 AM · hub edit review",
+    "file": "6-30-am-hub-edit-review.json",
     "w": 1440,
     "h": 1000,
-    "bytes": 20485,
-    "packed": 3897
+    "bytes": 20297,
+    "packed": 3745
+  },
+  {
+    "name": "7.01 Cluster Head review · with the Area Manager",
+    "file": "7-01-cluster-head-review-with-the-area-manager.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 37023,
+    "packed": 5576
+  },
+  {
+    "name": "7.02 Application rejected",
+    "file": "7-02-application-rejected.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 28525,
+    "packed": 4343
+  },
+  {
+    "name": "7.03 Select role · after a rejection",
+    "file": "7-03-select-role-after-a-rejection.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 9173,
+    "packed": 1786
+  },
+  {
+    "name": "7.04 New application · personal details",
+    "file": "7-04-new-application-personal-details.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 35617,
+    "packed": 5593
+  },
+  {
+    "name": "7.05 New hub · with the Area Manager",
+    "file": "7-05-new-hub-with-the-area-manager.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 37983,
+    "packed": 5726
+  },
+  {
+    "name": "7.06 New hub application rejected",
+    "file": "7-06-new-hub-application-rejected.json",
+    "w": 1440,
+    "h": 1000,
+    "bytes": 29505,
+    "packed": 4504
+  },
+  {
+    "name": "7.07 My Hubs · after a rejection",
+    "file": "7-07-my-hubs-after-a-rejection.json",
+    "w": 1440,
+    "h": 2251,
+    "bytes": 54278,
+    "packed": 8560
   }
 ]

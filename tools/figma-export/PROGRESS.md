@@ -10,10 +10,11 @@
 | `3 · Admin login flows` | 22 | complete (3.01 to 3.22) |
 | `4 · Captain without GST` | 9 | complete (4.01 to 4.09) |
 | `5 · Captain Hub after go-live` | 8 | complete (5.01 to 5.08) |
-| `6 · Rate card updates and Central Admin` | 22 | complete (6.01 to 6.22) |
+| `6 · Rate card updates and Central Admin` | 30 | complete (6.01 to 6.30) |
+| `7 · Area Manager rejects an application` | 7 | complete (7.01 to 7.07) |
 
-106 screens, rebuilt from the prototype on 27 Oct 2026. No text layer carries
-an em dash.
+121 screens, rebuilt from the prototype on 10 Nov 2026, in the Product Designer's
+Panel DS v1 styling. No text layer carries an em dash.
 
 Page 1 walks the whole FM approval chain. 1.13 to 1.14 type the GSTIN straight
 in, 1.17 to 1.19 add serviceable pincodes and pick vehicles, and 1.24 to 1.26
@@ -32,7 +33,14 @@ notifications, rate card history and editing hub details.
 
 Page 6 is the rate card update chain (AM, Cluster Head, Zonal Head, BizFin)
 plus Central Admin: FM Central Ops pendency views, bulk update, slab settings
-and the slab change BizFin approves, and the AM's hub edit queue.
+and the slab change BizFin approves, BizFin's city rates (the city picker and
+its search, a city saved, the All cities warning, a city added, and FM Central
+Ops' read-only view), and the AM's hub edit queue.
+
+Page 7 is the Area Manager rejecting an application: a new captain told it
+was rejected and to contact the Area Manager, acknowledging it and starting
+again from the role picker, and a live captain's new hub rejected and back on
+My Hubs.
 
 ## What the file is
 
