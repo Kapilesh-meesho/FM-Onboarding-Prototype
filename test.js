@@ -1056,22 +1056,23 @@ async function testCeilings() {
           c ? "got tp " + c.tp + ", ceiling " + c.tpCeiling : "category missing");
   });
 
-  /* slab ceilings: six 2,500-order columns, a slab held to the one it starts in */
-  eq(api.config.CEILING_COLS, [0, 2500, 5000, 7500, 10000, 12500], "six columns, 2,500 orders apart");
-  eq([0, 2500, 5000, 7500, 10000].map(f => H.slabCeiling("standalone_mini", "Anywhere", f)),
+  /* slab ceilings: the sheet's six 2,500-order columns seed a ceiling for each slab */
+  eq(api.config.CEILING_COLS, [0, 2500, 5000, 7500, 10000, 12500], "the sheet has six columns, 2,500 orders apart");
+  const SLAB_STARTS = [0, 2501, 5001, 7501, 10001];
+  eq(SLAB_STARTS.map(f => H.slabCeiling("standalone_mini", "Anywhere", f)),
      [3.2, 3, 2.73, 2.55, 2.38], "mini-hub ceilings step down by slab, the same in every city");
-  eq(H.slabCeiling("standalone_mini", "", 12500), 2.2, "and the column above 12,500 is 2.20");
+  eq(H.slabCeiling("standalone_mini", "", 12500), 2.38, "orders past 12,500 sit in the top slab, 10,001 and up");
   eq(H.slabCeiling("sah", "Mumbai, Maharashtra", 7500), 1.5, "SAH is 1.50 everywhere");
   eq(H.slabCeiling("lm_as_fm", "Bengaluru", 0), 6, "LM-as-FM keeps its flat 6.00 — the sheet leaves it blank");
   eq(H.slabCeiling("standalone", "Bengaluru, Karnataka", 0), 3.5, "Standalone in Bengaluru: 3.50");
-  eq([0, 2500, 5000, 7500, 10000].map(f => H.slabCeiling("standalone", "New Delhi, Delhi", f)),
+  eq(SLAB_STARTS.map(f => H.slabCeiling("standalone", "New Delhi, Delhi", f)),
      [2.65, 2.5, 2.25, 2, 1.75], "Standalone in Delhi steps down from 2.65");
   eq(H.slabCeiling("mall", "Mumbai, Maharashtra", 0), 3.85, "Mall hub in Mumbai starts at 3.85");
   eq(H.cityKey("New Delhi, Delhi"), "Delhi", "“New Delhi” reads as the sheet’s Delhi");
   eq(H.slabCeiling("standalone", "Resolved from pincode", 0), null, "a city off the sheet has no Standalone ceiling");
 
   /* above or within */
-  const card = rates => ({ slabs:rates.map((r, i) => ({ from:String(i * 2500), to:"", rate:r })) });
+  const card = rates => ({ slabs:rates.map((r, i) => ({ from:String(SLAB_STARTS[i]), to:"", rate:r })) });
   check(!H.cardAbove("standalone_mini", "", card(["3.20", "3.00", "2.73", "2.55", "2.38"])),
         "a mini-hub card exactly on every ceiling is within");
   check(H.cardAbove("standalone_mini", "", card(["3.00", "2.90", "2.80", "2.40", "2.30"])),
@@ -1079,7 +1080,7 @@ async function testCeilings() {
   check(H.cardAbove("standalone", "Kochi", card(["1.00", "1.00", "1.00", "1.00", "1.00"])),
         "a Standalone card in a city with no ceilings goes to BizFin, however low");
   eq(H.slabCeiling("standalone", "Jaipur, Rajasthan", 0), 2.55, "every city on the sheet has its ceilings (Jaipur 2.55)");
-  eq(H.ceilingText("standalone_mini", ""), "₹3.20 → ₹2.20", "stepped ceilings read first to last");
+  eq(H.ceilingText("standalone_mini", ""), "₹3.20 → ₹2.38", "stepped ceilings read first slab to last");
   eq(H.ceilingText("standalone", "Bengaluru"), "₹3.50", "flat ceilings read as one figure");
 
   api.stopTimers();
@@ -2513,7 +2514,7 @@ async function testCeilingEscalation() {
   clickSel(doc, '[data-aprole="ch"]');
   clickSel(doc, '[data-apopen="OBD-78222"]');
   check(txt(doc).indexOf("Slab ceilings (Standalone (mini-hub), Bengaluru)") >= 0 &&
-        txt(doc).indexOf("₹3.20 → ₹2.20") >= 0, "the CH's read-only card names the ceilings it was held to");
+        txt(doc).indexOf("₹3.20 → ₹2.38") >= 0, "the CH's read-only card names the ceilings it was held to");
   check(txt(doc).indexOf("₹6.00 / touchpoint · fixed for Standalone (mini-hub)") >= 0,
         "and shows the touchpoint as fixed for the hub type");
   check(txt(doc).indexOf("₹2.80 / shipment · above ceiling") >= 0, "with the slab over its ceiling flagged");
@@ -5111,9 +5112,11 @@ async function testCentralRates() {
   check(!/Tajinder|Roopesh|Vidhi|Agrim|Adrija/.test(doc.documentElement.outerHTML),
         "and no real person is named anywhere in the tool");
 
-  /* --- FM Central Ops proposes a slab change; BizFin approves it --- */
+  /* --- FM Central Ops proposes a slab change; BizFin sets its ceiling and approves it --- */
   A.adminTab("slabs");
   eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 5, "slab settings shows the five slabs");
+  check(!exists(doc, "[data-slabrate]") && !exists(doc, "#slab-tp") && txt(doc).indexOf("₹3.20") >= 0,
+        "FM Central Ops sees each slab’s ceiling but can’t change it");
   const to0 = () => sel(doc, '[data-slabto="0"]');
   to0().value = "2000"; fire(to0(), "input"); fire(to0(), "change");
   sel(doc, '[data-slabto="1"]').value = "1500"; fire(sel(doc, '[data-slabto="1"]'), "input");
@@ -5126,6 +5129,8 @@ async function testCentralRates() {
   click(doc, "slab-add");
   eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 6, "＋ Add slab adds one 2,500 orders above the last");
   eq(sel(doc, '[data-slabto="4"]').value, "12500", "ending at 12,500");
+  check(sel(doc, ".slab-new") && sel(doc, ".slab-new").textContent.indexOf("Set by BizFin") >= 0,
+        "the new slab is marked, its ceiling left to BizFin");
   clickSel(doc, '[data-slabrm="0"]');
   eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 5, "removing one folds it into the next");
   click(doc, "slab-submit");
@@ -5140,26 +5145,39 @@ async function testCentralRates() {
   A.adminTab("slabs");
   clickSel(doc, '[data-slabdecide="reject:' + req.id + '"]');
   check(sel(doc, '[data-testid="slab-error"]').textContent.indexOf("Say why") >= 0, "rejecting needs a reason");
-  clickSel(doc, '[data-slabdecide="approve:' + req.id + '"]');
-  eq(req.status, "approved", "BizFin approves it");
+  A.slabTp("6.00");
+  clickSel(doc, '[data-slabreview="' + req.id + '"]');
+  eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 5, "Review opens the proposed slabs in the editor");
+  check($(doc, "slab-submit").textContent === "Approve " + req.id, "to approve from there");
+  eq(sel(doc, '[data-slabrate="0"]').value, "3.20", "slabs that start where they did keep their ceilings");
+  eq(sel(doc, '[data-slabrate="12501"]').value, "", "the new top slab has none yet");
+  click(doc, "slab-submit");
+  check(sel(doc, '[data-testid="slab-error"]').textContent.indexOf("Set the ceiling for Slab 5") >= 0,
+        "it can’t be approved until the new slab has its ceiling");
+  eq(req.status, "pending", "so it stays pending");
+  sel(doc, '[data-slabrate="12501"]').value = "2.20"; fire(sel(doc, '[data-slabrate="12501"]'), "input");
+  click(doc, "slab-submit");
+  eq(req.status, "approved", "with its ceiling set, BizFin approves it");
   eq(H.slabBreaks("standalone_mini"), [5000, 7500, 10000, 12500], "and the mini-hub slabs change");
+  eq([H.slabCeiling("standalone_mini", "", 0), H.slabCeiling("standalone_mini", "", 12501)], [3.2, 2.2],
+     "each holding its ceiling, the new one included");
   eq(H.slabBreaks("standalone"), [2500, 5000, 7500, 10000], "only for that hub type");
-  eq(api.state.slabSettings.log[0].approvedBy, "BizFin", "logged with who approved it");
+  eq([api.state.slabSettings.log[0].by, api.state.slabSettings.log[0].approvedBy], ["FM Central Ops", "BizFin"],
+     "logged with who proposed it and who approved it");
 
-  /* BizFin can change a structure directly, for every hub type at once */
+  /* BizFin changes a hub type’s slabs and ceilings together */
   clickSel(doc, '[data-slabtype="lm_as_fm"]');
   click(doc, "slab-add");
-  $(doc, "slab-all").checked = true; fire($(doc, "slab-all"), "change");
   click(doc, "slab-submit");
-  check(api.state.admin.toast.indexOf("Slab structure saved") >= 0, "BizFin saves it straight away");
-  check(["standalone_mini", "standalone", "lm_as_fm", "mall", "sah"].every(k => H.slabBreaks(k).join() === "2500,5000,7500,10000,12500"),
-        "applied to every hub type — six slabs now");
-  clickSel(doc, '[data-slabtype="standalone"]');
-  clickSel(doc, '[data-slabrm="4"]');
+  check(sel(doc, '[data-testid="slab-error"]').textContent.indexOf("Set the ceiling for Slab 6") >= 0,
+        "a slab BizFin adds needs its ceiling too");
+  sel(doc, '[data-slabrate="12501"]').value = "6.00"; fire(sel(doc, '[data-slabrate="12501"]'), "input");
   click(doc, "slab-submit");
-  eq([H.slabBreaks("standalone"), H.slabBreaks("mall").length], [[2500, 5000, 7500, 10000], 5],
-     "or to one hub type — Standalone back to five, the rest on six");
-  eq(api.state.slabSettings.log.length, 3, "every change is logged");
+  check(api.state.admin.toast.indexOf("LM-as-FM slabs and ceilings saved") >= 0, "then saves straight away");
+  eq(H.slabBreaks("lm_as_fm"), [2500, 5000, 7500, 10000, 12500], "six slabs now");
+  eq(H.slabCeiling("lm_as_fm", "", 12501), 6, "the sixth with its ceiling");
+  check(!exists(doc, "#slab-all"), "slabs are changed one hub type at a time");
+  eq(api.state.slabSettings.log.length, 2, "every change is logged");
 
   /* new cards are priced on it; cards already priced keep theirs */
   eq(H.allHubById("nh-whf").rateCard.slabs.length, 5, "a hub’s card in force keeps its slabs");
@@ -5167,14 +5185,15 @@ async function testCentralRates() {
   clickSel(doc, '[data-aprole="am"]');
   A.adminTab("rates");
   clickSel(doc, '[data-aprate="nh-whf"]');
-  eq(doc.querySelectorAll('[data-rfield="rate"]').length, 6, "an update to it is priced on the new slabs");
+  eq(doc.querySelectorAll('[data-rfield="rate"]').length, H.slabBands(H.allHubById("nh-whf").category).length,
+     "an update to it is priced on its hub type’s slabs today");
   eq(sel(doc, '[data-rslab="5"][data-rfield="rate"]').value, "4.80", "each starting from the rate its orders had before");
   A.adminRateBack();
   A.adminTab("mine");
   A.adminOpen("OBD-78240");
   A.amStep("rate");
   A.amCategory("mall");
-  eq(H.apById("OBD-78240").rate.slabs.length, 6, "and so is a new onboarding rate card");
+  eq(H.apById("OBD-78240").rate.slabs.length, H.slabBands("mall").length, "and a new onboarding rate card on its hub type’s slabs");
   check(!exists(doc, '[data-field="from"]'), "with the bands fixed for the AM");
 
   /* --- FM Central Ops acts on AM and CH steps --- */
@@ -5243,8 +5262,8 @@ async function testCentralRates() {
 
   /* above a hub's ceilings it goes to BizFin first */
   $(doc, "ap-bulk-codes").value = "JPN"; fire($(doc, "ap-bulk-codes"), "input");
-  ["3.30", "3.20", "3.10", "3.00", "2.90", "2.80"].forEach((v, i) => {
-    const el = sel(doc, '[data-bulkrate="' + i + '"]'); el.value = v; fire(el, "input"); });
+  [...doc.querySelectorAll("[data-bulkrate]")].forEach((el, i) => {
+    el.value = ["3.30", "3.20", "3.10", "3.00", "2.90", "2.80"][i]; fire(el, "input"); });
   eq(plan().JPN, "bizfin", "3.30 is above the mini-hub’s ceiling, so it goes to BizFin");
   click(doc, "ap-bulk-go");
   const jpnU = api.state.rateUpdates.filter(u => u.source === "bulk" && u.hubCode === "JPN")[0];
@@ -5876,45 +5895,52 @@ async function testPanelDs() {
    ====================================================================== */
 
 async function testCityRates() {
-  section("40. City rates: BizFin sets ceilings by city");
+  section("40. Slab settings: slabs and their ceilings, by city");
   const { win, doc, api } = await boot();
   const A = api.actions, H = api.helpers;
   const fire = (el, t) => el.dispatchEvent(new win.Event(t, { bubbles: true }));
   const put = (q, v) => { const el = sel(doc, q); el.value = v; fire(el, "input"); };
-  const rateBox = (i) => '[data-cityrate="' + i + '"]';
+  const rateBox = (from) => '[data-slabrate="' + from + '"]';
+  const err = () => (sel(doc, '[data-testid="slab-error"]') || { textContent:"" }).textContent;
   const cityErr = () => (sel(doc, '[data-testid="city-error"]') || { textContent:"" }).textContent;
+  const log = () => sel(doc, '[data-testid="slab-log"]').textContent;
 
-  /* --- the sheet, loaded --- */
+  /* --- the sheet, loaded, a ceiling for each slab --- */
   eq(H.cityList("standalone").length, 256, "every Standalone city on the sheet is loaded");
   eq(H.cityList("mall").length, 194, "and every Mall hub city");
-  eq(H.ceilingRow("standalone", "Hansi"), [1.525, 1.5, 1.5, 1.5, 1.5, 1.5], "a row keeps the sheet’s third decimal");
+  eq(H.ceilingRow("standalone", "Hansi"), [1.525, 1.5, 1.5, 1.5, 1.5], "one ceiling for each slab, the sheet’s third decimal kept");
   eq(H.slabCeiling("standalone", "Chennai", 0), 3.5, "Standalone in Chennai starts at 3.50");
   eq(H.slabCeiling("mall", "Chennai", 0), 2.35, "while a Mall hub there starts at 2.35");
-  eq(H.slabCeiling("mall", "Jalandhar", 12500), 2.05, "and Jalandhar’s Mall row is its own");
+  eq(H.slabCeiling("mall", "Jalandhar", 10001), 2.17, "and Jalandhar’s Mall row is its own");
   eq(H.slabCeiling("standalone", "Hamirpur-up", 0), 2.2, "a lower-case sheet name still matches");
   eq([H.fixedTp("standalone", "Agra"), H.fixedTp("mall", "Agra"), H.fixedTp("standalone_mini", "Agra")],
      ["5.00", "2.00", "6.00"], "each city carries its hub type’s touchpoint");
   eq(H.slabCeiling("standalone", "Kochi", 0), null, "a city off the sheet has no ceilings yet");
 
-  /* --- BizFin opens it on Bengaluru --- */
+  /* --- one panel: slabs and ceilings together --- */
   devClick(doc, "as:admin");
   login(doc);
   asCentral(doc, "bizfin");
   A.adminTab("slabs");
-  clickSel(doc, '[data-slabtype="standalone_mini"]');
+  check(exists(doc, '[data-testid="ap-slab-settings"]') && !exists(doc, '[data-testid="ap-city-rates"]'),
+        "slabs and ceilings sit in one panel");
   check(exists(doc, '[data-testid="city-flat"]') && !exists(doc, "#city-toggle"),
         "a mini-hub is priced the same in every city, with no city to pick");
+  eq(sel(doc, rateBox(0)).value, "3.20", "each slab shows its ceiling");
+  eq($(doc, "slab-tp").value, "6.00", "and the touchpoint");
+  check(exists(doc, "[data-slabto]") && exists(doc, "#slab-add"), "its slabs can be changed alongside");
   clickSel(doc, '[data-slabtype="standalone"]');
-  check(exists(doc, '[data-testid="ap-city-rates"]'), "Standalone has city rates");
-  eq($(doc, "city-toggle").textContent, "Bengaluru", "opening on Bengaluru");
+  eq($(doc, "city-toggle").textContent, "Bengaluru", "Standalone opens on Bengaluru");
   check($(doc, "city-panel").hidden, "with the city list closed");
   const css = [...doc.querySelectorAll("style")].map(x => x.textContent).join("");
   check(/\.city-list\{max-height:396px\}/.test(css), "the list is ten cities tall, and scrolls for the rest");
-  check(/\.city-table\{/.test(css) && doc.querySelectorAll('[data-testid="city-rate-table"] tbody tr').length === 7,
-        "the rates read down the page: six bands and the touchpoint");
-  eq([...doc.querySelectorAll('[data-testid="city-rate-table"] tbody td:first-child')].map(td => td.textContent),
-     ["0–2,500", "2,500–5,000", "5,000–7,500", "7,500–10,000", "10,000–12,500", "Above 12,500", "Touchpoint rate"],
-     "one row for each band, then the touchpoint");
+  eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 5, "one row for each slab");
+  eq([...doc.querySelectorAll('[data-testid="slab-set-row"] td:nth-child(2)')].map(td => td.textContent),
+     ["0", "2,501", "5,001", "7,501", "10,001"], "from 0 to 10,001 and up");
+  check(exists(doc, '[data-testid="slab-bands-locked"]') && !exists(doc, "[data-slabto]") && !exists(doc, "#slab-add"),
+        "for one city the slabs are fixed: a slab change applies to every city");
+
+  /* --- the city picker --- */
   click(doc, "city-toggle");
   check(!$(doc, "city-panel").hidden, "the picker opens the list");
   eq(doc.querySelectorAll("#city-list [data-citypick]").length, 256, "with every city in it");
@@ -5934,27 +5960,27 @@ async function testCityRates() {
   clickSel(doc, '#city-list [data-citypick="bengaluru"]');
   eq($(doc, "city-toggle").textContent, "Bengaluru", "a click on a city picks it");
   eq(sel(doc, rateBox(0)).value, "3.50", "its ceilings filled in");
-  eq($(doc, "city-tp").value, "5.00", "and its touchpoint");
+  eq($(doc, "slab-tp").value, "5.00", "and its touchpoint");
   check(txt(doc).indexOf("Bengaluru: From the rate card sheet.") >= 0, "saying where they come from");
 
-  /* --- one city --- */
+  /* --- one city's ceilings --- */
   click(doc, "city-toggle");
   put("#city-search", "del");
   clickSel(doc, '#city-list [data-citypick="delhi"]');
   eq(sel(doc, rateBox(0)).value, "2.65", "picking Delhi shows Delhi’s ceilings");
-  click(doc, "city-save");
-  check(cityErr().indexOf("already on") >= 0, "saving them unchanged says so");
+  click(doc, "slab-submit");
+  check(err().indexOf("already in use") >= 0, "saving them unchanged says so");
   put(rateBox(0), "two");
-  click(doc, "city-save");
-  check(cityErr().indexOf("0–2,500 ceiling") >= 0, "a ceiling that isn’t a rate is refused, naming the column");
+  click(doc, "slab-submit");
+  check(err().indexOf("Slab 1’s ceiling") >= 0, "a ceiling that isn’t a rate is refused, naming the slab");
   put(rateBox(0), "2.80");
-  put("#city-tp", "5.50");
-  click(doc, "city-save");
+  put("#slab-tp", "5.50");
+  click(doc, "slab-submit");
   eq(H.slabCeiling("standalone", "New Delhi, Delhi", 0), 2.8, "Delhi’s new ceiling holds Standalone cards there");
   eq(H.fixedTp("standalone", "Delhi"), "5.50", "and its new touchpoint");
   eq(H.slabCeiling("mall", "Delhi", 0), 2.65, "Mall hubs in Delhi are untouched");
   check(txt(doc).indexOf("Delhi: Changed by BizFin on") >= 0, "the city says who changed it");
-  check(sel(doc, '[data-testid="city-log"]').textContent.indexOf("Delhi") >= 0, "and the change is logged");
+  check(log().indexOf("Delhi") >= 0, "and the change is logged");
 
   /* --- every city at once --- */
   setCheck(doc, "city-all", true);
@@ -5963,36 +5989,61 @@ async function testCityRates() {
         "naming how many cities it changes");
   check($(doc, "city-toggle").disabled && $(doc, "city-toggle").textContent === "All 256 cities",
         "the city picker stands down");
-  eq($(doc, "city-save").textContent, "Apply to all 256 cities", "and the button says what it does");
-  eq(sel(doc, rateBox(0)).value, "", "every column starts blank, to keep each city’s own rate");
-  click(doc, "city-save");
-  check(cityErr().indexOf("at least one column") >= 0, "nothing filled in, nothing changes");
-  put(rateBox(5), "1.40");
-  click(doc, "city-save");
-  check(cityErr().indexOf("Tick the box") >= 0, "it won’t apply until the warning is acknowledged");
-  check(H.slabCeiling("standalone", "Agra", 12500) === 3, "and nothing has changed yet");
+  eq($(doc, "slab-submit").textContent, "Apply to all 256 cities", "and the button says what it does");
+  eq(sel(doc, rateBox(0)).value, "", "every ceiling starts blank, to keep each city’s own");
+  check(exists(doc, "[data-slabto]") && exists(doc, "#slab-add"), "and the slabs can be changed now");
+  click(doc, "slab-submit");
+  check(err().indexOf("already in use") >= 0, "nothing filled in, nothing changes");
+  put(rateBox(10001), "1.40");
+  click(doc, "slab-submit");
+  check(err().indexOf("Tick the box") >= 0, "it won’t apply until the warning is acknowledged");
+  eq(H.slabCeiling("standalone", "Agra", 10001), 3.03, "and nothing has changed yet");
   setCheck(doc, "city-ack", true);
-  click(doc, "city-save");
-  check(H.cityList("standalone").every(c => c.row[5] === 1.4), "the top column is 1.40 in every city");
-  eq(H.slabCeiling("standalone", "Agra", 0), 3.25, "the columns left blank keep each city’s own rate");
+  click(doc, "slab-submit");
+  check(H.cityList("standalone").every(c => H.slabCeiling("standalone", c.name, 10001) === 1.4),
+        "the top slab is 1.40 in every city");
+  eq(H.slabCeiling("standalone", "Agra", 0), 3.25, "the slabs left blank keep each city’s own ceiling");
   eq(H.slabCeiling("standalone", "Delhi", 0), 2.8, "including a city changed earlier");
   check(!$(doc, "city-all").checked && !exists(doc, '[data-testid="city-all-warn"]'), "and the editor goes back to one city");
-  check(sel(doc, '[data-testid="city-log"]').textContent.indexOf("All 256 cities") >= 0, "the change is logged for all cities");
+  check(log().indexOf("All 256 cities") >= 0, "the change is logged for all cities");
 
-  /* --- a new city --- */
+  /* --- a new slab can't be saved without its ceiling --- */
+  setCheck(doc, "city-all", true);
+  click(doc, "slab-add");
+  check(sel(doc, ".slab-new") && sel(doc, ".slab-new").textContent.indexOf("New") >= 0, "a new slab is marked");
+  eq(sel(doc, rateBox(12501)).getAttribute("placeholder"), "Required", "and asks for its ceiling");
+  setCheck(doc, "city-ack", true);
+  click(doc, "slab-submit");
+  check(err().indexOf("Set the ceiling for Slab 6") >= 0 && err().indexOf("for every city") >= 0,
+        "saving without it says the new slab needs a ceiling, for every city");
+  eq(H.slabBreaks("standalone"), [2500, 5000, 7500, 10000], "and the slabs don’t change");
+  put(rateBox(12501), "1.20");
+  click(doc, "slab-submit");
+  eq(H.slabBreaks("standalone"), [2500, 5000, 7500, 10000, 12500], "with it set, the sixth slab is added");
+  check(H.cityList("standalone").every(c => H.slabCeiling("standalone", c.name, 12501) === 1.2),
+        "holding its ceiling in every city");
+  eq([H.slabCeiling("standalone", "Agra", 10001), H.slabCeiling("standalone", "Delhi", 0)], [1.4, 2.8],
+     "while every other slab keeps its ceiling");
+  check(log().indexOf("Slabs 0–2,500") >= 0, "the log shows the new slabs");
+  eq(doc.querySelectorAll('[data-testid="slab-set-row"]').length, 6, "and each city shows six slabs");
+  check(!exists(doc, '[data-testid="ap-city-rates"]') && !exists(doc, '[data-testid="city-log"]'),
+        "one log holds slab and ceiling changes alike");
+
+  /* --- a new city, with a ceiling for every slab --- */
   click(doc, "city-add");
   check(exists(doc, '[data-testid="city-new"]'), "Add city opens a form");
+  eq(doc.querySelectorAll("[data-citynew]").length, 6, "asking for a ceiling for each of the six slabs");
   eq($(doc, "city-new-tp").value, "5.00", "with the hub type’s touchpoint filled in");
   put("#city-new-name", "bengaluru");
   click(doc, "city-new-save");
   check(cityErr().indexOf("already on the list") >= 0, "a city already there can’t be added again");
   put("#city-new-name", "Kochi");
   click(doc, "city-new-save");
-  check(cityErr().indexOf("ceiling as a rate") >= 0, "every ceiling is needed");
-  ["2.60", "2.40", "2.20", "2.00", "1.80", "1.60"].forEach((v, i) => put('[data-citynew="' + i + '"]', v));
+  check(cityErr().indexOf("Slab 1’s ceiling") >= 0, "every ceiling is needed");
+  H.slabBands("standalone").forEach((b, i) => put('[data-citynew="' + b.from + '"]', ["2.60", "2.40", "2.20", "2.00", "1.80", "1.60"][i]));
   click(doc, "city-new-save");
   eq(H.cityList("standalone").length, 257, "Kochi joins the Standalone cities");
-  eq(H.slabCeiling("standalone", "Kochi, Kerala", 0), 2.6, "and holds Standalone cards there to its ceilings");
+  eq(H.ceilingRow("standalone", "Kochi, Kerala"), [2.6, 2.4, 2.2, 2, 1.8, 1.6], "with a ceiling for every slab");
   eq(H.slabCeiling("mall", "Kochi", 0), null, "Mall hubs are added separately");
   eq($(doc, "city-toggle").textContent, "Kochi", "the new city is picked");
   eq($(doc, "city-count").textContent, "257 cities · 1 added by BizFin", "and counted as added");
@@ -6005,17 +6056,19 @@ async function testCityRates() {
   check(!H.cardAbove("standalone", "Kochi", { slabs:[{ from:"0", to:"2500", rate:"2.50" }] }),
         "a card under Kochi’s ceilings is now within them");
 
-  /* --- kept across a reload, and read-only for FM Central Ops --- */
+  /* --- kept across a reload, and read-only ceilings for FM Central Ops --- */
   check(api.reload(), "the save reloads");
-  eq(H.slabCeiling("standalone", "Delhi", 0), 2.8, "with Delhi’s rates kept");
-  eq(H.slabCeiling("standalone", "Kochi", 0), 2.6, "and Kochi still there");
+  eq(H.slabCeiling("standalone", "Delhi", 0), 2.8, "with Delhi’s ceilings kept");
+  eq(H.slabCeiling("standalone", "Kochi", 12501), 1.6, "Kochi still there");
+  eq(H.slabBreaks("standalone").length, 5, "and the six slabs");
   A.adminSwitchRole();
   asCentral(doc, "ops");
   A.adminTab("slabs");
   clickSel(doc, '[data-slabtype="standalone"]');
-  check(exists(doc, '[data-testid="ap-city-rates"]') && !exists(doc, "#city-save") && !exists(doc, "#city-all") &&
-        !exists(doc, "#city-add"), "FM Central Ops sees city rates but can’t change them");
-  check(txt(doc).indexOf("Only BizFin can change city rates.") >= 0, "and is told so");
+  check(!exists(doc, "[data-slabrate]") && !exists(doc, "#slab-tp") && !exists(doc, "#city-all") && !exists(doc, "#city-add"),
+        "FM Central Ops sees the ceilings but can’t change them");
+  check(txt(doc).indexOf("Only BizFin changes ceilings.") >= 0, "and is told so");
+  eq($(doc, "slab-submit").textContent, "Send to BizFin for approval", "its slab changes go to BizFin");
 
   api.stopTimers();
   win.close();

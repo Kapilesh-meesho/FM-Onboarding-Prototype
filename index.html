@@ -1756,6 +1756,11 @@ body{font-size:13px;line-height:20px}
 .city-table tr.city-tp td{border-top:1px solid var(--line)}
 .city-table .city-in{width:104px}
 .city-unit{margin-left:8px;font-size:12px;line-height:16px;color:var(--muted)}
+.slab-set td{vertical-align:middle}
+.slab-set .slab-ceil,.city-table .slab-ceil{width:104px}
+.slab-set tr.slab-new td{background:var(--warn-bg)}
+.slab-set .slab-ceil.new{border-color:var(--warn-ink)}
+.slab-set tr.city-tp td{border-top:1px solid var(--line)}
 .ms-search{height:36px;border-radius:4px}
 .slab-row input,.slab-tp input,.slab-to{height:36px;border-radius:4px}
 .otp-row{gap:12px}
@@ -1875,9 +1880,10 @@ var HUB_CATEGORIES = {
 /* Slab ceilings, from the FM hub rate card sheet. Each row is six ceilings, one
    per 2,500-order column: 0–2,500, 2,500–5,000, 5,000–7,500, 7,500–10,000,
    10,000–12,500 and above 12,500. A slab is held to the column its first order
-   falls in. Standalone and Mall hub ceilings differ by city and come from
-   CITY_SHEET; a city with no row has no ceiling a Cluster Head can approve
-   within, so its cards go to BizFin. The mini-hub and SAH ceilings are the same
+   falls in, until BizFin sets each slab's own ceiling in Slab settings; from
+   then on every slab carries its own. Standalone and Mall hub ceilings differ
+   by city and come from CITY_SHEET; a city with no row has no ceiling a
+   Cluster Head can approve within, so its cards go to BizFin. The mini-hub and SAH ceilings are the same
    everywhere. The sheet leaves LM-as-FM blank, so it keeps the flat 6.00 it had. */
 var CEILING_COLS = [0, 2500, 5000, 7500, 10000, 12500];
 var SLAB_CEILINGS = {
@@ -2088,38 +2094,61 @@ function cityKey(city) {
   return c ? c.charAt(0).toUpperCase() + c.slice(1).toLowerCase() : "";
 }
 function isCityType(type) { return CITY_TYPES.indexOf(type) >= 0; }
-/* A city's ceilings and touchpoint for a city-wise hub type: BizFin's saved row
-   if there is one, else the sheet's. Null for a city on neither. */
+/* The sheet column a slab starting at `start` orders reads its ceiling from. */
+function sheetCol(start) {
+  var i = 0;
+  CEILING_COLS.forEach(function (c, j) { if ((+start || 0) >= c) i = j; });
+  return i;
+}
+function savedCeilings(type) {
+  var s = typeof S !== "undefined" && S && S.slabSettings && S.slabSettings.cities;
+  return (s && s[type]) || {};
+}
+/* A city's ceilings and touchpoint for a hub type: what BizFin saved, else the
+   sheet's row. A hub type priced the same everywhere has one entry, "*". Null
+   for a city-wise hub type in a city on neither. */
 function cityRates(type, city) {
-  if (!isCityType(type)) return null;
-  var k = cityKey(city).toLowerCase();
+  if (!HUB_CATEGORIES[type]) return null;
+  var k = isCityType(type) ? cityKey(city).toLowerCase() : "*";
   if (!k) return null;
-  var saved = typeof S !== "undefined" && S && S.slabSettings && S.slabSettings.cities &&
-              S.slabSettings.cities[type];
-  return (saved && saved[k]) || CITY_BASE[type][k] || null;
+  var saved = savedCeilings(type)[k];
+  if (saved) return saved;
+  if (!isCityType(type)) return { name:"Every city", row:SLAB_CEILINGS[type]["*"], tp:HUB_CATEGORIES[type].tp };
+  return CITY_BASE[type][k] || null;
+}
+/* The ceiling an entry holds for the slab starting at `start` orders: the one set
+   for that slab, else the sheet's column the slab starts in. */
+function entryCeiling(type, e, start) {
+  if (!e) return null;
+  if (e.bands && e.bands[String(start)] != null) return +e.bands[String(start)];
+  var row = e.row || (isCityType(type) ? (CITY_BASE[type][String(e.name).toLowerCase()] || {}).row
+                                       : SLAB_CEILINGS[type]["*"]);
+  return row ? row[sheetCol(start)] : null;
+}
+/* Where the slab holding `from` orders starts, in the hub type's slabs today. */
+function slabStart(type, from) {
+  var f = +from || 0, st = 0;
+  slabBands(type).forEach(function (b) { if (f >= +b.from) st = +b.from; });
+  return st;
 }
 /* Every city a city-wise hub type is priced in, sheet and added, A to Z. */
 function cityList(type) {
   if (!isCityType(type)) return [];
-  var saved = (typeof S !== "undefined" && S && S.slabSettings && S.slabSettings.cities &&
-               S.slabSettings.cities[type]) || {};
-  var all = Object.assign({}, CITY_BASE[type], saved);
+  var all = Object.assign({}, CITY_BASE[type], savedCeilings(type));
+  delete all["*"];
   return Object.keys(all).map(function (k) { return all[k]; })
     .sort(function (a, b) { return a.name.localeCompare(b.name); });
 }
+/* The ceilings for each of the hub type's slabs today, in a city. */
 function ceilingRow(type, city) {
-  var t = SLAB_CEILINGS[type];
-  if (t) return t["*"];
-  var c = cityRates(type, city);
-  return c ? c.row : null;
+  var e = cityRates(type, city);
+  if (!e) return null;
+  return slabBands(type).map(function (b) { return entryCeiling(type, e, +b.from); });
 }
-/* The ceiling for a slab starting at `from` orders, or null with no city row. */
+/* The ceiling for the slab `from` orders falls in, or null with no city row. */
 function slabCeiling(type, city, from) {
-  var row = ceilingRow(type, city);
-  if (!row) return null;
-  var i = 0;
-  CEILING_COLS.forEach(function (c, j) { if ((+from || 0) >= c) i = j; });
-  return row[i];
+  var e = cityRates(type, city);
+  return e ? entryCeiling(type, e, slabStart(type, from)) : null;
 }
 /* A priced slab over its ceiling — or on a hub type and city with none. */
 function slabAbove(type, city, sl) {
@@ -3339,7 +3368,9 @@ var DEFAULT_SLAB_BREAKS = [2500, 5000, 7500, 10000];   // five slabs; the last i
 function blankSlabSettings() {
   var byType = {};
   CATEGORY_ORDER.forEach(function (k) { byType[k] = DEFAULT_SLAB_BREAKS.slice(); });
-  return { byType:byType, requests:[], log:[], cities:{ standalone:{}, mall:{} }, cityLog:[] };
+  var cities = {};
+  CATEGORY_ORDER.forEach(function (k) { cities[k] = {}; });
+  return { byType:byType, requests:[], log:[], cities:cities, cityLog:[] };
 }
 /* The upper bound of every slab but the last, for a hub type. */
 function slabBreaks(type) {
@@ -5135,7 +5166,7 @@ function blankAdmin() {
            hubSearch:"", hubFilter:"all", rateSearch:"", rateFilter:"all",
            central:null,                                 // Central Admin: bizfin | design | ops
            slabType:null, slabDraft:null, slabError:"", slabReason:"",   // slab settings
-           cityPick:{}, cityAll:false, cityAck:false, cityDraft:null,     // city rates, by hub type
+           cityPick:{}, cityAll:false, cityAck:false,    // the city picked, per hub type; all cities
            cityNew:null, cityError:"",
            bulk:null, bulkError:"",                      // FM Central Ops' bulk update form
            fAm:"all", fCh:"all", fZh:"all",               // pendency filters by desk
@@ -6805,90 +6836,203 @@ function apCentralPick() {
    The slab structure for each hub type. FM Central Ops proposes a change and
    BizFin approves it; BizFin can save one directly. New rate cards and updates
    are priced on it from then; cards already priced keep their slabs. */
+/* Slab settings: slabs and their ceilings, together --------------------------
+   Each hub type has one set of slabs, and every slab its own ceiling: the most
+   an Area Manager can price it at. Standalone and Mall hubs hold a ceiling per
+   city; the other hub types hold one for every city. A slab is never saved
+   without its ceiling. Adding, removing or moving one is done for every city at
+   once, and a slab that starts somewhere new needs its ceiling before it saves.
+   FM Central Ops proposes slab changes, and BizFin sets the ceilings for any new
+   slab when approving one. BizFin changes ceilings, and slabs, directly. */
+function slabTypeNow() { return HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0]; }
+/* What the editor works on: "*" for every city, else the city picked. */
+function slabScope(type) {
+  if (!isCityType(type)) return "*";
+  if (S.admin.cityAll && S.admin.central === "bizfin") return "*";
+  var c = cityPicked(type);
+  return c ? c.name.toLowerCase() : "";
+}
+/* The draft on screen: what is being typed, else today's slabs with the ceilings
+   of the scope. For all cities the ceilings start blank, keeping each city's own. */
+function slabDraftFor(type) {
+  var a = S.admin, scope = slabScope(type);
+  if (a.slabDraft && a.slabDraft.type === type && a.slabDraft.scope === scope && a.slabDraft.rates) return a.slabDraft;
+  var all = isCityType(type) && scope === "*";
+  var e = all ? null : cityRates(type, isCityType(type) ? scope : "");
+  var rates = {};
+  if (e) slabBands(type).forEach(function (b) {
+    var c = entryCeiling(type, e, +b.from);
+    if (c != null) rates[b.from] = fmtCeil(c);
+  });
+  return { type:type, scope:scope, breaks:slabBreaks(type).map(String), rates:rates,
+           tp:e ? (+e.tp).toFixed(2) : "", fromRequest:null };
+}
+function bandShort(b) { return fmtOrders(b.from) + (String(b.to).trim() ? "–" + fmtOrders(b.to) : "+"); }
 function apSlabSettings() {
   var a = S.admin, ss = S.slabSettings, biz = a.central === "bizfin";
-  var type = HUB_CATEGORIES[a.slabType] ? a.slabType : CATEGORY_ORDER[0];
-  var d = a.slabDraft && a.slabDraft.type === type ? a.slabDraft : { type:type, breaks:slabBreaks(type).slice(), all:false };
+  var type = slabTypeNow(), cm = HUB_CATEGORIES[type], cityType = isCityType(type);
+  var list = cityList(type), all = cityType && biz && !!a.cityAll, pick = cityType ? cityPicked(type) : null;
+  var d = slabDraftFor(type), editBands = !biz || !cityType || all;
+  var curFroms = slabBands(type).map(function (b) { return b.from; });
+  var scopeEntry = all ? null : cityRates(type, cityType ? (pick ? pick.name : "") : "");
   var pending = ss.requests.filter(function (x) { return x.status === "pending"; });
-  var mine = pending[0];
+  var reviewing = biz && d.fromRequest ? d.fromRequest : null;
+
   var typeBtns = CATEGORY_ORDER.map(function (k) {
     return '<button data-slabtype="' + k + '"' + (k === type ? ' class="on"' : '') + '>' +
       esc(HUB_CATEGORIES[k].label) + '</button>';
   }).join("");
-  var n = d.breaks.length;
-  var rows = bandsFor(d.breaks.map(function (b) { return +b || 0; })).map(function (b, i) {
-    var last = i === n;
-    return '<tr data-testid="slab-set-row"><td class="id">Slab ' + (i + 1) + '</td>' +
-      '<td>' + esc(fmtOrders(b.from)) + '</td>' +
-      '<td>' + (last ? '<span class="mute">and above</span>'
-               : '<input class="slab-to" data-slabto="' + i + '" inputmode="numeric" value="' + esc(d.breaks[i]) + '">') +
-      '</td><td style="text-align:right">' +
-        (n > 0 ? '<button class="btn-link" data-slabrm="' + i + '" style="color:var(--err)">Remove</button>' : '') +
-      '</td></tr>';
-  }).join("");
+
   var request = function (x) {
-    var types = x.types.map(function (k) { return HUB_CATEGORIES[k].label; }).join(", ");
+    var label = x.types.map(function (k) { return HUB_CATEGORIES[k].label; }).join(", ");
+    var open = reviewing === x.id;
     return '<div class="notice ' + (biz ? 'warn' : 'info') + '" data-testid="slab-request" style="margin:0 0 16px">' +
       '<b>' + esc(x.id) + ' · proposed by ' + esc(x.by) + ' on ' + esc(x.at) + '</b>' +
-      'For ' + esc(types) + ': ' + esc(breaksText(x.breaks)) + '<br><span class="mute">Today: ' +
+      'For ' + esc(label) + ': ' + esc(breaksText(x.breaks)) + '<br><span class="mute">Today: ' +
       esc(breaksText(x.before[x.types[0]] || DEFAULT_SLAB_BREAKS)) + '</span>' +
       (biz
-        ? '<div class="fl" style="margin:12px 0 8px"><label>Reason (needed to reject)</label><div class="box' +
-            (a.slabError && a.slabError.indexOf("why") >= 0 ? ' bad' : '') + '"><input id="slab-reason" value="' +
-            esc(a.slabReason) + '" placeholder="e.g. Keep the first slab at 2,500"></div></div>' +
-          '<div style="display:flex;gap:12px;justify-content:flex-end">' +
-            '<button class="btn btn-ghost" data-slabdecide="reject:' + esc(x.id) + '" style="color:var(--err)">Reject</button>' +
-            '<button class="btn btn-primary" data-slabdecide="approve:' + esc(x.id) + '">Approve and apply it</button></div>'
-        : '<div style="margin-top:8px">Waiting for BizFin to approve it. You can propose another once it’s decided.</div>') +
+        ? (open
+            ? '<div style="margin-top:8px">Reviewing it below. Set the ceiling for each new slab, then approve it.</div>'
+            : '<div class="fl" style="margin:12px 0 8px"><label>Reason (needed to reject)</label><div class="box' +
+                (a.slabError && a.slabError.indexOf("why") >= 0 ? ' bad' : '') + '"><input id="slab-reason" value="' +
+                esc(a.slabReason) + '" placeholder="e.g. Keep the first slab at 2,500"></div></div>' +
+              '<div style="display:flex;gap:12px;justify-content:flex-end">' +
+                '<button class="btn btn-ghost" data-slabdecide="reject:' + esc(x.id) + '" style="color:var(--err)">Reject</button>' +
+                '<button class="btn btn-primary" data-slabreview="' + esc(x.id) + '">Review and set ceilings</button></div>')
+        : '<div style="margin-top:8px">Waiting for BizFin, who sets the ceiling for any new slab before it applies.</div>') +
     '</div>';
   };
-  var log = ss.log.slice().reverse();
+
+  var bar = cityType
+    ? '<div class="city-bar">' +
+        '<div class="fl" data-testid="city-picker"><label>City</label>' +
+          '<div class="ms" id="city-ms">' +
+            '<button type="button" id="city-toggle" class="ms-control' + (cityUI.open && !all ? ' open' : '') +
+              '" aria-haspopup="listbox" aria-expanded="' + (cityUI.open && !all) + '"' + (all ? ' disabled' : '') + '>' +
+              '<span class="ms-val">' + (all ? 'All ' + list.length + ' cities' : pick ? esc(pick.name)
+                                              : '<span class="ph">Pick a city</span>') + '</span></button>' +
+            '<div class="ms-panel" id="city-panel"' + (cityUI.open && !all ? '' : ' hidden') + '>' +
+              '<input class="ms-search" id="city-search" placeholder="Search ' + list.length + ' cities" ' +
+                'autocomplete="off" aria-label="Search cities" value="' + esc(cityUI.filter) + '">' +
+              '<div class="ms-list city-list" id="city-list" role="listbox">' + cityRowsHtml(type) + '</div>' +
+              '<div class="ms-foot"><span class="cnt" id="city-count">' + esc(cityCountText(type)) + '</span></div>' +
+            '</div></div></div>' +
+        (biz
+          ? '<label class="city-all"><input type="checkbox" id="city-all"' + (all ? ' checked' : '') + '>' +
+              '<span>All ' + list.length + ' cities</span></label>' +
+            '<button class="btn btn-ghost city-add" id="city-add">＋ Add city</button>'
+          : '') +
+      '</div>'
+    : '';
+
+  var body;
+  if (biz && cityType && a.cityNew && a.cityNew.type === type) {
+    var nw = a.cityNew;
+    body = '<div data-testid="city-new"><b style="display:block;margin-bottom:4px">Add a city for ' + esc(cm.label) +
+        ' hubs</b><span class="mute" style="display:block;margin-bottom:16px;font-size:12px;line-height:16px">Set a ' +
+        'ceiling for every slab. Hubs in this city are held to them from now on. Mall hubs and Standalone hubs are ' +
+        'added separately.</span>' +
+      '<div class="fl" style="max-width:320px"><label>City name</label><div class="box">' +
+        '<input id="city-new-name" placeholder="e.g. Kochi" value="' + esc(nw.name) + '"></div></div>' +
+      '<table class="ap-table city-table" data-testid="city-new-table"><thead><tr><th>Slab</th><th>Orders</th>' +
+        '<th>Ceiling (₹)</th></tr></thead><tbody>' +
+        slabBands(type).map(function (b, i) {
+          return '<tr><td class="id">Slab ' + (i + 1) + '</td><td>' + esc(bandShort(b)) + '</td><td>' +
+            '<input class="slab-to slab-ceil" data-citynew="' + b.from + '" inputmode="decimal" value="' +
+            esc(nw.rates[b.from] || "") + '"><span class="city-unit">/ shipment</span></td></tr>';
+        }).join("") +
+        '<tr class="city-tp"><td class="id">Touchpoint</td><td></td><td><input class="slab-to slab-ceil" ' +
+          'id="city-new-tp" inputmode="decimal" value="' + esc(nw.tp) + '"><span class="city-unit">/ touchpoint</span>' +
+        '</td></tr></tbody></table>' +
+      (a.cityError ? '<div class="notice bad" data-testid="city-error" style="margin:12px 0 0">' + esc(a.cityError) + '</div>' : '') +
+      '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">' +
+        '<button class="btn btn-ghost" id="city-new-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="city-new-save">Add city</button></div></div>';
+  } else {
+    var n = d.breaks.length;
+    var rows = bandsFor(d.breaks.map(function (b) { return +b || 0; })).map(function (b, i) {
+      var last = i === n, isNew = curFroms.indexOf(b.from) < 0, cell;
+      if (biz) {
+        cell = '<input class="slab-to slab-ceil' + (isNew ? ' new' : '') + '" data-slabrate="' + b.from + '" ' +
+          'inputmode="decimal" value="' + esc(d.rates[b.from] || "") + '"' +
+          (all ? ' placeholder="' + (isNew ? 'Required' : 'Keep') + '"' : isNew ? ' placeholder="Required"' : '') + '>' +
+          '<span class="city-unit">/ shipment</span>';
+      } else {
+        var c = !isNew && scopeEntry ? entryCeiling(type, scopeEntry, +b.from) : null;
+        cell = c != null ? '<b>₹' + esc(fmtCeil(c)) + '</b><span class="city-unit">/ shipment</span>'
+                         : '<span class="mute">Set by BizFin</span>';
+      }
+      return '<tr data-testid="slab-set-row"' + (isNew ? ' class="slab-new"' : '') + '><td class="id">Slab ' + (i + 1) +
+          (isNew ? ' <span class="pill-warn">New</span>' : '') + '</td>' +
+        '<td>' + esc(fmtOrders(b.from)) + '</td>' +
+        '<td>' + (last ? '<span class="mute">and above</span>'
+                 : editBands ? '<input class="slab-to" data-slabto="' + i + '" inputmode="numeric" value="' + esc(d.breaks[i]) + '">'
+                 : esc(fmtOrders(b.to))) + '</td>' +
+        '<td>' + cell + '</td>' +
+        '<td style="text-align:right">' + (editBands && n > 0
+          ? '<button class="btn-link" data-slabrm="' + i + '" style="color:var(--err)">Remove</button>' : '') + '</td></tr>';
+    }).join("");
+    var tpRow = '<tr class="city-tp"><td class="id">Touchpoint</td><td colspan="2"><span class="mute">Paid per touchpoint ' +
+        'on every card</span></td><td>' +
+      (biz ? '<input class="slab-to slab-ceil" id="slab-tp" inputmode="decimal" value="' + esc(d.tp) + '"' +
+               (all ? ' placeholder="Keep"' : '') + '>'
+           : '<b>₹' + esc(scopeEntry ? (+scopeEntry.tp).toFixed(2) : fixedTp(type)) + '</b>') +
+      '<span class="city-unit">/ touchpoint</span></td><td></td></tr>';
+    var source = cityType && pick && !all
+      ? (pick.added ? "Added by " + pick.by + " on " + pick.at + "." : pick.at ? "Changed by " + pick.by + " on " + pick.at + "."
+         : "From the rate card sheet.") : "";
+    var label = reviewing ? "Approve " + reviewing
+      : !biz ? "Send to BizFin for approval"
+      : all ? "Apply to all " + list.length + " cities"
+      : cityType ? "Save " + (pick ? pick.name : "") + " ceilings"
+      : "Save slabs and ceilings";
+    body = (!cityType
+        ? '<div class="notice info" data-testid="city-flat" style="margin:0 0 16px"><b>' + esc(cm.label) + ' hubs are ' +
+            'priced the same in every city</b>Their slabs and ceilings apply everywhere.</div>' : '') +
+      (cityType && biz && !all
+        ? '<div class="notice info" data-testid="slab-bands-locked" style="margin:0 0 16px"><b>Slabs are the same in every ' +
+            esc(cm.label) + ' city</b>To add, remove or move a slab, tick All ' + list.length + ' cities. A new slab ' +
+            'needs its ceiling for every city.</div>' : '') +
+      (all
+        ? '<div class="notice warn" data-testid="city-all-warn" style="margin:0 0 16px"><b>This changes all ' +
+            list.length + ' ' + esc(cm.label) + ' cities</b>Each ceiling you fill in replaces that slab’s ceiling in ' +
+            'every city, including the cities priced higher or lower than it today. Leave one blank to keep each ' +
+            'city’s own. A new slab needs its ceiling here, for every city. Cards already priced keep their rates; new ' +
+            'rate cards and updates in every city are held to the new ceilings.</div>' : '') +
+      (!biz
+        ? '<div class="notice info" style="margin:0 0 16px">Only BizFin changes ceilings. A slab change you send goes to ' +
+            'BizFin, who sets the ceiling for any new slab before it applies.</div>' : '') +
+      '<span style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;line-height:16px">In use for ' +
+        esc(cm.label) + ': ' + esc(breaksText(slabBreaks(type))) + '</span>' +
+      '<table class="ap-table slab-set" data-testid="slab-set-table"><thead><tr><th>Slab</th><th>From (orders)</th>' +
+        '<th>To (orders)</th><th>Ceiling (₹)</th><th></th></tr></thead><tbody>' + rows + tpRow + '</tbody></table>' +
+      (source ? '<span class="mute" data-testid="city-source" style="display:block;margin-top:8px;font-size:12px;' +
+        'line-height:16px">' + esc(pick.name) + ': ' + esc(source) + '</span>' : '') +
+      (editBands ? '<div style="margin:12px 0 0"><button class="btn btn-ghost" id="slab-add">＋ Add slab</button></div>' : '') +
+      (all
+        ? '<label class="check-row" style="margin:16px 0 0"><input type="checkbox" id="city-ack"' +
+            (a.cityAck ? ' checked' : '') + '><span class="cl"><b>I understand this changes every ' + esc(cm.label) +
+            ' city</b></span></label>' : '') +
+      (a.slabError ? '<div class="notice bad" data-testid="slab-error" style="margin:12px 0 0">' + esc(a.slabError) + '</div>' : '') +
+      '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">' +
+        '<button class="btn btn-ghost" id="slab-reset">' + (reviewing ? 'Stop reviewing' : 'Reset') + '</button>' +
+        '<button class="btn btn-primary" id="slab-submit"' + (!biz && pending.length ? ' disabled' : '') + '>' +
+          esc(label) + '</button></div>';
+  }
+
   return '<div class="ap-panel" data-testid="ap-slab-settings" style="margin-bottom:20px">' +
-      '<div class="ph"><div><b>Slab settings</b><span>The order-volume slabs each hub type’s rate cards are priced ' +
-        'on. They’re set in steps of 2,500 orders; add, remove or move a slab to change them. ' +
-        (biz ? 'As BizFin you can save a change directly, and you approve the ones FM Central Ops proposes.'
-             : 'Changes you make go to BizFin for approval before they apply.') +
-        ' New rate cards and updates use the structure from then on; cards already priced keep theirs.</span></div></div>' +
+      '<div class="ph"><div><b>Slab settings</b><span>The order-volume slabs each hub type’s rate cards are priced on, ' +
+        'and each slab’s ceiling: the most an Area Manager can price it at. A card above its ceilings goes to BizFin. ' +
+        'Slabs are set in steps of 2,500 orders. ' +
+        (biz ? 'You change slabs and ceilings together, and approve the slab changes FM Central Ops proposes.'
+             : 'Slab changes you make go to BizFin for approval before they apply.') +
+        ' Cards already priced keep their rates; new rate cards and updates use these from then on.</span></div></div>' +
       '<div class="ap-form">' +
         pending.map(request).join("") +
         '<div class="ap-tabs" style="margin:0 0 12px" data-testid="slab-types">' + typeBtns + '</div>' +
-        '<span style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;line-height:16px">In use for ' +
-          esc(HUB_CATEGORIES[type].label) + ': ' + esc(breaksText(slabBreaks(type))) + '</span>' +
-        '<table class="ap-table" data-testid="slab-set-table"><thead><tr><th>Slab</th><th>From (orders)</th>' +
-          '<th>To (orders)</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0">' +
-          '<button class="btn btn-ghost" id="slab-add">＋ Add slab</button>' +
-          '<label class="check-row" style="margin:0"><input type="checkbox" id="slab-all"' + (d.all ? ' checked' : '') + '>' +
-            '<span class="cl"><b>Apply to all five hub types</b></span></label></div>' +
-        (a.slabError ? '<div class="notice bad" data-testid="slab-error">' + esc(a.slabError) + '</div>' : '') +
-        '<div style="display:flex;gap:12px;justify-content:flex-end">' +
-          '<button class="btn btn-ghost" id="slab-reset">Reset</button>' +
-          '<button class="btn btn-primary" id="slab-submit"' + (!biz && mine ? ' disabled' : '') + '>' +
-            (biz ? 'Save slab structure' : 'Send to BizFin for approval') + '</button></div>' +
+        bar + body +
       '</div></div>' +
-    apCityRates(type, biz) +
-    '<div class="ap-panel"><div class="ph"><div><b>Slab structure changes</b><span>Every change applied, and who ' +
-      'approved it.</span></div></div><table class="ap-table" data-testid="slab-log"><thead><tr><th>Change</th>' +
-      '<th>Hub types</th><th>Slabs</th><th>Approved by</th></tr></thead><tbody>' +
-      (log.length ? log.map(function (x) {
-        return '<tr><td class="id">' + esc(x.id) + apSub(esc(x.at) + ' · ' + esc(x.by)) + '</td><td style="white-space:normal">' +
-          esc(x.types.map(function (k) { return HUB_CATEGORIES[k].label; }).join(", ")) + '</td>' +
-          '<td style="white-space:normal">' + esc(breaksText(x.breaks)) + '</td><td>' + esc(x.approvedBy) + '</td></tr>';
-      }).join("") : '<tr><td class="empty" colspan="4">No changes yet. Every hub type is on 2,500-order steps.</td></tr>') +
-    '</tbody></table></div>' +
-    apCityLog();
-}
-
-/* City rates ------------------------------------------------------------------
-   Standalone and Mall hubs are held to their city's ceilings, one for each
-   2,500-order column, and carry their city's touchpoint rate. BizFin picks a
-   city and changes its row, changes a column in every city at once, or adds a
-   city. A card already priced keeps its rates; new cards and updates are held
-   to the new ceilings. The other hub types are priced the same in every city. */
-function cityColLabel(i) {
-  return i < CEILING_COLS.length - 1
-    ? fmtOrders(CEILING_COLS[i]) + "–" + fmtOrders(CEILING_COLS[i + 1])
-    : "Above " + fmtOrders(CEILING_COLS[i]);
+    apSlabLog();
 }
 /* 3.5 reads as 3.50; the sheet’s 2.175 keeps its third place. */
 function fmtCeil(v) { v = +v; return Math.round(v * 1000) % 10 ? v.toFixed(3) : v.toFixed(2); }
@@ -6900,34 +7044,6 @@ function cityPicked(type) {
   var hit = list.filter(function (c) { return c.name.toLowerCase() === k; })[0] ||
             list.filter(function (c) { return c.name === "Bengaluru"; })[0] || list[0];
   return hit || null;
-}
-/* What the editor shows: a draft being typed, else the city's saved row, or for
-   all cities, nothing (a blank column keeps each city's own rate). */
-function cityDraftFor(type) {
-  var a = S.admin, all = !!a.cityAll, c = all ? null : cityPicked(type), key = all ? "*" : (c ? c.name.toLowerCase() : "");
-  if (a.cityDraft && a.cityDraft.type === type && a.cityDraft.key === key) return a.cityDraft;
-  return { type:type, key:key,
-           rates:CEILING_COLS.map(function (x, i) { return c ? fmtCeil(c.row[i]) : ""; }),
-           tp:c ? (+c.tp).toFixed(2) : "" };
-}
-/* The rates as a column: one row for each 2,500-order band, then the touchpoint.
-   With `attr` the cells are inputs; without, they read the values. */
-function cityTableHtml(o) {
-  var cell = function (v, attrs, unit) {
-    return (o.attr
-      ? '<input class="slab-to city-in" ' + attrs + ' inputmode="decimal" value="' + esc(v == null ? "" : v) + '"' +
-          (o.placeholder ? ' placeholder="' + o.placeholder + '"' : '') + '>'
-      : '<b>₹' + esc(v) + '</b>') + '<span class="city-unit">' + unit + '</span>';
-  };
-  return '<table class="ap-table city-table" data-testid="' + o.testid + '"><thead><tr><th>Orders</th>' +
-      '<th>Ceiling (₹)</th></tr></thead><tbody>' +
-    CEILING_COLS.map(function (x, i) {
-      return '<tr><td>' + esc(cityColLabel(i)) + '</td><td>' +
-        cell(o.attr ? o.values[i] : fmtCeil(o.values[i]), o.attr + '="' + i + '"', "/ shipment") + '</td></tr>';
-    }).join("") +
-    '<tr class="city-tp"><td>Touchpoint rate</td><td>' +
-      cell(o.attr ? o.tp : (+o.tp).toFixed(2), 'id="' + o.tpId + '"', "/ touchpoint") + '</td></tr>' +
-    '</tbody></table>';
 }
 /* The city picker: a list ten cities tall that scrolls, and a search box that
    narrows it as BizFin types. Like the vehicle picker, the list is repainted in
@@ -6953,90 +7069,6 @@ function cityCountText(type) {
   return (shown < list.length ? shown + " of " : "") + list.length + " cities" +
     (added ? " · " + added + " added by BizFin" : "");
 }
-function apCityRates(type, biz) {
-  var a = S.admin, cm = HUB_CATEGORIES[type];
-  var lede = 'The most an Area Manager can price each slab at, by the 2,500-order band its first order falls in, ' +
-    'and the touchpoint rate every card carries. A card above its ceilings goes to BizFin. Cards already priced ' +
-    'keep their rates; new rate cards and updates are held to these.';
-  var head = '<div class="ph"><div><b>City rates</b><span>' + lede + '</span></div></div>';
-
-  if (!isCityType(type)) {
-    return '<div class="ap-panel" data-testid="ap-city-rates" style="margin-bottom:20px">' + head +
-      '<div class="ap-form"><div class="notice info" data-testid="city-flat" style="margin:0 0 16px"><b>' +
-        esc(cm.label) + ' hubs are priced the same in every city</b>Only Standalone and Mall hubs have city rates.</div>' +
-      cityTableHtml({ testid:"city-flat-table", values:ceilingRow(type, ""), tp:fixedTp(type) }) + '</div></div>';
-  }
-
-  var list = cityList(type), all = !!a.cityAll && biz, pick = cityPicked(type), d = cityDraftFor(type);
-  var open = cityUI.open && !all;
-  var bar = '<div class="city-bar">' +
-    '<div class="fl" data-testid="city-picker"><label>City</label>' +
-      '<div class="ms" id="city-ms">' +
-        '<button type="button" id="city-toggle" class="ms-control' + (open ? ' open' : '') + '" aria-haspopup="listbox" ' +
-          'aria-expanded="' + open + '"' + (all ? ' disabled' : '') + '><span class="ms-val">' +
-          (all ? 'All ' + list.length + ' cities' : pick ? esc(pick.name) : '<span class="ph">Pick a city</span>') +
-          '</span></button>' +
-        '<div class="ms-panel" id="city-panel"' + (open ? '' : ' hidden') + '>' +
-          '<input class="ms-search" id="city-search" placeholder="Search ' + list.length + ' cities" autocomplete="off" ' +
-            'aria-label="Search cities" value="' + esc(cityUI.filter) + '">' +
-          '<div class="ms-list city-list" id="city-list" role="listbox">' + cityRowsHtml(type) + '</div>' +
-          '<div class="ms-foot"><span class="cnt" id="city-count">' + esc(cityCountText(type)) + '</span></div>' +
-        '</div></div></div>' +
-    (biz
-      ? '<label class="city-all"><input type="checkbox" id="city-all"' + (all ? ' checked' : '') + '>' +
-          '<span>All ' + list.length + ' cities</span></label>' +
-        '<button class="btn btn-ghost city-add" id="city-add">＋ Add city</button>'
-      : '') +
-    '</div>';
-
-  var body;
-  if (biz && a.cityNew && a.cityNew.type === type) {
-    var n = a.cityNew;
-    body = '<div data-testid="city-new"><b style="display:block;margin-bottom:4px">Add a city for ' + esc(cm.label) +
-        ' hubs</b><span class="mute" style="display:block;margin-bottom:16px;font-size:12px;line-height:16px">Hubs in ' +
-        'this city are held to these ceilings from now on. Mall hubs and Standalone hubs are added separately.</span>' +
-      '<div class="fl" style="max-width:320px"><label>City name</label><div class="box">' +
-        '<input id="city-new-name" placeholder="e.g. Kochi" value="' + esc(n.name) + '"></div></div>' +
-      cityTableHtml({ testid:"city-new-table", attr:"data-citynew", values:n.rates, tpId:"city-new-tp", tp:n.tp }) +
-      (a.cityError ? '<div class="notice bad" data-testid="city-error" style="margin:12px 0 0">' + esc(a.cityError) + '</div>' : '') +
-      '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">' +
-        '<button class="btn btn-ghost" id="city-new-cancel">Cancel</button>' +
-        '<button class="btn btn-primary" id="city-new-save">Add city</button></div></div>';
-  } else if (!pick && !all) {
-    body = '<div class="rs-empty"><b>No cities yet</b><span>Add one to price ' + esc(cm.label) + ' hubs by city.</span></div>';
-  } else {
-    var source = all ? "" : pick.added ? "Added by " + pick.by + " on " + pick.at + "."
-      : pick.at ? "Changed by " + pick.by + " on " + pick.at + "." : "From the rate card sheet.";
-    body = (all
-        ? '<div class="notice warn" data-testid="city-all-warn" style="margin:0 0 16px"><b>This changes all ' +
-            list.length + ' ' + esc(cm.label) + ' cities</b>Each rate you fill in replaces that band in every ' +
-            'city, including the cities priced higher or lower than it today. Leave a band blank to keep each city’s ' +
-            'own rate. Cards already priced keep their rates; new rate cards and updates in every city are held to ' +
-            'the new ceilings.</div>'
-        : '') +
-      (biz
-        ? cityTableHtml({ testid:"city-rate-table", attr:"data-cityrate", values:d.rates, tpId:"city-tp", tp:d.tp,
-                          placeholder:all ? "Keep" : "" })
-        : cityTableHtml({ testid:"city-rate-table", values:pick.row, tp:pick.tp })) +
-      (source ? '<span class="mute" data-testid="city-source" style="display:block;margin-top:8px;font-size:12px;' +
-        'line-height:16px">' + esc(pick.name) + ': ' + esc(source) + '</span>' : '') +
-      (all
-        ? '<label class="check-row" style="margin:16px 0 0"><input type="checkbox" id="city-ack"' +
-            (a.cityAck ? ' checked' : '') + '><span class="cl"><b>I understand this changes every ' + esc(cm.label) +
-            ' city</b></span></label>'
-        : '') +
-      (!biz ? '<div class="notice info" style="margin:16px 0 0">Only BizFin can change city rates.</div>' : '') +
-      (a.cityError && biz ? '<div class="notice bad" data-testid="city-error" style="margin:12px 0 0">' + esc(a.cityError) + '</div>' : '') +
-      (biz
-        ? '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">' +
-            '<button class="btn btn-ghost" id="city-reset">Reset</button>' +
-            '<button class="btn btn-primary" id="city-save">' +
-              (all ? 'Apply to all ' + list.length + ' cities' : 'Save ' + esc(pick.name) + ' rates') + '</button></div>'
-        : '');
-  }
-  return '<div class="ap-panel" data-testid="ap-city-rates" style="margin-bottom:20px">' + head +
-    '<div class="ap-form">' + bar + body + '</div></div>';
-}
 /* Repaint the open list and its count without a full render. */
 function paintCityList() {
   var t = HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
@@ -7058,24 +7090,41 @@ function bindCityGlobals() {
   document.addEventListener("click", function () { if (cityUI.open) A.cityOpen(false); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && cityUI.open) A.cityOpen(false); });
 }
-/* "₹3.50 → ₹2.50 · touchpoint ₹5", or for all cities only the columns changed. */
-function cityChangeText(x) {
-  var cols = x.row.map(function (v, i) { return v == null ? null : (x.scope === "all" ? cityColLabel(i) + ": " : "") + "₹" + fmtCeil(v); })
-    .filter(function (t) { return t != null; });
-  var rates = x.scope === "all" ? cols.join("; ")
-    : "₹" + fmtCeil(x.row[0]) + (x.row[0] === x.row[x.row.length - 1] ? "" : " → ₹" + fmtCeil(x.row[x.row.length - 1]));
-  return [rates, x.tp != null ? "touchpoint ₹" + (+x.tp).toFixed(2) : ""].filter(Boolean).join(" · ");
+/* One log for slab and ceiling changes, newest first. */
+function slabChangeText(x) {
+  var parts = [];
+  if (x.breaks) parts.push("Slabs " + breaksText(x.breaks));
+  if (x.ceil) {
+    var set = x.ceil.filter(function (c) { return c.v != null; });
+    if (set.length === x.ceil.length && set.length) {
+      var lo = set[0].v, hi = set[set.length - 1].v;
+      parts.push("Ceilings ₹" + fmtCeil(lo) + (lo === hi ? "" : " → ₹" + fmtCeil(hi)));
+    } else if (set.length) {
+      parts.push("Ceilings " + set.map(function (c) { return bandShort(c) + " ₹" + fmtCeil(c.v); }).join("; "));
+    }
+  } else if (x.row) {                                    // an older city change, by sheet column
+    var r = x.row.filter(function (v) { return v != null; });
+    if (r.length) parts.push("Ceilings ₹" + fmtCeil(r[0]) + (r.length > 1 ? " → ₹" + fmtCeil(r[r.length - 1]) : ""));
+  }
+  if (x.tp != null) parts.push("touchpoint ₹" + (+x.tp).toFixed(2));
+  return parts.join(" · ");
 }
-function apCityLog() {
-  var log = (S.slabSettings.cityLog || []).slice().reverse();
-  return '<div class="ap-panel" style="margin-top:20px"><div class="ph"><div><b>City rate changes</b><span>Every city ' +
-    'rate saved or city added, and who did it.</span></div></div><table class="ap-table" data-testid="city-log"><thead><tr>' +
-    '<th>Change</th><th>Hub type</th><th>Cities</th><th>Rates</th></tr></thead><tbody>' +
-    (log.length ? log.map(function (x) {
-      return '<tr><td class="id">' + esc(x.id) + apSub(esc(x.at) + ' · ' + esc(x.by)) + '</td><td>' +
-        esc(HUB_CATEGORIES[x.type].label) + '</td><td style="white-space:normal">' + esc(x.what) + '</td>' +
-        '<td style="white-space:normal">' + esc(cityChangeText(x)) + '</td></tr>';
-    }).join("") : '<tr><td class="empty" colspan="4">No changes yet. Every city is on the rate card sheet’s rates.</td></tr>') +
+function apSlabLog() {
+  var ss = S.slabSettings;
+  var all = (ss.log || []).concat(ss.cityLog || []).map(function (x, i) { return { x:x, i:i }; })
+    .sort(function (p, q) { return ((q.x.t || 0) - (p.x.t || 0)) || (q.i - p.i); }).map(function (p) { return p.x; });
+  return '<div class="ap-panel"><div class="ph"><div><b>Slab and ceiling changes</b><span>Every change to slabs and ' +
+    'ceilings, who made it, and who approved it.</span></div></div><table class="ap-table" data-testid="slab-log"><thead><tr>' +
+    '<th>Change</th><th>Hub type</th><th>Cities</th><th>What changed</th></tr></thead><tbody>' +
+    (all.length ? all.map(function (x) {
+      var types = x.types || [x.type];
+      return '<tr><td class="id">' + esc(x.id) + apSub(esc(x.at) + ' · ' + esc(x.by) +
+          (x.approvedBy && x.approvedBy !== x.by ? ', approved by ' + esc(x.approvedBy) : '')) + '</td>' +
+        '<td style="white-space:normal">' + esc(types.map(function (k) { return HUB_CATEGORIES[k].label; }).join(", ")) + '</td>' +
+        '<td style="white-space:normal">' + esc(x.cities || x.what || "Every city") + '</td>' +
+        '<td style="white-space:normal">' + esc(slabChangeText(x)) + '</td></tr>';
+    }).join("") : '<tr><td class="empty" colspan="4">No changes yet. Every hub type is on 2,500-order slabs and ' +
+      'the rate card sheet’s ceilings.</td></tr>') +
     '</tbody></table></div>';
 }
 
@@ -10494,18 +10543,19 @@ var A = {
     S.admin.toast = u.id + " withdrawn. " + h.code + " stays on the rate card in force.";
     save(); render();
   },
-  /* ---- slab settings ---- */
+  /* ---- slab settings: slabs and their ceilings ---- */
   slabType: function (t) {
     if (!HUB_CATEGORIES[t]) return;
     S.admin.slabType = t; S.admin.slabDraft = null; S.admin.slabError = "";
-    S.admin.cityDraft = null; S.admin.cityNew = null; S.admin.cityAll = false; S.admin.cityAck = false;
+    S.admin.cityNew = null; S.admin.cityAll = false; S.admin.cityAck = false;
     S.admin.cityError = ""; cityUI.open = false; cityUI.filter = "";
     save(); render();
   },
   slabDraftOf: function () {
-    var t = HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
-    if (!S.admin.slabDraft || S.admin.slabDraft.type !== t) {
-      S.admin.slabDraft = { type:t, breaks:slabBreaks(t).map(String), all:false };
+    var d = slabDraftFor(slabTypeNow());
+    if (d !== S.admin.slabDraft) {
+      S.admin.slabDraft = { type:d.type, scope:d.scope, breaks:d.breaks.slice(), rates:Object.assign({}, d.rates),
+                            tp:d.tp, fromRequest:d.fromRequest };
     }
     return S.admin.slabDraft;
   },
@@ -10527,64 +10577,132 @@ var A = {
     d.breaks.splice(Math.min(i, d.breaks.length - 1), 1);
     S.admin.slabError = ""; save(); render();
   },
-  slabAll: function (v) { var d = A.slabDraftOf(); d.all = !!v; save(); },
-  slabReset: function () { S.admin.slabDraft = null; S.admin.slabError = ""; save(); render(); },
+  /* a ceiling typed against the slab that starts at `from` */
+  slabRate: function (from, v) {
+    var d = A.slabDraftOf();
+    d.rates[String(from)] = String(v == null ? "" : v).trim();
+    S.admin.slabError = ""; save();
+  },
+  slabTp: function (v) { A.slabDraftOf().tp = String(v == null ? "" : v).trim(); S.admin.slabError = ""; save(); },
+  slabReset: function () {
+    var reviewing = S.admin.slabDraft && S.admin.slabDraft.fromRequest;
+    S.admin.slabDraft = null; S.admin.slabError = ""; S.admin.cityAck = false;
+    if (reviewing) S.admin.cityAll = false;
+    save(); render();
+  },
   slabSubmit: function () {
-    var a = S.admin, persona = a.central;
-    if (a.role !== "central" || (persona !== "bizfin" && persona !== "ops")) return;
-    var d = A.slabDraftOf(), nums = d.breaks.map(function (b) { return +b; });
-    var ok = nums.every(function (n, i) {
-      return /^\d+$/.test(String(d.breaks[i])) && n > 0 && (i === 0 || n > nums[i - 1]);
-    });
-    var types = d.all ? CATEGORY_ORDER.slice() : [d.type];
+    var a = S.admin;
+    if (a.role !== "central") return;
+    if (a.central === "ops") return A.slabPropose();
+    if (a.central === "bizfin") return A.slabSave();
+  },
+  /* FM Central Ops: a slab change goes to BizFin, who sets its new ceilings. */
+  slabPropose: function () {
+    var a = S.admin, t = slabTypeNow(), d = A.slabDraftOf(), nums = d.breaks.map(Number);
+    var ok = nums.every(function (n, i) { return /^\d+$/.test(String(d.breaks[i])) && n > 0 && (i === 0 || n > nums[i - 1]); });
     var err = !ok ? "Each slab has to end above the one before it, in whole orders."
-      : !types.some(function (t) { return slabBreaks(t).join() !== nums.join(); })
-        ? "That’s the structure already in use."
-      : persona === "ops" && S.slabSettings.requests.some(function (x) { return x.status === "pending"; })
-        ? "A change is already waiting for BizFin."
+      : slabBreaks(t).join() === nums.join() ? "That’s the structure already in use."
+      : S.slabSettings.requests.some(function (x) { return x.status === "pending"; }) ? "A change is already waiting for BizFin."
       : "";
     if (err) { a.slabError = err; save(); render(); return; }
-    var id = "SLB-" + String(10000 + Math.floor(Math.random() * 90000)), at = fmtDay(new Date());
-    var before = {};
-    types.forEach(function (t) { before[t] = slabBreaks(t).slice(); });
-    if (persona === "bizfin") {
-      types.forEach(function (t) { S.slabSettings.byType[t] = nums.slice(); });
-      S.slabSettings.log.push({ id:id, at:at, by:"BizFin", types:types, breaks:nums, before:before, approvedBy:"BizFin" });
-      a.toast = "Slab structure saved. New rate cards for " + (types.length > 1 ? "every hub type" :
-        HUB_CATEGORIES[types[0]].label) + " are priced on it.";
-    } else {
-      S.slabSettings.requests.push({ id:id, at:at, by:"FM Central Ops", types:types, breaks:nums, before:before,
-                                     status:"pending", decidedOn:"", reason:"" });
-      a.toast = id + " sent to BizFin for approval.";
-    }
+    var id = "SLB-" + String(10000 + Math.floor(Math.random() * 90000)), before = {};
+    before[t] = slabBreaks(t).slice();
+    S.slabSettings.requests.push({ id:id, at:fmtDay(new Date()), by:"FM Central Ops", types:[t], breaks:nums,
+                                   before:before, status:"pending", decidedOn:"", reason:"" });
+    a.toast = id + " sent to BizFin for approval.";
     a.slabDraft = null; a.slabError = "";
     save(); render();
   },
-  slabDecide: function (id, approve) {
+  /* BizFin saves slabs and ceilings together. Nothing saves with a slab
+     lacking its ceiling. */
+  slabSave: function () {
+    var a = S.admin;
+    if (a.role !== "central" || a.central !== "bizfin") return;
+    var t = slabTypeNow(), cm = HUB_CATEGORIES[t], cityType = isCityType(t), d = A.slabDraftOf();
+    var fail = function (m) { a.slabError = m; save(); render(); };
+    var nums = d.breaks.map(Number);
+    if (!nums.every(function (n, i) { return /^\d+$/.test(String(d.breaks[i])) && n > 0 && (i === 0 || n > nums[i - 1]); }))
+      return fail("Each slab has to end above the one before it, in whole orders.");
+    var curBands = slabBands(t), curFroms = curBands.map(function (b) { return b.from; }), newBands = bandsFor(nums);
+    var changed = !sameBands(curBands, newBands);
+    var all = !cityType || d.scope === "*", eachCity = cityType && d.scope === "*";
+    if (changed && !all) return fail("Tick All cities to change the slabs. A slab change applies to every city.");
+    var val = function (from) { return String(d.rates[from] == null ? "" : d.rates[from]).trim(); };
+    for (var i = 0; i < newBands.length; i++) {
+      var b = newBands[i], v = val(b.from), isNew = curFroms.indexOf(b.from) < 0;
+      if (v !== "" && !cityCeilingOk(v)) return fail("Enter Slab " + (i + 1) + "’s ceiling as a rate, like 2.50.");
+      if (v === "" && isNew) return fail("Set the ceiling for Slab " + (i + 1) + " (" + bandText(b) + "). It’s a new slab, " +
+        "so it needs one" + (eachCity ? " for every city." : "."));
+      if (v === "" && !eachCity) return fail("Fill in every slab’s ceiling.");
+    }
+    var tpv = String(d.tp == null ? "" : d.tp).trim();
+    if (tpv !== "" && !cityTpOk(tpv)) return fail("Enter the touchpoint rate as a rate, like 5.00.");
+    if (tpv === "" && !eachCity) return fail("Fill in the touchpoint rate.");
+    if (eachCity && !changed && tpv === "" && newBands.every(function (nb) { return val(nb.from) === ""; }))
+      return fail("These are the slabs and ceilings already in use. Fill in a ceiling, or change a slab, to apply it to every city.");
+    if (eachCity && !a.cityAck) return fail("Tick the box to confirm you’re changing every " + cm.label + " city.");
+    var entries = cityType ? (eachCity ? cityList(t) : [cityPicked(t)]) : [cityRates(t, "")];
+    var at = fmtDay(new Date()), store = S.slabSettings.cities[t] = S.slabSettings.cities[t] || {};
+    var any = changed;
+    var writes = entries.map(function (e) {
+      var bands = {};
+      newBands.forEach(function (nb) { var v2 = val(nb.from); bands[nb.from] = v2 !== "" ? +v2 : entryCeiling(t, e, +nb.from); });
+      var tp = tpv !== "" ? +tpv : +e.tp;
+      if (tp !== +e.tp || curBands.some(function (cb) { return bands[cb.from] !== entryCeiling(t, e, +cb.from); })) any = true;
+      return { key:cityType ? e.name.toLowerCase() : "*",
+               entry:{ name:e.name, added:!!e.added, by:"BizFin", at:at, bands:bands, tp:tp } };
+    });
+    if (!any) return fail("These are the slabs and ceilings already in use.");
+    writes.forEach(function (w) { store[w.key] = w.entry; });
+    var before = curBands.map(function (cb) { return +cb.to || 0; }).filter(Boolean);
+    if (changed) S.slabSettings.byType[t] = nums.slice();
+    var req = d.fromRequest && S.slabSettings.requests.filter(function (q) { return q.id === d.fromRequest; })[0];
+    if (req) { req.status = "approved"; req.decidedOn = at; req.reason = ""; }
+    S.slabSettings.log.push({ id:req ? req.id : "SLB-" + String(10000 + Math.floor(Math.random() * 90000)), at:at,
+      t:Date.now(), by:req ? req.by : "BizFin", approvedBy:"BizFin", types:[t],
+      cities:cityType ? (eachCity ? "All " + entries.length + " cities" : entries[0].name) : "Every city",
+      breaks:changed ? nums.slice() : null, before:changed ? before : null,
+      ceil:newBands.map(function (nb) { return { from:nb.from, to:nb.to, v:val(nb.from) === "" ? null : +val(nb.from) }; }),
+      tp:tpv === "" ? null : +tpv });
+    a.toast = req ? req.id + " approved. The new slabs and their ceilings apply to rate cards priced from now."
+      : changed ? cm.label + " slabs and ceilings saved. New rate cards and updates are priced on them."
+      : (cityType && !eachCity ? entries[0].name + "’s " : "") + cm.label + " ceilings saved. New rate cards and updates" +
+        (cityType && !eachCity ? " there" : "") + " are held to them.";
+    a.slabDraft = null; a.slabError = ""; a.cityAll = false; a.cityAck = false;
+    save(); render();
+  },
+  /* BizFin opens a proposed slab change in the editor, to set its new ceilings. */
+  slabReview: function (id) {
     var a = S.admin, x = S.slabSettings.requests.filter(function (q) { return q.id === id; })[0];
     if (!x || x.status !== "pending" || a.role !== "central" || a.central !== "bizfin") return;
-    if (!approve && !String(a.slabReason || "").trim()) {
+    var t = x.types[0];
+    a.slabType = t; a.cityNew = null; a.cityAck = false; a.slabError = "";
+    a.cityAll = isCityType(t);
+    var base = slabDraftFor(t);
+    a.slabDraft = { type:t, scope:"*", breaks:x.breaks.map(String), rates:Object.assign({}, base.rates), tp:base.tp,
+                    fromRequest:id };
+    save(); render();
+  },
+  slabDecide: function (id, approve) {
+    if (approve) return A.slabReview(id);
+    var a = S.admin, x = S.slabSettings.requests.filter(function (q) { return q.id === id; })[0];
+    if (!x || x.status !== "pending" || a.role !== "central" || a.central !== "bizfin") return;
+    if (!String(a.slabReason || "").trim()) {
       a.slabError = "Say why you’re rejecting it. FM Central Ops sees this."; save(); render(); return;
     }
-    x.status = approve ? "approved" : "rejected"; x.decidedOn = fmtDay(new Date());
-    x.reason = approve ? "" : String(a.slabReason).trim();
-    if (approve) {
-      x.types.forEach(function (t) { S.slabSettings.byType[t] = x.breaks.slice(); });
-      S.slabSettings.log.push({ id:x.id, at:x.decidedOn, by:x.by, types:x.types, breaks:x.breaks, before:x.before,
-                                approvedBy:"BizFin" });
-    }
+    x.status = "rejected"; x.decidedOn = fmtDay(new Date()); x.reason = String(a.slabReason).trim();
+    if (a.slabDraft && a.slabDraft.fromRequest === id) a.slabDraft = null;
     a.slabReason = ""; a.slabError = "";
-    a.toast = approve ? x.id + " approved. The new slabs apply to rate cards priced from now."
-                      : x.id + " rejected. FM Central Ops sees why.";
+    a.toast = x.id + " rejected. FM Central Ops sees why.";
     save(); render();
   },
 
-  /* ---- city rates (BizFin) ---- */
+  /* ---- city picker (BizFin and FM Central Ops) ---- */
   cityPick: function (k) {
     var t = S.admin.slabType && HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
     S.admin.cityPick[t] = String(k || "").toLowerCase();
     cityUI.open = false; cityUI.filter = "";
-    S.admin.cityDraft = null; S.admin.cityError = ""; save(); render();
+    S.admin.slabDraft = null; S.admin.cityError = ""; save(); render();
   },
   cityOpen: function (open) {
     cityUI.open = open === undefined ? !cityUI.open : !!open;
@@ -10601,70 +10719,22 @@ var A = {
   },
   cityAllToggle: function (v) {
     cityUI.open = false; cityUI.filter = "";
-    S.admin.cityAll = !!v; S.admin.cityAck = false; S.admin.cityDraft = null; S.admin.cityError = "";
+    S.admin.cityAll = !!v; S.admin.cityAck = false; S.admin.slabDraft = null; S.admin.cityError = "";
     save(); render();
   },
   cityAckToggle: function (v) { S.admin.cityAck = !!v; S.admin.cityError = ""; save(); },
-  /* a keystroke into the editor: kept as typed, checked on save */
-  cityField: function (i, v) {
-    var t = HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
-    var d = cityDraftFor(t);
-    d = S.admin.cityDraft = { type:d.type, key:d.key, rates:d.rates.slice(), tp:d.tp };
-    if (i === "tp") d.tp = String(v == null ? "" : v).trim();
-    else d.rates[i] = String(v == null ? "" : v).trim();
-    S.admin.cityError = ""; save();
-  },
-  cityReset: function () { S.admin.cityDraft = null; S.admin.cityError = ""; S.admin.cityAck = false; save(); render(); },
-  citySave: function () {
-    var a = S.admin;
-    if (a.role !== "central" || a.central !== "bizfin") return;
-    var t = HUB_CATEGORIES[a.slabType] ? a.slabType : CATEGORY_ORDER[0];
+  cityNewOpen: function () {
+    var t = slabTypeNow();
     if (!isCityType(t)) return;
-    var d = cityDraftFor(t), all = !!a.cityAll, list = cityList(t), at = fmtDay(new Date());
-    var fail = function (m) { a.cityError = m; save(); render(); };
-    var filled = d.rates.map(function (v) { return String(v).trim() !== ""; }), tpFilled = String(d.tp).trim() !== "";
-    var badCol = d.rates.map(function (v, i) { return filled[i] && !cityCeilingOk(v) ? i : -1; })
-      .filter(function (i) { return i >= 0; })[0];
-    if (badCol != null) return fail("Enter the " + cityColLabel(badCol) + " ceiling as a rate, like 2.50.");
-    if (tpFilled && !cityTpOk(d.tp)) return fail("Enter the touchpoint rate as a rate, like 5.00.");
-    var id = "CTY-" + String(10000 + Math.floor(Math.random() * 90000));
-    var store = S.slabSettings.cities[t] = S.slabSettings.cities[t] || {};
-    if (all) {
-      if (!filled.some(Boolean) && !tpFilled) return fail("Fill in at least one column to change it in every city.");
-      if (!a.cityAck) return fail("Tick the box to confirm you’re changing every " + HUB_CATEGORIES[t].label + " city.");
-      list.forEach(function (c) {
-        store[c.name.toLowerCase()] = { name:c.name, added:!!c.added, by:"BizFin", at:at,
-          row:c.row.map(function (v, i) { return filled[i] ? +d.rates[i] : v; }), tp:tpFilled ? +d.tp : c.tp };
-      });
-      S.slabSettings.cityLog.push({ id:id, at:at, by:"BizFin", type:t, scope:"all", what:"All " + list.length + " cities",
-        row:d.rates.map(function (v, i) { return filled[i] ? +v : null; }), tp:tpFilled ? +d.tp : null });
-      a.toast = "Rates changed in all " + list.length + " " + HUB_CATEGORIES[t].label + " cities.";
-      a.cityAll = false; a.cityAck = false;
-    } else {
-      var c = cityPicked(t);
-      if (!c) return;
-      if (!filled.every(Boolean) || !tpFilled) return fail("Fill in every column and the touchpoint rate.");
-      var row = d.rates.map(Number), tp = +d.tp;
-      if (row.join() === c.row.join() && tp === c.tp) return fail("These are the rates " + c.name + " is already on.");
-      store[c.name.toLowerCase()] = { name:c.name, added:!!c.added, by:"BizFin", at:at, row:row, tp:tp };
-      S.slabSettings.cityLog.push({ id:id, at:at, by:"BizFin", type:t, scope:"city", what:c.name, row:row, tp:tp });
-      a.toast = c.name + "’s " + HUB_CATEGORIES[t].label + " rates saved. New rate cards and updates there are held to them.";
-    }
-    a.cityDraft = null; a.cityError = "";
+    S.admin.cityNew = { type:t, name:"", rates:{}, tp:HUB_CATEGORIES[t].tp.toFixed(2) };
+    S.admin.cityAll = false; S.admin.cityAck = false; S.admin.cityError = ""; S.admin.slabDraft = null;
     save(); render();
   },
-  cityNewOpen: function () {
-    var t = HUB_CATEGORIES[S.admin.slabType] ? S.admin.slabType : CATEGORY_ORDER[0];
-    if (!isCityType(t)) return;
-    S.admin.cityNew = { type:t, name:"", rates:CEILING_COLS.map(function () { return ""; }),
-                        tp:HUB_CATEGORIES[t].tp.toFixed(2) };
-    S.admin.cityAll = false; S.admin.cityAck = false; S.admin.cityError = ""; save(); render();
-  },
-  cityNewField: function (i, v) {
+  cityNewField: function (k, v) {
     var n = S.admin.cityNew;
     if (!n) return;
     v = String(v == null ? "" : v);
-    if (i === "name") n.name = v; else if (i === "tp") n.tp = v.trim(); else n.rates[i] = v.trim();
+    if (k === "name") n.name = v; else if (k === "tp") n.tp = v.trim(); else n.rates[String(k)] = v.trim();
     S.admin.cityError = ""; save();
   },
   cityNewCancel: function () { S.admin.cityNew = null; S.admin.cityError = ""; save(); render(); },
@@ -10676,18 +10746,23 @@ var A = {
     if (!name) return fail("Enter the city’s name.");
     if (!/^[A-Za-z][A-Za-z .'-]*[A-Za-z.]$/.test(name)) return fail("Use only letters, spaces and hyphens in the city’s name.");
     if (cityList(n.type).some(function (c) { return c.name.toLowerCase() === name.toLowerCase(); }))
-      return fail(name + " is already on the list. Pick it from the cities to change its rates.");
-    var badCol = n.rates.map(function (v, i) { return cityCeilingOk(v) ? -1 : i; }).filter(function (i) { return i >= 0; })[0];
-    if (badCol != null) return fail("Enter the " + cityColLabel(badCol) + " ceiling as a rate, like 2.50.");
+      return fail(name + " is already on the list. Pick it from the cities to change its ceilings.");
+    var bandsNow = slabBands(n.type), bands = {};
+    for (var i = 0; i < bandsNow.length; i++) {
+      var v = n.rates[bandsNow[i].from];
+      if (!cityCeilingOk(v)) return fail("Enter Slab " + (i + 1) + "’s ceiling as a rate, like 2.50.");
+      bands[bandsNow[i].from] = +v;
+    }
     if (!cityTpOk(n.tp)) return fail("Enter the touchpoint rate as a rate, like 5.00.");
-    var at = fmtDay(new Date()), row = n.rates.map(Number), tp = +n.tp, key = name.toLowerCase();
+    var at = fmtDay(new Date()), key = name.toLowerCase();
     S.slabSettings.cities[n.type] = S.slabSettings.cities[n.type] || {};
-    S.slabSettings.cities[n.type][key] = { name:name, added:true, by:"BizFin", at:at, row:row, tp:tp };
-    S.slabSettings.cityLog.push({ id:"CTY-" + String(10000 + Math.floor(Math.random() * 90000)), at:at, by:"BizFin",
-      type:n.type, scope:"add", what:"Added " + name, row:row, tp:tp });
+    S.slabSettings.cities[n.type][key] = { name:name, added:true, by:"BizFin", at:at, bands:bands, tp:+n.tp };
+    S.slabSettings.log.push({ id:"CTY-" + String(10000 + Math.floor(Math.random() * 90000)), at:at, t:Date.now(),
+      by:"BizFin", types:[n.type], cities:"Added " + name, breaks:null,
+      ceil:bandsNow.map(function (b) { return { from:b.from, to:b.to, v:bands[b.from] }; }), tp:+n.tp });
     a.cityPick[n.type] = key;
     a.toast = name + " added to " + HUB_CATEGORIES[n.type].label + " cities. Hubs there are held to its ceilings from now on.";
-    a.cityNew = null; a.cityDraft = null; a.cityError = "";
+    a.cityNew = null; a.slabDraft = null; a.cityError = "";
     save(); render();
   },
 
@@ -11532,7 +11607,13 @@ function bindAdmin() {
   on("slab-add", "click", A.slabAdd);
   on("slab-reset", "click", A.slabReset);
   on("slab-submit", "click", A.slabSubmit);
-  on("slab-all", "change", function (e) { A.slabAll(e.target.checked); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-slabreview]"), function (el) {
+    el.addEventListener("click", function () { A.slabReview(el.getAttribute("data-slabreview")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-slabrate]"), function (el) {
+    el.addEventListener("input", function () { A.slabRate(el.getAttribute("data-slabrate"), el.value); });
+  });
+  on("slab-tp", "input", function (e) { A.slabTp(e.target.value); });
   on("slab-reason", "input", function (e) { S.admin.slabReason = e.target.value; save(); });
   /* city rates */
   bindCityGlobals();
@@ -11547,16 +11628,10 @@ function bindAdmin() {
   if (cityPanel) cityPanel.addEventListener("click", function (e) { e.stopPropagation(); });
   on("city-all", "change", function (e) { A.cityAllToggle(e.target.checked); });
   on("city-ack", "change", function (e) { A.cityAckToggle(e.target.checked); });
-  Array.prototype.forEach.call(document.querySelectorAll("[data-cityrate]"), function (el) {
-    el.addEventListener("input", function () { A.cityField(+el.getAttribute("data-cityrate"), el.value); });
-  });
-  on("city-tp", "input", function (e) { A.cityField("tp", e.target.value); });
-  on("city-reset", "click", A.cityReset);
-  on("city-save", "click", A.citySave);
   on("city-add", "click", A.cityNewOpen);
   on("city-new-name", "input", function (e) { A.cityNewField("name", e.target.value); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-citynew]"), function (el) {
-    el.addEventListener("input", function () { A.cityNewField(+el.getAttribute("data-citynew"), el.value); });
+    el.addEventListener("input", function () { A.cityNewField(el.getAttribute("data-citynew"), el.value); });
   });
   on("city-new-tp", "input", function (e) { A.cityNewField("tp", e.target.value); });
   on("city-new-cancel", "click", A.cityNewCancel);
@@ -12368,7 +12443,7 @@ if (typeof window !== "undefined") {
               DEFAULT_SLAB_BREAKS: DEFAULT_SLAB_BREAKS, LEGACY_FM_HUBS: LEGACY_FM_HUBS },
     helpers: {
       slabCeiling: slabCeiling, slabAbove: slabAbove, cardAbove: cardAbove, fixedTp: fixedTp,
-      ceilingText: ceilingText, cityKey: cityKey, cityList: cityList, ceilingRow: ceilingRow, noGstState: noGstState, chCity: chCity,
+      ceilingText: ceilingText, cityKey: cityKey, cityList: cityList, ceilingRow: ceilingRow, slabBands: slabBands, noGstState: noGstState, chCity: chCity,
       chainOf: chainOf, hubChain: hubChain, ruChain: ruChain, onMyPatch: onMyPatch, ruWaitingOn: ruWaitingOn,
       captainAgree: captainAgree, sendToCaptain: sendToCaptain,
       kycComplete: kycComplete, chCanDecide: chCanDecide, agCanActivate: agCanActivate,
