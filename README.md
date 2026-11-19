@@ -199,12 +199,15 @@ rates. The sheet gives every city its hub type's rate:
 **Every slab has its own ceiling.** The sheet has six 2,500-order columns (0–2,500 up to above
 12,500), and each slab starts on the ceiling of the column its first order falls in, so a
 ceiling can step down from slab to slab. From then on BizFin sets each slab's ceiling in Slab
-settings, and a new slab is never saved without one. Mini-hub and SAH ceilings are the same everywhere; Standalone and Mall hub
-ceilings differ by **city**. The prototype carries the whole sheet (256 Standalone cities and
-194 Mall hub cities; Mall matches Standalone everywhere but Jalandhar and Chennai), and BizFin
-edits it from Slab settings (below). A Standalone or Mall hub in a city with
-no row has no ceiling a Cluster Head can approve within, so its card goes to BizFin. The sheet's LM-as-FM
-tab is blank, so LM-as-FM keeps its earlier flat 6.00. A card is above threshold if *any*
+settings, and a new slab is never saved without one. Every hub type has an **All cities**
+default and can have ceilings for any **city** on its own; in a city, **whichever was set last
+applies**. The sheet's defaults count as set on 1 Oct and its city rows on 2 Oct, so the 256
+Standalone and 194 Mall hub cities on the sheet start on their own rows (Mall matches
+Standalone everywhere but Jalandhar and Chennai). The All cities default is the sheet's row
+for the mini-hub, LM-as-FM (a flat 6.00, the sheet leaves it blank) and SAH, and for Standalone
+and Mall hubs the lowest ceiling any city has (a flat 1.30). A city with none of its own,
+including a new pincode, follows All cities, so the Area Manager always has ceilings to price
+against. A card is above threshold if *any*
 slab is over its own ceiling. Because the touchpoint is fixed, a hub type change that moves it
 (Standalone → LM-as-FM, 5.00 → 6.00) is a rate change the captain has to agree to; one between
 types that share it (mini-hub ↔ LM-as-FM) stays internal.
@@ -718,25 +721,30 @@ it.
   slab's upper bound gives any slab that now starts somewhere new a *New* tag and a *Required*
   ceiling. Saving without it says which slab needs one. Slabs that start where they did keep
   their ceilings.
-- **Per city.** Standalone and Mall hubs hold a ceiling per city. The picker lists every city on
-  the sheet, opening on Bengaluru. Its list is ten cities tall and scrolls for the rest. Typing
-  narrows it (*2 of 256 cities*), and Enter takes the first match. Cities BizFin has added or
-  changed are marked in the list. For one city the slabs are fixed and only its ceilings change.
-  The slabs are the same in every city, so adding, removing or moving one is done with *All
-  cities*. The other hub types are *priced the same in every city*, with slabs and ceilings
-  edited together directly.
-- **All cities.** Changes ceilings, and slabs, for every city of the hub type at once. It warns
-  first (*This changes all 256 Standalone cities*): each ceiling filled in replaces that slab's
-  ceiling everywhere, and one left blank keeps each city's own. A new slab's ceiling is set
-  here, for every city. It won't apply until BizFin ticks *I understand this changes every
-  Standalone city*.
-- **Add city.** A name, a ceiling for every slab and a touchpoint rate (pre-filled with the hub
-  type's). A city already on the list can't be added again. Standalone and Mall hubs are added
+- **All cities and per city, latest wins.** Every hub type has an All cities default and can
+  have ceilings for any city on its own. Each is dated, and in a city the later of the two
+  applies: set All cities after a city's own and the city follows All cities; set the city
+  again afterwards and its own apply. Under the table the editor says what applies and why
+  (*Delhi: follows All cities, set by BizFin on …, after its own from …*).
+- **The city picker.** Lists every city on the sheet and any added, opening on Bengaluru. Its
+  list is ten cities tall and scrolls for the rest. Typing narrows it (*2 of 256 cities*), and
+  Enter takes the first match. The list marks cities BizFin added or changed, and those whose
+  own ceilings now give way to All cities (*follows All*). For one city the slabs are fixed
+  and only its ceilings change; saving them gives the city its own.
+- **All cities.** Edits the All cities default, starting on its ceilings. It warns first (*This
+  changes all 256 Standalone cities*): the latest setting wins, so ceilings saved here apply in
+  every city, including the cities with their own today. It won't apply until BizFin ticks
+  *I understand this changes every Standalone city*. Slabs are added, removed or moved here,
+  for every city at once. A new slab's ceiling is added to the All cities default and to every
+  city's own ceilings, which keep their other ceilings and their dates.
+- **Add city.** A name, a ceiling for every slab and a touchpoint rate, starting on the All
+  cities ones. A city already on the list can't be added again. Each hub type's cities are set
   separately.
 - **FM Central Ops proposes; BizFin approves.** FM Central Ops sees the ceilings read-only and
   sends slab changes to BizFin, with the new slabs marked *Set by BizFin*. BizFin rejects with
   a reason, or opens it with **Review and set ceilings**, sets the ceiling for each new slab,
-  and approves it. Slabs are changed one hub type at a time.
+  and approves it, which adds the new slab's ceiling to every city. Only BizFin saves ceilings.
+  Slabs are changed one hub type at a time.
 
 Every change, to slabs or ceilings, is logged under **Slab and ceiling changes** with who made
 it and who approved it. New rate cards and updates are priced on the new slabs and held to the
@@ -952,7 +960,7 @@ build from.
 npm install && npm test
 ```
 
-**2219 assertions across 41 groups:**
+**2222 assertions across 41 groups:**
 
 1. **LM Captain** — full 9-phase walk, hub code at submit, Oracle vendor ID, 6-target fan-out
 2. **FM Captain** — 7 phases, a within-ceiling card authored by the AM and approved by the
@@ -1186,19 +1194,18 @@ npm install && npm test
    result reported once and then spent; a pincode in another state still accepted, one
    starting with 0 given the usual message, and pincode fields left alone on leaving them;
    Back beside the section title; and no em dash in any validation message
-40. **Slab settings, by city**: the whole sheet loaded as a ceiling for each slab (256 Standalone
-   and 194 Mall hub cities, the sheet's third decimals, Chennai and Jalandhar's own Mall rows,
-   lower-case names matched, each city's touchpoint); slabs and ceilings in one panel; a
-   mini-hub's slabs and ceilings edited together with no city to pick; Standalone opening on
-   Bengaluru with its slabs fixed for one city; the city list ten cities tall, opening on its
-   search box, narrowing as typed, saying when nothing matches, taking the first match on
-   Enter, marking added and changed cities and closing on a click elsewhere; a city's ceilings
-   changed and saved, held to on new cards, logged and attributed, with an unchanged or
-   malformed one refused; All cities warning first, needing a change and the acknowledgement,
-   changing only the ceilings filled in; a new slab refused without its ceiling, then added
-   with it in every city while every other ceiling stays; one log for slab and ceiling
-   changes; a city added with a ceiling for every slab (duplicates refused) and holding cards
-   there to them, Mall left out; kept across a reload; and read-only ceilings for FM Central Ops
+40. **Slab settings, All cities and by city**: the sheet loaded as an All cities default and
+   the cities on their own (Mall's 194, none for the mini-hub yet), a ceiling for each slab, the
+   sheet's third decimals, Chennai and Jalandhar's own Mall rows, lower-case names matched,
+   each city's touchpoint, and a city with none of its own following All cities (Standalone's
+   lowest, 1.30); every hub type priced by city in one panel, each city saying what applies
+   and why; the city list ten cities tall, searchable, taking the first match on Enter; a
+   city's own ceilings saved, held to and logged; All cities warning that the latest setting
+   wins, starting on its default, needing a change and the acknowledgement, then applying in
+   every city, Delhi included and marked *follows All*; a city set again afterwards having its
+   own; a new slab refused without its ceiling, then added to every city while each keeps its
+   own; a city added starting on the All cities ceilings, every one needed; kept across a
+   reload; and read-only for FM Central Ops
 41. **The Area Manager rejects an application**: the simulator offering it while the Area Manager
    has the application; the captain told it was rejected and to contact the Area Manager for
    any details, with no way back in and one Acknowledged button; kept across a reload; on acknowledging it, the application kept only
